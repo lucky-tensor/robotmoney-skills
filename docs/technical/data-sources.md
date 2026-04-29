@@ -260,7 +260,15 @@ The `stateOverride` simulation depends on USDC's `allowed` mapping being at stor
 
 The ROBOT pool's Doppler hook can set an effective fee up to 80% during high volatility. The V4 quoter returns an `amountOut` that reflects the hook's *current* fee, but the fee can change between quote time and execution. The 3% uniform slippage tolerance is a compromise: too tight for an 80%-fee spike, too loose for normal V3 conditions. There is no per-pool slippage tuning in the current interface.
 
-### 6.8 Delegated strategy data sources are entirely undefined
+### 6.8 Skill reference docs describe an incorrect RPC fallback
+
+`plugins/robotmoney-cli/skills/robotmoney-cli/references/read.md` documents the `--rpc-url` flag as:
+
+> "falls back to `RPC_URL` env, then `https://base.llamarpc.com`"
+
+The actual code (`lib/rpc.ts`) uses a five-endpoint pool: `base.drpc.org` (primary), `base-rpc.publicnode.com`, `base.llamarpc.com`, `base.meowrpc.com`, `1rpc.io/base`. `llamarpc.com` is the third entry, not the sole fallback. An agent or operator debugging an RPC failure and relying on `read.md` would look for the wrong endpoint. This is a skill-file fix (out of scope for `docs/`) but is noted here as a data-provenance inaccuracy in the published reference. See `plugins/robotmoney-cli/skills/robotmoney-cli/references/read.md` line 8.
+
+### 6.9 Delegated strategy data sources are entirely undefined
 
 No endpoint URL, auth scheme, response schema, or freshness model is documented for the ZYFAI and Giza delegated-strategy APIs. `get-allocation` (when built) must specify these before implementation. On-chain reads should be preferred over proprietary APIs wherever available. See `docs/issues/issue-get-allocation-missing.md`.
 
@@ -283,7 +291,7 @@ No endpoint URL, auth scheme, response schema, or freshness model is documented 
 | ETH balance + gas price | On-chain RPC | `lib/gas.ts` | Command aborts | Legacy gas price only (§1.9) |
 | Gas estimates | On-chain RPC (`eth_estimateGas`) | `lib/execute.ts` | Conservative fallback for dependent txs | — |
 | Simulation results | On-chain RPC (`eth_call` + stateOverride) | `prepare-*` | Error decoded + surfaced | Slot 10 assumption (§6.6) |
-| Delegated strategy positions | Off-chain API (ZYFAI, Giza) | **Not implemented** | n/a | Entirely undefined (§6.8) |
+| Delegated strategy positions | Off-chain API (ZYFAI, Giza) | **Not implemented** | n/a | Entirely undefined (§6.9) |
 | Governance / basket composition | On-chain (future) / hardcoded (now) | **Not implemented** | n/a | Hardcoded; no read path (§6.3) |
 | OWS wallet + key | Local keystore (`~/.ows/wallets/`) | `execute-*`, `create-wallet` | Named error | Policy not set/checked (§6; see issue) |
 | OWS passphrase | Env var / flag / TTY | `execute-*` | Hangs in non-TTY | TTY hang in headless environments (§3.3) |

@@ -83,7 +83,7 @@ The trigger lives in the harness's own scheduler — daily sweep, threshold swee
 
 If you built your own agent loop, the integration is the same three steps:
 
-1. Add `@robotmoney/cli` to the agent's tool environment (or run it as an MCP server: `npx @robotmoney/cli mcp`).
+1. Add `@robotmoney/cli` to the agent's tool environment (shell) or, once MCP server mode is available, run it as `npx @robotmoney/cli mcp` and connect over MCP. **MCP server mode is not yet implemented** — see [`docs/issues/issue-mcp-server-missing.md`](../issues/issue-mcp-server-missing.md).
 2. Register `plugins/robotmoney-cli/skills/robotmoney-cli/SKILL.md` as a tool description in your prompt.
 3. In your agent's planning step, add a goal like *"if idle USDC > threshold, deposit to treasury"*.
 
@@ -119,11 +119,13 @@ The minimal end-to-end loop a zero-human company runs:
 
 ```
    every N hours, the agent:
-     1. checks its wallet balance         →  npx @robotmoney/cli get-balance --user-address $SELF
+     1. checks its wallet balance         →  npx @robotmoney/cli get-balance --chain base --user-address $SELF
      2. if balance > threshold:
-          deposits the excess to treasury →  npx @robotmoney/cli execute-deposit --amount $((balance - reserve))
+          deposits the excess to treasury →  npx @robotmoney/cli execute-deposit --chain base --amount $((balance - reserve))
      3. logs the tx hashes
 ```
+
+> **Note:** `get-balance` currently returns only the vault position (rmUSDC shares and NAV). The wallet's USDC balance — needed to compute the sweep amount — is not yet in the output. See [`docs/issues/issue-get-balance-wallet-context.md`](../issues/issue-get-balance-wallet-context.md).
 
 Three commands, no human. The harness handles the schedule. Open Wallet Standard handles signing under whatever policy you set (per-day caps, allowlist of contracts, multi-sig requirement above a threshold). The CLI handles RPC, gas, simulation, and partial-failure safety.
 
@@ -141,7 +143,7 @@ That's the round trip.
 
 **Does the harness ever see private keys?** No. Keys live in OWS (Open Wallet Standard); the CLI talks to OWS via local IPC. Compromising the harness does not compromise the wallet. Set OWS policy (caps, allowlists, approval requirements) once, and every harness inherits it.
 
-**What if my harness can't run shell commands?** Run `@robotmoney/cli` as a long-lived MCP server (`npx @robotmoney/cli mcp`) and connect over MCP. Any MCP-compatible runtime works without shell access.
+**What if my harness can't run shell commands?** MCP server mode (`npx @robotmoney/cli mcp`) is not yet implemented. Until it ships, any runtime that cannot exec a shell has no supported integration path. Track progress at [`docs/issues/issue-mcp-server-missing.md`](../issues/issue-mcp-server-missing.md).
 
 **What if I'm running in multiple harnesses at once?** Fine. The CLI is stateless and the wallet is shared. Two harnesses cannot double-spend because OWS serializes signing. Use distinct OWS policies per harness if you want different spend caps per surface.
 

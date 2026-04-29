@@ -64,14 +64,15 @@ Three end-to-end narratives, each covering one column of the user matrix in §2:
 
 ```bash
 # 1. Read pre-sweep state.
-npx @robotmoney/cli get-balance --user-address $WALLET --json
+npx @robotmoney/cli get-balance --user-address $WALLET --chain base
 # → { usdcBalance, ethBalance, rmUsdcBalance, navUsdc }
+# NOTE: usdcBalance and ethBalance are not yet in the output — see issue-get-balance-wallet-context.md
 
 # 2. If usdcBalance > reserve + minDeposit, sweep the surplus.
 npx @robotmoney/cli execute-deposit \
   --wallet ops \
   --amount $((usdcBalance - reserve)) \
-  --json
+  --chain base
 ```
 
 **API/RPC surface.** The CLI dispatches over viem's `fallback()` transport to a built-in Base RPC pool (multiple free endpoints with rate-limit retry). On-chain calls: `USDC.allowance`, `USDC.approve`, `RobotMoneyVault.deposit`, `Permit2.approve`, `UniversalRouter.execute`. No third-party API is in the deposit path.
