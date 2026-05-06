@@ -29,8 +29,8 @@
 single-token (mock USDC), single-gateway system where a Rust daemon
 authenticates as an `AGENT_ROLE` key and calls one function —
 `deposit` — on a gateway that enforces per-agent allowlist,
-per-payment cap, per-window cap, pause, and **forwards the deposit into
-a `RobotMoneyVault`**. Vault shares (`rmUSDC`) settle to a configurable
+per-deposit cap, per-window cap, pause, and **forwards the deposit into
+a `RobotMoneyVault`**. Vault shares (`rmUSDC`) route to a configurable
 receiver registered with the gateway. Admin role is real (separate
 key, on-chain checks).
 
@@ -48,7 +48,7 @@ configuration) on Anvil and on the Docker devnet.
 
 **Out of scope (deferred).** Implementing or changing the ERC-4626
 vault/share token, adapters/yield, master-batch Merkle confirmation
-(v0 §22), `MASTER_ROLE` in any form, refund/expiry, Permit2
+(v0 §22), `MASTER_ROLE` in any form, reversal/expiry, Permit2
 / UniversalRouter, withdraw/redeem flows, multi-RPC consensus,
 multi-backend signers (only software-encrypted for MVP), proxy
 upgradeability, governance.
@@ -121,7 +121,7 @@ contracts/gateway/
   AccessRoles.sol               # role constants + AccessControl wiring
   interfaces/IGateway.sol
 
-clients/rust-payment-client/
+clients/rmpc/
   Cargo.toml
   src/
     main.rs                     # CLI: deposit / status / self-check
@@ -180,7 +180,7 @@ IERC4626  public immutable vault;                      // RobotMoneyVault, pinne
 struct AgentPolicy {
     bool    active;
     uint64  validUntil;
-    uint256 maxPerPayment;
+    uint256 maxPerDeposit;
     uint256 maxPerWindow;
     address shareReceiver;     // who gets rmUSDC; set by ADMIN, not the agent
 }
@@ -188,7 +188,7 @@ mapping(address => AgentPolicy) public agents;
 
 mapping(address => mapping(uint64 => uint256))         // per-agent windowed gross —
         public agentWindowGross;                       // NOT shared across agents
-mapping(bytes32 => bool) public usedPaymentIds;
+mapping(bytes32 => bool) public usedDepositIds;
 bool public paused;
 uint64 public constant WINDOW_SECONDS = 86400;         // Unix-epoch-aligned;
                                                        // see v0 §23.3
@@ -203,7 +203,7 @@ function deposit(
     uint64  deadline,
     bytes32 idempotencyKey
 ) external whenNotPaused onlyRole(AGENT_ROLE)
-    returns (bytes32 paymentId, uint256 sharesMinted);
+    returns (bytes32 depositId, uint256 sharesMinted);
 
 function authorizeAgent(address agent, AgentPolicy calldata p) external onlyRole(ADMIN_ROLE);
 function revokeAgent(address agent) external onlyRole(ADMIN_ROLE);
@@ -215,13 +215,13 @@ Events:
 
 ```solidity
 event AgentAuthorized(address indexed agent, uint64 validUntil,
-                      uint256 maxPerPayment, uint256 maxPerWindow,
+                      uint256 maxPerDeposit, uint256 maxPerWindow,
                       address shareReceiver);
 event AgentRevoked(address indexed agent);
 event Paused(address indexed by);
 event Unpaused(address indexed by);
 event AgentDeposit(
-    bytes32 indexed paymentId,
+    bytes32 indexed depositId,
     bytes32 indexed orderId,
     address indexed agent,
     address shareReceiver,
@@ -233,19 +233,19 @@ event AgentDeposit(
 
 Behavior of `deposit` (subset of v0 §20.1, retargeted to the vault):
 
-1. `amount > 0 && amount <= agents[msg.sender].maxPerPayment`
+1. `amount > 0 && amount <= agents[msg.sender].maxPerDeposit`
 2. `block.timestamp <= deadline && deadline <= block.timestamp + 600`
 3. `agents[msg.sender].active && validUntil >= block.timestamp`
 4. `windowId = uint64(block.timestamp / WINDOW_SECONDS)`
 5. `agentWindowGross[msg.sender][windowId] + amount <= agents[msg.sender].maxPerWindow`
-6. `paymentId = keccak256(abi.encode(block.chainid, address(this),
+6. `depositId = keccak256(abi.encode(block.chainid, address(this),
    msg.sender, orderId, amount, idempotencyKey))`; revert if already
    used.
    - **`deadline` is intentionally excluded from the hash.**
      Idempotency is keyed on (caller, order, amount, idempotency
      key). Two requests with the same `(orderId, idempotencyKey)`
-     collapse to the same paymentId regardless of deadline; the
-     second is rejected by `usedPaymentIds`. This makes deadline a
+     collapse to the same depositId regardless of deadline; the
+     second is rejected by `usedDepositIds`. This makes deadline a
      *liveness* parameter, not an *identity* parameter.
 7. `usdc.safeTransferFrom(msg.sender, address(this), amount)` with
    **balance-delta verification** (fee-on-transfer defense, v0 §25).
@@ -257,8 +257,8 @@ Behavior of `deposit` (subset of v0 §20.1, retargeted to the vault):
    cap, paused, shutdown) propagate; the gateway never holds shares.
 10. `usdc.forceApprove(address(vault), 0)` to clear residual.
 11. Update `agentWindowGross[msg.sender][windowId] += amount` and
-    mark `usedPaymentIds[paymentId] = true`.
-12. emit `AgentDeposit(paymentId, orderId, agent, shareReceiver,
+    mark `usedDepositIds[depositId] = true`.
+12. emit `AgentDeposit(depositId, orderId, agent, shareReceiver,
     amount, sharesMinted, windowId)`.
 
 The gateway must never custody `rmUSDC`; the vault deposit and the
@@ -387,7 +387,7 @@ Defaults: `max_fee_per_gas_cap = 100 gwei` for MVP devnet runs.
 
 ```
 rmpc deposit --amount 100.00 --order-id 0x…
-rmpc status  --payment-id 0x…
+rmpc status  --deposit-id 0x…
 rmpc self-check                # backend report (v0 §9.2 JSON)
 ```
 
@@ -422,14 +422,14 @@ as a subprocess from the Rust harness's `setup()` fixture.
 **Scenarios** (each = one `#[test]`):
 
 1. `deposit_happy_path` *(Geth)* — admin authorizes agent, agent runs
-   `rmpc deposit`, assert `PaymentEscrowed` event + USDC balance delta
+   `rmpc deposit`, assert `AgentDeposit` event + USDC balance delta
    on gateway.
 2. `unauthorized_agent_rejected` *(Anvil)* — agent without
    `AGENT_ROLE` → contract reverts; client surfaces
    `ErrAgentNotAuthorized`.
 3. `paused_blocks_deposit` *(Anvil)* — `PAUSER_ROLE` calls `pause()`;
    client preflight refuses to sign (no broadcast).
-4. `over_per_payment_cap_rejected` *(Anvil)* — preflight rejects;
+4. `over_per_deposit_cap_rejected` *(Anvil)* — preflight rejects;
    contract would also revert (asserted via debug-only bypass).
 5. `over_window_cap_rejected` *(Geth)* — two deposits whose sum
    exceeds `maxPerWindow` → second reverts on-chain. Geth-layer
@@ -437,7 +437,7 @@ as a subprocess from the Rust harness's `setup()` fixture.
    block cadence.
 6. `idempotent_replay_rejected` *(Anvil)* — same `(orderId,
    idempotencyKey)` twice → second reverts with
-   `PaymentIdAlreadyUsed`.
+   `DepositIdAlreadyUsed`.
 7. `code_hash_mismatch_aborts` *(Anvil)* — flip pinned hash in config
    → client refuses to sign (hard refusal, not advisory).
 8. `software_fallback_disabled_aborts_startup` *(Anvil)* —
@@ -562,7 +562,7 @@ rmpc get-vault
 rmpc get-balance --address 0x...
 rmpc get-agent --agent 0x...
 rmpc get-gateway
-rmpc get-payment --payment-id 0x...
+rmpc get-deposit --deposit-id 0x...
 rmpc get-tx --tx-hash 0x...
 rmpc get-allowance --owner 0x... --spender 0x...
 rmpc get-roles --address 0x...
@@ -584,10 +584,10 @@ the same concepts.
 **Gateway and agent state.**
 
 - Gateway code hash, chain id, configured USDC/vault addresses.
-- Agent policy: active, valid until, max per payment, max per window,
+- Agent policy: active, valid until, max per deposit, max per window,
   current window usage, share receiver.
 - Role membership for ADMIN, PAUSER, AGENT, and any future roles.
-- Payment/order status from gateway events and direct storage reads
+- Deposit/order status from gateway events and direct storage reads
   where possible.
 
 **Output contract.**
@@ -736,7 +736,7 @@ GET /v1/vault/snapshots?from_block=&to_block=
 GET /v1/agents/:address
 GET /v1/agents/:address/deposits
 GET /v1/transactions/:tx_hash
-GET /v1/payments/:payment_id
+GET /v1/deposits/:deposit_id
 ```
 
 **Boundaries.**
@@ -768,7 +768,7 @@ the consequences before execution.
 3. Inspect current vault/gateway/agent state.
 4. Create or register a new agent credential.
 5. Configure agent policy: share receiver, valid-until, max per
-   payment, max per window.
+   deposit, max per window.
 6. Grant/revoke roles or agent authorization.
 7. Pause/unpause where permitted.
 8. Export `rmpc` config for the agent runtime.
@@ -835,7 +835,7 @@ agent to function.
 3. The agent refuses or asks for operator action if config, role,
    balance, allowance, cap, or code hash checks fail.
 4. The agent performs a successful guarded deposit on the fork.
-5. The agent records tx hash, payment id, vault position, and block
+5. The agent records tx hash, deposit id, vault position, and block
    number.
 6. The agent continues running long enough to detect final status and
    produce a concise final report.
