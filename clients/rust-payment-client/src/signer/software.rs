@@ -57,9 +57,7 @@ use k256::ecdsa::{signature::hazmat::PrehashSigner, RecoveryId, Signature, Signi
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
-use super::{
-    gateway_tx_digest, AgentSigner, GatewayTxRequest, SignedTx, SignerBackendKind, SignerError,
-};
+use super::{AgentSigner, SignerBackendKind, SignerError};
 
 /// Environment variable name from which the passphrase is read in non-TTY
 /// contexts (CI, systemd unit). Stdin fallback is the operator-attended path.
@@ -364,29 +362,6 @@ impl AgentSigner for SoftwareSigner {
         self.address
     }
 
-    fn sign_gateway_tx(&self, req: GatewayTxRequest) -> Result<SignedTx, SignerError> {
-        let digest = gateway_tx_digest(&req);
-        let (signature, recid): (Signature, RecoveryId) = self
-            .signing_key
-            .sign_prehash(digest.as_slice())
-            .map_err(|e| SignerError::ErrSign(e.to_string()))?;
-        // Normalize to low-S; required for Ethereum-style sigs.
-        let signature = signature.normalize_s().unwrap_or(signature);
-
-        let mut sig_bytes = [0u8; 65];
-        let r_s = signature.to_bytes();
-        sig_bytes[..64].copy_from_slice(&r_s);
-        // Ethereum convention: v = 27 + recovery_id (0 or 1).
-        sig_bytes[64] = 27 + recid.to_byte();
-
-        Ok(SignedTx {
-            request: req,
-            signer: self.address,
-            signature: sig_bytes,
-            digest,
-        })
-    }
-
     fn sign_eip1559_hash(&self, hash: &[u8; 32]) -> Result<AlloySignature, SignerError> {
         let (signature, recid): (Signature, RecoveryId) = self
             .signing_key
@@ -482,35 +457,9 @@ fn parse_address(s: &str) -> Result<Address, SignerError> {
     Ok(Address::from(a))
 }
 
-/// Recover the signer address from a [`SignedTx`] by re-running ECDSA
-/// recovery on the digest. Lives next to the signer so tests can verify a
-/// produced signature without re-deriving the address from the private
-/// key.
-pub fn recover_signer(signed: &SignedTx) -> Result<Address, SignerError> {
-    use k256::ecdsa::VerifyingKey;
-
-    if signed.signature[64] < 27 {
-        return Err(SignerError::ErrSign("invalid recovery id v < 27".into()));
-    }
-    let recid_byte = signed.signature[64] - 27;
-    let recid = RecoveryId::from_byte(recid_byte)
-        .ok_or_else(|| SignerError::ErrSign(format!("bad recovery id {recid_byte}")))?;
-    let sig = Signature::from_slice(&signed.signature[..64])
-        .map_err(|e| SignerError::ErrSign(format!("bad signature: {e}")))?;
-    let vk = VerifyingKey::recover_from_prehash(signed.digest.as_slice(), &sig, recid)
-        .map_err(|e| SignerError::ErrSign(format!("recover: {e}")))?;
-    let encoded = vk.to_encoded_point(false);
-    let bytes = encoded.as_bytes();
-    let hash = keccak256(&bytes[1..]);
-    let mut addr = [0u8; 20];
-    addr.copy_from_slice(&hash[12..]);
-    Ok(Address::from(addr))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy_primitives::{B256, U256};
     use tempfile::TempDir;
 
     /// Deterministic test private key (NEVER use on a real chain).
@@ -626,38 +575,30 @@ mod tests {
         SoftwareSigner::create_keystore(&path, &test_privkey(), TEST_PASSPHRASE).unwrap();
         let signer = SoftwareSigner::load_with_passphrase(&path, TEST_PASSPHRASE, true).unwrap();
 
-        let req = GatewayTxRequest::Deposit {
-            order_id: B256::repeat_byte(0xab),
-            amount: U256::from(1_234_567u64),
-            deadline: 1_700_000_123,
-            idempotency_key: B256::repeat_byte(0xcd),
-        };
-        let signed = signer.sign_gateway_tx(req.clone()).unwrap();
-        assert_eq!(signed.request, req);
-        assert_eq!(signed.signer, signer.public_address());
-
-        let recovered = recover_signer(&signed).unwrap();
-        assert_eq!(recovered, signer.public_address());
+        // Sign a fixed digest twice; outputs must match (RFC 6979
+        // deterministic nonces). The previous sign_gateway_tx /
+        // recover_signer surface was retired (audit L1).
+        let digest = [0xabu8; 32];
+        let a = signer.sign_eip1559_hash(&digest).unwrap();
+        let b = signer.sign_eip1559_hash(&digest).unwrap();
+        assert_eq!(a.r(), b.r());
+        assert_eq!(a.s(), b.s());
+        assert_eq!(a.v(), b.v());
     }
 
     #[test]
     fn signing_is_deterministic_for_rfc6979() {
         // k256 ECDSA signs with deterministic nonces (RFC 6979). Two
-        // signatures over the same digest from the same key must match.
+        // signatures over the same EIP-1559 hash must match.
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("keystore.json");
         SoftwareSigner::create_keystore(&path, &test_privkey(), TEST_PASSPHRASE).unwrap();
         let signer = SoftwareSigner::load_with_passphrase(&path, TEST_PASSPHRASE, true).unwrap();
-        let req = GatewayTxRequest::Deposit {
-            order_id: B256::repeat_byte(0x01),
-            amount: U256::from(42u64),
-            deadline: 1_700_000_000,
-            idempotency_key: B256::repeat_byte(0x02),
-        };
-        let a = signer.sign_gateway_tx(req.clone()).unwrap();
-        let b = signer.sign_gateway_tx(req).unwrap();
-        assert_eq!(a.signature, b.signature);
-        assert_eq!(a.digest, b.digest);
+        let hash = [0x42u8; 32];
+        let a = signer.sign_eip1559_hash(&hash).unwrap();
+        let b = signer.sign_eip1559_hash(&hash).unwrap();
+        assert_eq!(a.r(), b.r());
+        assert_eq!(a.s(), b.s());
     }
 
     #[test]
