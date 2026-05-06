@@ -81,6 +81,9 @@ jobs:
         env:
           RMPC_FORK_RPC_URL: ${{ secrets.RMPC_FORK_RPC_URL }}
         run: |
+          if [ -z "$RMPC_FORK_RPC_URL" ]; then
+            echo "::warning::RMPC_FORK_RPC_URL secret not configured; tests will skip-clean. Set the secret in repo settings to actually exercise the fork."
+          fi
           cargo test --test abi_address_sanity --test vault_deposit_redeem_smoke -- --nocapture
 
   full-suite:
@@ -119,4 +122,8 @@ jobs:
         working-directory: testing/fork-e2e-rust
         env:
           RMPC_FORK_RPC_URL: ${{ secrets.RMPC_FORK_RPC_URL }}
-        run: cargo test -- --nocapture --test-threads=2
+        run: |
+          if [ -z "$RMPC_FORK_RPC_URL" ]; then
+            echo "::warning::RMPC_FORK_RPC_URL secret not configured; tests will skip-clean."
+          fi
+          cargo test -- --nocapture --test-threads=2

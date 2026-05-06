@@ -112,10 +112,17 @@ macro_rules! skip_if_no_fork {
     };
 }
 
-/// Returns true iff `RMPC_FORK_RPC_URL` is set and `anvil` is on
-/// PATH. Used by the [`skip_if_no_fork!`] macro.
+/// Returns true iff `RMPC_FORK_RPC_URL` is set to a non-empty
+/// value and `anvil` is on PATH. Used by the [`skip_if_no_fork!`]
+/// macro. The non-empty check matters for CI: GitHub Actions
+/// passes a missing-secret value through as the literal empty
+/// string, not as an unset env var, so a plain `env::var().is_ok()`
+/// check would happily try to fork against an empty URL.
 pub fn can_run() -> bool {
-    std::env::var("RMPC_FORK_RPC_URL").is_ok() && which::which("anvil").is_ok()
+    std::env::var("RMPC_FORK_RPC_URL")
+        .map(|v| !v.is_empty())
+        .unwrap_or(false)
+        && which::which("anvil").is_ok()
 }
 
 // -- Configuration -------------------------------------------------
@@ -165,6 +172,12 @@ impl ForkFixture {
     /// if `RMPC_FORK_RPC_URL` is unset.
     pub fn new() -> Result<Self, HarnessError> {
         let upstream = std::env::var("RMPC_FORK_RPC_URL").map_err(|_| HarnessError::SkipNoRpc)?;
+        if upstream.is_empty() {
+            // CI passes a missing secret through as the empty
+            // string; treat it as "no RPC configured" so the test
+            // skips cleanly rather than hanging on `anvil --fork-url ""`.
+            return Err(HarnessError::SkipNoRpc);
+        }
         if which::which("anvil").is_err() {
             return Err(HarnessError::AnvilMissing);
         }
