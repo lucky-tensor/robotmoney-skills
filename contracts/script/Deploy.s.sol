@@ -19,7 +19,7 @@ import {IGateway} from "../gateway/interfaces/IGateway.sol";
 ///         Deploys MockUSDC + MockVault + RobotMoneyGateway, grants AGENT_ROLE
 ///         to a distinct EOA via `authorizeAgent`, asserts role-separation,
 ///         mints test USDC to the agent, and writes a deployment JSON.
-/// @dev Implements `docs/implementation-plan-mvp.md` §5 step 1–2 and
+/// @dev Implements `docs/implementation-plan.md` §5 step 1–2 and
 ///      satisfies issue #10. Inputs are env-driven so the same script works
 ///      on Anvil, the docker devnet, and (with care) any throwaway L1.
 ///

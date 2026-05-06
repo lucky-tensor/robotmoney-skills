@@ -1,6 +1,6 @@
 //! End-to-end test harness for `rmpc` (Rust payment daemon).
 //!
-//! Issue #17 / `docs/implementation-plan-mvp.md` §4.
+//! Issue #17 / `docs/implementation-plan.md` §4.
 //!
 //! Two flavors:
 //!

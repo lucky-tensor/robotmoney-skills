@@ -1,6 +1,6 @@
 //! `tx` — EIP-1559 transaction envelope construction and broadcast.
 //!
-//! Per `docs/implementation-plan-mvp.md` §3.5/§3.7 and issue #12. The
+//! Per `docs/implementation-plan.md` §3.5/§3.7 and issue #12. The
 //! daemon builds typed EIP-1559 (`type=0x02`) transactions only — legacy
 //! and EIP-2930 envelopes are intentionally not supported. Construction
 //! is split from signing so unit tests can encode/decode envelopes

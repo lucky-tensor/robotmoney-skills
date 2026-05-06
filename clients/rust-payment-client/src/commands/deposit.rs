@@ -1,6 +1,6 @@
 //! `rmpc deposit` — sign and broadcast a USDC deposit through the gateway.
 //!
-//! Per `docs/implementation-plan-mvp.md` §3.8 and issue #16. This is the
+//! Per `docs/implementation-plan.md` §3.8 and issue #16. This is the
 //! keystone command; it ties together every other module:
 //!
 //! 1. Load config + signer (software keystore decrypted in-process).

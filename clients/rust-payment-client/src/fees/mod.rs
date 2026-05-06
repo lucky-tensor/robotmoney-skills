@@ -1,6 +1,6 @@
 //! `fees` — EIP-1559 fee policy.
 //!
-//! Per `docs/implementation-plan-mvp.md` §3.7 and issue #12. The daemon
+//! Per `docs/implementation-plan.md` §3.7 and issue #12. The daemon
 //! always builds EIP-1559 transactions; legacy `gasPrice` selection is
 //! intentionally not supported. Per-invocation behaviour:
 //!

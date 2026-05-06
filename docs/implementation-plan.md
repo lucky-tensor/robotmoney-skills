@@ -1,6 +1,6 @@
 # MVP Implementation Plan — Rust Client, Gateway, Testing, Agent Surfaces
 
-> Companion to `docs/architecture-proposal-v0.md`. This plan covers the
+> Companion to `docs/architecture.md`. This plan covers the
 > full MVP sequence. Phase 1 is the buildable slice of v0: one chain,
 > one token, one gateway, one Rust client. Later phases add fork-based
 > smart-contract testing, direct chain-read tooling, agent-harness

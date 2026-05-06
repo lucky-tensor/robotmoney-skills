@@ -11,7 +11,7 @@
 > parity: it covers guarded deposits, direct chain reads, and the agent
 > safety boundary. Reads, withdraw/redeem, basket routing, simulation,
 > wallet UX, and mainnet configuration are phased in
-> `docs/implementation-plan-mvp.md`.
+> `docs/implementation-plan.md`.
 
 ## 1. Product Boundary
 
@@ -282,7 +282,7 @@ The gateway is the source of truth for safety.
 The Rust client should replace relevant TypeScript CLI reads with
 direct JSON-RPC reads, not explorer APIs.
 
-Initial read commands are scoped in `docs/implementation-plan-mvp.md`
+Initial read commands are scoped in `docs/implementation-plan.md`
 and include vault status, balances, agent policy, gateway config,
 roles, tx status, and allowance checks.
 
@@ -370,7 +370,7 @@ or unredacted customer data.
 ## 16. MVP Phase Link
 
 The implementation sequence lives in
-`docs/implementation-plan-mvp.md`.
+`docs/implementation-plan.md`.
 
 That plan defines:
 

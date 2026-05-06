@@ -1,7 +1,7 @@
 //! `gateway` module — typed `alloy-sol-types` bindings for the on-chain
 //! contracts the daemon interacts with.
 //!
-//! Per issue #11 and `docs/implementation-plan-mvp.md` §3.5: typed ABI
+//! Per issue #11 and `docs/implementation-plan.md` §3.5: typed ABI
 //! encode/decode for `RobotMoneyGateway`, plus read-side bindings for the
 //! `MockUSDC` / ERC-20 `allowance`+`balanceOf` views and the `MockVault`
 //! used by tests. The ABIs are extracted from the Foundry build output and
