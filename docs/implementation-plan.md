@@ -1,11 +1,18 @@
 # MVP Implementation Plan — Rust Client, Gateway, Testing, Agent Surfaces
 
+> **Status (2026-05-06).** Phase 1 (secure agent deposit
+> infrastructure) is complete: contracts, deploy script, Rust client,
+> preflight, fee policy, nonce lock, all 11 e2e scenarios across the
+> Anvil and Geth+Lighthouse layers, and the `rmpd` → `rmpc` rename
+> have all merged. Phases 2–7 are not yet started; their sections
+> below describe the target shape and acceptance criteria.
+
 > Companion to `docs/architecture.md`. This plan covers the
-> full MVP sequence. Phase 1 is the buildable slice of v0: one chain,
-> one token, one gateway, one Rust client. Later phases add fork-based
-> smart-contract testing, direct chain-read tooling, agent-harness
-> installation, a simple explorer API/database, human-facing controls,
-> and a final OpenClaw demo.
+> full MVP sequence. Phase 1 was the buildable slice of v0: one
+> chain, one token, one gateway, one Rust client. Later phases add
+> fork-based smart-contract testing, direct chain-read tooling,
+> agent-harness installation, a simple explorer API/database,
+> human-facing controls, and a final OpenClaw demo.
 >
 > **Relationship to the product.** Robot Money is the ERC-4626 yield
 > vault in `contracts/RobotMoneyVault.sol` plus its
@@ -63,24 +70,26 @@ mainnet configuration management.
 
 ## 1. Phase map
 
-| Phase | Theme | Primary outcome |
-|---|---|---|
-| 1 | Secure agent deposit infrastructure | Agents can safely call a policy gateway that deposits USDC into the vault. |
-| 2 | Forked smart-contract e2e | Robot Money contracts are tested against a recent public-chain fork with real DEX/router interactions. |
-| 3 | Rust query tooling | `rmpc` exposes direct on-chain reads for vault status and related state without explorer APIs. |
-| 4 | Agent-harness installation | `rmpc` and the Robot Money skill install into OpenCode and OpenClaw; MCP is evaluated and scoped. |
-| 5 | Explorer API + database | A small service indexes relevant on-chain and `rmpc` activity for web/API consumers. |
-| 6 | Human dapp controls | Humans can execute sensitive commands such as granting permissions or creating credentials. |
-| 7 | E2E agent demo | OpenClaw completes a long-running Robot Money task on a recent public-chain fork. |
+| Phase | Theme | Primary outcome | Status |
+|---|---|---|---|
+| 1 | Secure agent deposit infrastructure | Agents can safely call a policy gateway that deposits USDC into the vault. | **DONE** (PRs #22–#36, #40, #43) |
+| 2 | Forked smart-contract e2e | Robot Money contracts are tested against a recent public-chain fork with real DEX/router interactions. | Not started |
+| 3 | Rust query tooling | `rmpc` exposes direct on-chain reads for vault status and related state without explorer APIs. | Not started |
+| 4 | Agent-harness installation | `rmpc` and the Robot Money skill install into OpenCode and OpenClaw; MCP is evaluated and scoped. | Not started |
+| 5 | Explorer API + database | A small service indexes relevant on-chain and `rmpc` activity for web/API consumers. | Not started |
+| 6 | Human dapp controls | Humans can execute sensitive commands such as granting permissions or creating credentials. | Not started |
+| 7 | E2E agent demo | OpenClaw completes a long-running Robot Money task on a recent public-chain fork. | Not started |
 
-Phase 1 is specified in detail below because it is the current
-implementation branch. Phases 2-7 define the target shape and
-acceptance criteria; they are intentionally less prescriptive where the
-architecture is still open.
+Phase 1 is specified in detail below because it was the implementation
+branch through 2026-05; the spec is preserved as a record of what
+shipped. Phases 2–7 define the target shape and acceptance criteria;
+they are intentionally less prescriptive where the architecture is
+still open.
 
 These are internal MVP delivery phases for the Rust/agent-access work.
 They are not the same numbering scheme as the public Robot Money
-product roadmap phases in `docs/project-roadmap.md`.
+product roadmap (`docs/project-roadmap.md` is deprecated; the public
+roadmap lives at robotmoney.net/changelog).
 
 **Intentional tradeoffs.**
 
@@ -466,18 +475,23 @@ test.
 
 ## 6. Phase 1 build order
 
-1. Contracts + role-separation deploy script + Foundry tests on Anvil.
-2. Mock USDC + deploy harness wired into the Docker testnet, plus a
-   bare `cast send` smoke (one tx) to confirm the stack — no TS SDK
-   detour.
-3. Rust crate skeleton + config loader + RPC + alloy bindings.
-   `rmpc self-check` can read state.
-4. Software signer + nonce lock + fee-cap policy + `deposit` happy
-   path. Tests 1–2, 10–11.
-5. Preflight + policy refusal + code-hash pinning. Tests 3–4, 7–8.
-6. Negative on-chain paths. Tests 5–6, 9.
+All six chunks shipped 2026-04 → 2026-05; recorded here for posterity.
 
-Each chunk is independently mergeable.
+1. ✅ Contracts + role-separation deploy script + Foundry tests on
+   Anvil. (PRs #23–#26, #29, #30)
+2. ✅ Mock USDC + deploy harness wired into the Docker testnet, plus a
+   bare `cast send` smoke (one tx) to confirm the stack — no TS SDK
+   detour. (PRs #23, #29)
+3. ✅ Rust crate skeleton + config loader + RPC + alloy bindings.
+   `rmpc self-check` can read state. (PRs #22, #25, #27, #32)
+4. ✅ Software signer + nonce lock + fee-cap policy + `deposit` happy
+   path. Tests 1–2, 10–11. (PRs #25, #28, #33)
+5. ✅ Preflight + policy refusal + code-hash pinning. Tests 3–4, 7–8.
+   (PR #31)
+6. ✅ Negative on-chain paths. Tests 5–6, 9. (PRs #34–#36)
+
+Final cleanups: audit findings, logging, `rmpd` → `rmpc` rename
+(PR #40); deprecated TypeScript CLI removed (PR #43).
 
 ## 7. Phase 1 open questions
 
