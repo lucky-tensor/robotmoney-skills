@@ -10,10 +10,14 @@
 //!    asserts `AgentDeposit` log emission via `rmpd status` lookup and
 //!    USDC balance routing to the gateway → vault → share receiver.
 //! 2. `over_window_cap_rejected` — second deposit whose sum with the
-//!    first exceeds `maxPerWindow` reverts with `WindowCapExceeded`,
-//!    surfaced by rmpd as `ErrTxReverted`. The window math runs on
-//!    `block.timestamp / WINDOW_SECONDS`, so this test only proves
-//!    something on a chain whose timestamps actually advance — Geth.
+//!    first exceeds `maxPerWindow` is refused. rmpd's preflight reads
+//!    `windowGross` from the gateway and short-circuits with
+//!    `ErrConfig` before broadcasting; if the preflight is ever
+//!    relaxed the same revert still surfaces as `ErrTxReverted` from
+//!    the gateway's `WindowCapExceeded()` path. Either is acceptable.
+//!    The window math runs on `block.timestamp / WINDOW_SECONDS`, so
+//!    this test only proves something on a chain whose timestamps
+//!    actually advance — Geth.
 //! 3. `role_separation_invariant` — admin attempting to grant
 //!    `AGENT_ROLE` to itself reverts `RoleSeparationViolated`. Proves
 //!    the on-chain invariant from `AccessRoles._grantRole` holds end
@@ -258,7 +262,9 @@ fn over_window_cap_rejected() {
         let v1 = parse_json(&first.stdout, "over_window_cap_rejected/leg1");
         assert_eq!(v1["status"], "success", "stdout={}", first.stdout);
 
-        // Leg 2 — would push gross to 220 > 200 cap. Must revert.
+        // Leg 2 — would push gross to 220 > 200 cap. Must be refused
+        // (either by rmpd preflight as ErrConfig, or by the gateway as
+        // ErrTxReverted/WindowCapExceeded if preflight is bypassed).
         let oid_b = order_id("over_window_cap_rejected_b");
         let second = fx
             .run_rmpd_deposit(deposit_args(CAP_TEST_SECOND_LEG, &oid_b))
@@ -266,22 +272,25 @@ fn over_window_cap_rejected() {
         assert_eq!(
             second.status.code(),
             Some(2),
-            "expected exit 2 on window-cap revert; stdout={}\nstderr={}",
+            "expected exit 2 on window-cap refusal; stdout={}\nstderr={}",
             second.stdout,
             second.stderr,
         );
         let v2 = parse_json(&second.stdout, "over_window_cap_rejected/leg2");
         assert_eq!(v2["status"], "refused", "stdout={}", second.stdout);
-        assert_eq!(
-            v2["error"], "ErrTxReverted",
-            "expected ErrTxReverted from WindowCapExceeded; stdout={}",
+        let err = v2["error"].as_str().unwrap_or("");
+        assert!(
+            err == "ErrConfig" || err == "ErrTxReverted",
+            "expected ErrConfig (preflight) or ErrTxReverted (gateway revert); got {err}; stdout={}",
             second.stdout
         );
-        // ErrTxReverted always carries the failed-tx hash.
+        // The error message must surface the cap arithmetic so an
+        // operator can see the offending numbers without re-running.
+        let msg = v2["message"].as_str().unwrap_or("");
         assert!(
-            v2["tx_hash"].as_str().is_some(),
-            "ErrTxReverted should carry tx_hash; stdout={}",
-            second.stdout,
+            msg.contains("maxPerWindow") || msg.to_lowercase().contains("window"),
+            "refusal message should reference the window cap; got: {msg}; stdout={}",
+            second.stdout
         );
     });
 }
