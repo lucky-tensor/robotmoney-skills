@@ -85,14 +85,30 @@ jobs:
       # Each test binary boots its own Geth devnet on port 8545. CI runs
       # them sequentially so the port is never contended; tests within a
       # binary serialize via `--test-threads=1`.
+      #
+      # The shared `Fixture` lives in a `static OnceLock` inside each
+      # test binary, so its `Drop` is NOT guaranteed to run at process
+      # exit (Rust does not destruct statics). We therefore tear the
+      # compose stack down explicitly between binaries — otherwise the
+      # next `compose up -d` finds containers Running with the volume
+      # already populated, recreates the `setup` service against the
+      # populated volume, and the genesis script fails with exit 1.
 
       - name: e2e smoke test
         working-directory: testing/ethereum-testnet/e2e-rust
         run: cargo test --release --test smoke -- --test-threads=1 --nocapture
 
+      - name: Tear down docker between binaries (post-smoke)
+        working-directory: testing/ethereum-testnet/config
+        run: docker compose down -v --remove-orphans
+
       - name: e2e scenario suite
         working-directory: testing/ethereum-testnet/e2e-rust
         run: cargo test --release --test scenarios -- --test-threads=1 --nocapture
+
+      - name: Tear down docker between binaries (post-scenarios)
+        working-directory: testing/ethereum-testnet/config
+        run: docker compose down -v --remove-orphans
 
       - name: e2e window-cap scenario
         working-directory: testing/ethereum-testnet/e2e-rust
