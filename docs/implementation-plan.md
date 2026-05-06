@@ -121,19 +121,23 @@ contracts/gateway/
   AccessRoles.sol               # role constants + AccessControl wiring
   interfaces/IGateway.sol
 
-clients/rmpc/
+clients/rust-payment-client/         # crate name; binary is `rmpc`
   Cargo.toml
   src/
-    main.rs                     # CLI: deposit / status / self-check
+    main.rs                     # binary entry; defers to lib::run
+    lib.rs                      # public surface for integration tests
+    cli.rs                      # clap parser
+    commands/                   # deposit / status / self-check
     config.rs                   # toml loader, address pinning, chain_id
-    signer/mod.rs               # AgentSigner trait
-    signer/software.rs          # encrypted-keystore secp256k1 (MVP)
-    gateway.rs                  # alloy-sol-types bindings + event decode
-    rpc.rs                      # minimal JSON-RPC over reqwest
-    policy.rs                   # preflight checks mirrored from contract
-    tx.rs                       # build/sign/broadcast EIP-1559 tx
-    fees.rs                     # gas pricing + fee-cap policy
-    nonce.rs                    # local nonce manager
+    signer/                     # AgentSigner trait + encrypted-keystore impl
+    gateway/                    # alloy-sol-types bindings + event decode
+    rpc/                        # minimal JSON-RPC over reqwest
+    policy/                     # preflight checks mirrored from contract
+    tx/                         # build/sign/broadcast EIP-1559 tx
+    fees/                       # gas pricing + fee-cap policy
+    nonce/                      # per-agent file lock + nonce read
+    replay_cache.rs             # local idempotency cache
+    logging.rs
     errors.rs
 
 testing/ethereum-testnet/
@@ -174,13 +178,14 @@ the agent's signing key).
 Storage:
 
 ```solidity
-IERC20    public immutable usdc;                       // pinned at construction
-IERC4626  public immutable vault;                      // RobotMoneyVault, pinned
+IERC20    public immutable usdcToken;                  // pinned at construction
+IERC4626  public immutable vaultContract;              // RobotMoneyVault, pinned
+                                                       // (exposed via usdc()/vault() views)
 
 struct AgentPolicy {
     bool    active;
     uint64  validUntil;
-    uint256 maxPerDeposit;
+    uint256 maxPerPayment;
     uint256 maxPerWindow;
     address shareReceiver;     // who gets rmUSDC; set by ADMIN, not the agent
 }
@@ -188,10 +193,11 @@ mapping(address => AgentPolicy) public agents;
 
 mapping(address => mapping(uint64 => uint256))         // per-agent windowed gross —
         public agentWindowGross;                       // NOT shared across agents
-mapping(bytes32 => bool) public usedDepositIds;
-bool public paused;
-uint64 public constant WINDOW_SECONDS = 86400;         // Unix-epoch-aligned;
+mapping(bytes32 => bool) public usedPaymentIds;
+bool private _paused;                                  // exposed via paused()
+uint64  public constant WINDOW_SECONDS    = 86400;     // Unix-epoch-aligned;
                                                        // see v0 §23.3
+uint256 public constant MAX_DEADLINE_SKEW = 600;       // seconds
 ```
 
 Functions (refuse anything else):
@@ -202,8 +208,11 @@ function deposit(
     uint256 amount,
     uint64  deadline,
     bytes32 idempotencyKey
-) external whenNotPaused onlyRole(AGENT_ROLE)
-    returns (bytes32 depositId, uint256 sharesMinted);
+) external onlyRole(AGENT_ROLE)
+    returns (bytes32 paymentId, uint256 sharesMinted);
+// Pause is enforced by an explicit `if (_paused) revert PausedError()`
+// at function head; the gateway uses custom errors throughout instead
+// of OZ's `whenNotPaused` modifier.
 
 function authorizeAgent(address agent, AgentPolicy calldata p) external onlyRole(ADMIN_ROLE);
 function revokeAgent(address agent) external onlyRole(ADMIN_ROLE);
@@ -215,13 +224,13 @@ Events:
 
 ```solidity
 event AgentAuthorized(address indexed agent, uint64 validUntil,
-                      uint256 maxPerDeposit, uint256 maxPerWindow,
+                      uint256 maxPerPayment, uint256 maxPerWindow,
                       address shareReceiver);
 event AgentRevoked(address indexed agent);
 event Paused(address indexed by);
 event Unpaused(address indexed by);
 event AgentDeposit(
-    bytes32 indexed depositId,
+    bytes32 indexed paymentId,
     bytes32 indexed orderId,
     address indexed agent,
     address shareReceiver,
@@ -233,32 +242,32 @@ event AgentDeposit(
 
 Behavior of `deposit` (subset of v0 §20.1, retargeted to the vault):
 
-1. `amount > 0 && amount <= agents[msg.sender].maxPerDeposit`
-2. `block.timestamp <= deadline && deadline <= block.timestamp + 600`
+1. `amount > 0 && amount <= agents[msg.sender].maxPerPayment`
+2. `block.timestamp <= deadline && deadline <= block.timestamp + MAX_DEADLINE_SKEW`
 3. `agents[msg.sender].active && validUntil >= block.timestamp`
 4. `windowId = uint64(block.timestamp / WINDOW_SECONDS)`
 5. `agentWindowGross[msg.sender][windowId] + amount <= agents[msg.sender].maxPerWindow`
-6. `depositId = keccak256(abi.encode(block.chainid, address(this),
+6. `paymentId = keccak256(abi.encode(block.chainid, address(this),
    msg.sender, orderId, amount, idempotencyKey))`; revert if already
    used.
    - **`deadline` is intentionally excluded from the hash.**
      Idempotency is keyed on (caller, order, amount, idempotency
      key). Two requests with the same `(orderId, idempotencyKey)`
-     collapse to the same depositId regardless of deadline; the
-     second is rejected by `usedDepositIds`. This makes deadline a
+     collapse to the same paymentId regardless of deadline; the
+     second is rejected by `usedPaymentIds`. This makes deadline a
      *liveness* parameter, not an *identity* parameter.
-7. `usdc.safeTransferFrom(msg.sender, address(this), amount)` with
+7. `usdcToken.safeTransferFrom(msg.sender, address(this), amount)` with
    **balance-delta verification** (fee-on-transfer defense, v0 §25).
-8. `usdc.forceApprove(address(vault), amount)` (one-shot allowance,
-   reset to zero post-call).
-9. `sharesMinted = vault.deposit(amount, agents[msg.sender].shareReceiver)`
+8. `usdcToken.forceApprove(address(vaultContract), amount)` (one-shot
+   allowance, reset to zero post-call).
+9. `sharesMinted = vaultContract.deposit(amount, agents[msg.sender].shareReceiver)`
    — the gateway is the ERC-4626 caller; the receiver is the agent's
    pre-registered share-receiver address. Vault-side reverts (TVL
    cap, paused, shutdown) propagate; the gateway never holds shares.
-10. `usdc.forceApprove(address(vault), 0)` to clear residual.
+10. `usdcToken.forceApprove(address(vaultContract), 0)` to clear residual.
 11. Update `agentWindowGross[msg.sender][windowId] += amount` and
-    mark `usedDepositIds[depositId] = true`.
-12. emit `AgentDeposit(depositId, orderId, agent, shareReceiver,
+    mark `usedPaymentIds[paymentId] = true`.
+12. emit `AgentDeposit(paymentId, orderId, agent, shareReceiver,
     amount, sharesMinted, windowId)`.
 
 The gateway must never custody `rmUSDC`; the vault deposit and the
@@ -273,31 +282,26 @@ Matches v0 §6 but trimmed: only `signer/software.rs` is implemented.
 `signer/mod.rs` defines the trait so HSM/KMS land later without API
 churn.
 
-### 4.2 `AgentSigner` trait (verbatim from v0 §8.1, MVP-shrunk request)
+### 4.2 `AgentSigner` trait (matches v0 §8.1)
 
 ```rust
-use alloy_primitives::{Address, B256, U256};
+use alloy_primitives::Address;
+use alloy_signer::Signature;
 
-pub trait AgentSigner {
+pub trait AgentSigner: Send + Sync {
     fn backend_kind(&self) -> SignerBackendKind;
     fn public_address(&self) -> Address;
-    fn sign_gateway_tx(&self, req: GatewayTxRequest) -> Result<SignedTx, SignerError>;
-}
-
-pub enum GatewayTxRequest {
-    Deposit {
-        order_id: B256,
-        amount: U256,                // matches contract uint256;
-                                     // never narrowed at the trust boundary
-        deadline: u64,
-        idempotency_key: B256,
-    },
+    fn sign_eip1559_hash(&self, hash: &[u8; 32])
+        -> Result<Signature, SignerError>;
 }
 ```
 
 The trait does **not** expose `sign_hash` / `sign_message` /
-`sign_typed_data`. Enforced at the type level so future backends
-cannot widen it.
+`sign_typed_data`. The only hash a caller can produce is the EIP-1559
+envelope hash for a known gateway-deposit transaction, which is
+constructed by the `tx` module from a typed `GatewayTxRequest` —
+keeping the trust boundary at the call site rather than inside the
+signer. Future backends cannot widen this.
 
 ### 4.3 Software signer
 
@@ -429,7 +433,7 @@ as a subprocess from the Rust harness's `setup()` fixture.
    `ErrAgentNotAuthorized`.
 3. `paused_blocks_deposit` *(Anvil)* — `PAUSER_ROLE` calls `pause()`;
    client preflight refuses to sign (no broadcast).
-4. `over_per_deposit_cap_rejected` *(Anvil)* — preflight rejects;
+4. `over_per_payment_cap_rejected` *(Anvil)* — preflight rejects;
    contract would also revert (asserted via debug-only bypass).
 5. `over_window_cap_rejected` *(Geth)* — two deposits whose sum
    exceeds `maxPerWindow` → second reverts on-chain. Geth-layer
