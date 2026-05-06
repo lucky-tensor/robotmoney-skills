@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: MIT
+// Canonical: docs/implementation-plan.md §3 — Phase 1 Contracts (deploy + role-separation invariant)
+// (See also: docs/architecture.md §6 — Roles)
 pragma solidity ^0.8.24;
 
 import {Script} from "forge-std/Script.sol";

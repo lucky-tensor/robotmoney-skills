@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: MIT
+// Canonical: docs/architecture.md §6 — Roles
+// (See also: docs/implementation-plan.md §3.1 — AccessRoles.sol)
 pragma solidity ^0.8.24;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";

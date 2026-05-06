@@ -1,3 +1,5 @@
+//! Canonical: docs/architecture.md §8 — Signer Backends
+//!
 //! `signer` module — `AgentSigner` trait and backends.
 //!
 //! Issue #8 / `docs/implementation-plan.md` §3.2–§3.3. The trait is

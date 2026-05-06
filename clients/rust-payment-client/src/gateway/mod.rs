@@ -1,3 +1,5 @@
+//! Canonical: docs/implementation-plan.md §3.2 — RobotMoneyGateway.sol (typed ABI bindings)
+//!
 //! `gateway` module — typed `alloy-sol-types` bindings for the on-chain
 //! contracts the daemon interacts with.
 //!

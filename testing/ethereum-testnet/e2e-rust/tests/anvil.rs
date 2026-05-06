@@ -1,3 +1,5 @@
+//! Canonical: docs/implementation-plan.md §5 — Anvil-layer scenarios
+//!
 //! Anvil-layer scenario tests for `rmpc` (issue #18).
 //!
 //! Per `docs/implementation-plan.md` §4. These eight `#[test]`

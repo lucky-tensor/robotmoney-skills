@@ -1,3 +1,5 @@
+//! Canonical: docs/architecture.md §10 — Local State (operator config TOML loader)
+//!
 //! TOML configuration loader.
 //!
 //! Field set is fixed by `docs/implementation-plan.md` §3.4–§3.7 and

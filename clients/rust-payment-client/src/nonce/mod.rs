@@ -1,3 +1,5 @@
+//! Canonical: docs/implementation-plan.md §4.6 — Nonce management
+//!
 //! `nonce` — single-flight per-agent file lock.
 //!
 //! Per `docs/implementation-plan.md` §3.6 and issue #12. The MVP CLI

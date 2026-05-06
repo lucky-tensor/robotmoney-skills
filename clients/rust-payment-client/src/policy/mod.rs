@@ -1,3 +1,6 @@
+//! Canonical: docs/architecture.md §9 — Client Preflight
+//! (See also: docs/implementation-plan.md §4.4 — Preflight)
+//!
 //! `policy` module — client-side preflight that mirrors the on-chain
 //! `RobotMoneyGateway` policy.
 //!

@@ -1,3 +1,5 @@
+//! Canonical: docs/implementation-plan.md §4.5 — ABI encoding and Ethereum primitives (JSON-RPC transport)
+//!
 //! `rpc` module — minimal async JSON-RPC over `reqwest`.
 //!
 //! Per `docs/implementation-plan.md` §3.5 ("hand-roll if minimal") and

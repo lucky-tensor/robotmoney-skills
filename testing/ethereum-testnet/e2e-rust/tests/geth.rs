@@ -1,3 +1,5 @@
+//! Canonical: docs/implementation-plan.md §5 — Geth+Lighthouse-layer scenarios
+//!
 //! Geth + Lighthouse-layer scenario tests for `rmpc` (issue #19).
 //!
 //! Per `docs/implementation-plan.md` §4. These three `#[test]`

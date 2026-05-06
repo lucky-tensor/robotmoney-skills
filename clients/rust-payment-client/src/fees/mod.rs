@@ -1,3 +1,5 @@
+//! Canonical: docs/implementation-plan.md §4.7 — Fee policy
+//!
 //! `fees` — EIP-1559 fee policy.
 //!
 //! Per `docs/implementation-plan.md` §3.7 and issue #12. The daemon
