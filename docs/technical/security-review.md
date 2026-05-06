@@ -3,7 +3,7 @@
 **Scope:** Full codebase — `contracts/` (Solidity), `packages/cli/src/` (TypeScript), shell scripts, config.
 **Method (Pass 1):** Breadth-first codebase survey → drill-down per call path → parallel false-positive filtering, threshold confidence ≥ 8.
 **Method (Pass 2 — TS CLI critical re-review):** Adversarial re-read of `packages/cli/src/`, deliberately re-evaluating filters that Pass 1 applied.
-**Status of the TS CLI:** Deprecated as of 2026-05-06 in favor of a Rust signing daemon (`rmpd`) plus an on-chain policy gateway. Findings against the CLI are retained both as a historical record and as design traps the Rust rewrite must avoid (see [Lessons for the Rust + gateway rewrite](#lessons-for-the-rust--gateway-rewrite)).
+**Status of the TS CLI:** Deprecated as of 2026-05-06 in favor of a Rust signing client (`rmpc`) plus an on-chain policy gateway. Findings against the CLI are retained both as a historical record and as design traps the Rust rewrite must avoid (see [Lessons for the Rust + gateway rewrite](#lessons-for-the-rust--gateway-rewrite)).
 
 ---
 
