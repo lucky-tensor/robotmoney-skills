@@ -204,8 +204,8 @@ mod tests {
         let p = lock_path(dir, &address!("00000000000000000000000000000000000000Aa"));
         // Lowercase, no 0x: two invocations passing different EIP-55
         // checksums collide on the same lock file.
-        assert!(p.to_string_lossy().ends_with(
-            "agent-00000000000000000000000000000000000000aa.lock"
-        ));
+        assert!(p
+            .to_string_lossy()
+            .ends_with("agent-00000000000000000000000000000000000000aa.lock"));
     }
 }

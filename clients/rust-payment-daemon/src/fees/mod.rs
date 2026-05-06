@@ -64,9 +64,7 @@ pub fn compute_fees(fee_history: &FeeHistory, cap_wei: u128) -> Result<FeeBid> {
     // Saturating because `2 * baseFee + tip` could in principle overflow
     // a u128 only on absurd networks; we'd still treat that as
     // cap-exceeded.
-    let target = base_fee_next
-        .saturating_mul(2)
-        .saturating_add(priority_fee);
+    let target = base_fee_next.saturating_mul(2).saturating_add(priority_fee);
 
     if target > cap_wei {
         return Err(RmpdError::ErrFeeCapExceeded);
