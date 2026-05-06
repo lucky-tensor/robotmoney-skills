@@ -2,12 +2,12 @@ name: Ethereum Test Harness Smoke Test
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - "testing/ethereum-testnet/**"
       - ".github/workflows/eth-harness-ci.yaml"
   pull_request:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - "testing/ethereum-testnet/**"
       - ".github/workflows/eth-harness-ci.yaml"
