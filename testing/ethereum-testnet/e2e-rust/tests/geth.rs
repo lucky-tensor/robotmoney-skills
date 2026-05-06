@@ -200,7 +200,26 @@ fn deposit_happy_path() {
             st.stderr
         );
         let sv = parse_json(&st.stdout, "deposit_happy_path/status");
-        assert_eq!(sv["found"], true, "status stdout={}", st.stdout);
+        // StatusFound shape carries payment_id + block_number + tx_hash;
+        // StatusNotFound carries only payment_id + status="not_found".
+        // We assert on the discriminator: presence of `block_number`.
+        assert!(
+            sv.get("block_number").and_then(|v| v.as_u64()).is_some(),
+            "rmpd status should locate the deposit; stdout={}",
+            st.stdout
+        );
+        assert_eq!(
+            sv["payment_id"].as_str(),
+            Some(payment_id.as_str()),
+            "status payment_id roundtrip; stdout={}",
+            st.stdout
+        );
+        assert_eq!(
+            sv["amount"].as_str(),
+            Some(HAPPY_DEPOSIT.to_string().as_str()),
+            "status amount; stdout={}",
+            st.stdout
+        );
     });
 }
 
