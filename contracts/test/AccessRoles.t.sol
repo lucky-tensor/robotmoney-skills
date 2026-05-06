@@ -20,6 +20,10 @@ contract AccessRolesHarness is AccessRoles {
 contract AccessRolesTest is Test {
     AccessRolesHarness internal roles;
 
+    bytes32 internal ADMIN;
+    bytes32 internal PAUSER;
+    bytes32 internal AGENT;
+
     address internal admin = makeAddr("admin");
     address internal pauser = makeAddr("pauser");
     address internal agent = makeAddr("agent");
@@ -27,6 +31,9 @@ contract AccessRolesTest is Test {
 
     function setUp() public {
         roles = new AccessRolesHarness(admin);
+        ADMIN = roles.ADMIN_ROLE();
+        PAUSER = roles.PAUSER_ROLE();
+        AGENT = roles.AGENT_ROLE();
     }
 
     // --- Role-constant identity ---------------------------------------------
@@ -64,48 +71,48 @@ contract AccessRolesTest is Test {
     function test_grantAgent_revertsIfAlreadyAdmin() public {
         vm.prank(admin);
         vm.expectRevert(AccessRoles.RoleSeparationViolated.selector);
-        roles.grantRole(roles.AGENT_ROLE(), admin);
+        roles.grantRole(AGENT, admin);
     }
 
     function test_grantAgent_revertsIfAlreadyPauser() public {
         vm.prank(admin);
-        roles.grantRole(roles.PAUSER_ROLE(), pauser);
+        roles.grantRole(PAUSER, pauser);
 
         vm.prank(admin);
         vm.expectRevert(AccessRoles.RoleSeparationViolated.selector);
-        roles.grantRole(roles.AGENT_ROLE(), pauser);
+        roles.grantRole(AGENT, pauser);
     }
 
     function test_grantAdmin_revertsIfAlreadyAgent() public {
         vm.prank(admin);
-        roles.grantRole(roles.AGENT_ROLE(), agent);
+        roles.grantRole(AGENT, agent);
 
         vm.prank(admin);
         vm.expectRevert(AccessRoles.RoleSeparationViolated.selector);
-        roles.grantRole(roles.ADMIN_ROLE(), agent);
+        roles.grantRole(ADMIN, agent);
     }
 
     function test_grantPauser_revertsIfAlreadyAgent() public {
         vm.prank(admin);
-        roles.grantRole(roles.AGENT_ROLE(), agent);
+        roles.grantRole(AGENT, agent);
 
         vm.prank(admin);
         vm.expectRevert(AccessRoles.RoleSeparationViolated.selector);
-        roles.grantRole(roles.PAUSER_ROLE(), agent);
+        roles.grantRole(PAUSER, agent);
     }
 
     function test_grantAgent_succeedsForFreshAccount() public {
         vm.prank(admin);
-        roles.grantRole(roles.AGENT_ROLE(), agent);
-        assertTrue(roles.hasRole(roles.AGENT_ROLE(), agent));
+        roles.grantRole(AGENT, agent);
+        assertTrue(roles.hasRole(AGENT, agent));
     }
 
     function test_adminAndPauser_canCoexistOnSameAccount() public {
         // Only AGENT is exclusive; ADMIN+PAUSER overlap is permitted.
         vm.prank(admin);
-        roles.grantRole(roles.PAUSER_ROLE(), admin);
-        assertTrue(roles.hasRole(roles.ADMIN_ROLE(), admin));
-        assertTrue(roles.hasRole(roles.PAUSER_ROLE(), admin));
+        roles.grantRole(PAUSER, admin);
+        assertTrue(roles.hasRole(ADMIN, admin));
+        assertTrue(roles.hasRole(PAUSER, admin));
     }
 
     // --- assertRoleSeparation helper ----------------------------------------
@@ -120,7 +127,7 @@ contract AccessRolesTest is Test {
 
     function test_assertRoleSeparation_passesForAgentOnly() public {
         vm.prank(admin);
-        roles.grantRole(roles.AGENT_ROLE(), agent);
+        roles.grantRole(AGENT, agent);
         roles.exposed_assertRoleSeparation(agent);
     }
 
@@ -134,6 +141,6 @@ contract AccessRolesTest is Test {
                 bytes32(0)
             )
         );
-        roles.grantRole(roles.AGENT_ROLE(), agent);
+        roles.grantRole(AGENT, agent);
     }
 }
