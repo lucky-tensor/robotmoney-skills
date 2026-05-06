@@ -653,9 +653,7 @@ fn wait_for_rpc(rpc: &Rpc, timeout: Duration) -> Result<(), HarnessError> {
 fn sanitize_rpc_label(s: &str) -> String {
     let after = s.split_once("://").map(|(_, r)| r).unwrap_or(s);
     let after = after.split_once('@').map(|(_, r)| r).unwrap_or(after);
-    let host_end = after
-        .find(['/', ':', '?'])
-        .unwrap_or(after.len());
+    let host_end = after.find(['/', ':', '?']).unwrap_or(after.len());
     let host = &after[..host_end];
     if host.is_empty() {
         "unknown".to_string()
