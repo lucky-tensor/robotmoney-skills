@@ -228,8 +228,8 @@ impl SoftwareSigner {
         }
         // High-severity startup banner — operators rely on this to spot a
         // misconfigured production rollout that fell through to software.
-        eprintln!(
-            "rmpc[WARN] software signer enabled: keystore decrypted in process memory \
+        log::warn!(
+            "software signer enabled: keystore decrypted in process memory \
              (allow_software_fallback=true); HSM/KMS strongly recommended for production"
         );
 

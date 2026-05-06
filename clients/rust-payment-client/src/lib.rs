@@ -12,6 +12,7 @@ pub mod config;
 pub mod errors;
 pub mod fees;
 pub mod gateway;
+pub mod logging;
 pub mod nonce;
 pub mod policy;
 pub mod rpc;

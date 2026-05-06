@@ -35,6 +35,7 @@ use crate::config::Config;
 use crate::errors::RmpcError;
 use crate::fees::compute_fees;
 use crate::gateway::RobotMoneyGateway;
+use crate::logging::{record_audit, AuditDecision, AuditRecordBuilder};
 use crate::nonce::AgentLock;
 use crate::policy::{Preflight, PreflightInputs};
 use crate::rpc::RpcClient;
@@ -53,9 +54,11 @@ const EXIT_STARTUP_FAIL: i32 = 3;
 /// in sync with `RobotMoneyGateway.MAX_DEADLINE_SKEW`.
 pub const MAX_DEADLINE_SKEW_SECS: u64 = 600;
 
-/// Environment variable for the per-agent state directory (lock files).
-/// Falls back to a process-local default under the OS temp dir; operators
-/// in production set this to `/var/lib/rmpc`.
+/// Environment variable for the per-agent state directory.
+///
+/// Resolved by [`Config::resolve_state_dir`]: env override → TOML
+/// `state_dir` field → fail-fast. There is **no silent `/tmp` fallback**
+/// (audit finding M1).
 pub const STATE_DIR_ENV_VAR: &str = "RMPC_STATE_DIR";
 
 /// Inputs collected by `main.rs` from the CLI parser. Keeps the surface
@@ -120,7 +123,7 @@ pub fn run(args: Args) -> i32 {
     let cfg = match Config::from_path(&args.config_path) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("rmpc deposit: failed to load config: {e}");
+            log::error!("rmpc deposit: failed to load config: {e}");
             return EXIT_STARTUP_FAIL;
         }
     };
@@ -130,7 +133,7 @@ pub fn run(args: Args) -> i32 {
         _ => match U256::from_str(&args.amount) {
             Ok(v) => v,
             Err(e) => {
-                eprintln!("rmpc deposit: --amount must be a decimal U256: {e}");
+                log::error!("rmpc deposit: --amount must be a decimal U256: {e}");
                 return EXIT_STARTUP_FAIL;
             }
         },
@@ -139,7 +142,7 @@ pub fn run(args: Args) -> i32 {
     let order_id = match B256::from_str(&args.order_id) {
         Ok(b) => b,
         Err(e) => {
-            eprintln!("rmpc deposit: --order-id is not a 32-byte hex string: {e}");
+            log::error!("rmpc deposit: --order-id is not a 32-byte hex string: {e}");
             return EXIT_STARTUP_FAIL;
         }
     };
@@ -149,7 +152,7 @@ pub fn run(args: Args) -> i32 {
         Some(s) => match B256::from_str(s) {
             Ok(b) => b,
             Err(e) => {
-                eprintln!("rmpc deposit: --idempotency-key is not a 32-byte hex string: {e}");
+                log::error!("rmpc deposit: --idempotency-key is not a 32-byte hex string: {e}");
                 return EXIT_STARTUP_FAIL;
             }
         },
@@ -158,7 +161,7 @@ pub fn run(args: Args) -> i32 {
     let gateway_addr = match Address::from_str(&cfg.gateway_address) {
         Ok(a) => a,
         Err(e) => {
-            eprintln!("rmpc deposit: gateway_address parse error: {e}");
+            log::error!("rmpc deposit: gateway_address parse error: {e}");
             return EXIT_STARTUP_FAIL;
         }
     };
@@ -174,7 +177,7 @@ pub fn run(args: Args) -> i32 {
     let passphrase = match std::env::var(PASSPHRASE_ENV_VAR) {
         Ok(s) => s,
         Err(_) => {
-            eprintln!(
+            log::error!(
                 "rmpc deposit: ${PASSPHRASE_ENV_VAR} is unset; refusing to prompt on stdin from a non-interactive command"
             );
             return EXIT_STARTUP_FAIL;
@@ -187,23 +190,59 @@ pub fn run(args: Args) -> i32 {
     ) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("rmpc deposit: signer load failed: {e}");
+            log::error!("rmpc deposit: signer load failed: {e}");
             return EXIT_STARTUP_FAIL;
         }
     };
     let agent_address = signer.public_address();
+    let backend_label = match signer.backend_kind() {
+        crate::signer::SignerBackendKind::Software => "software",
+        crate::signer::SignerBackendKind::Hsm => "hsm",
+        crate::signer::SignerBackendKind::Kms => "kms",
+    };
 
-    // State dir for the per-agent lock. The doc references
-    // `$RMPC_STATE_DIR`; default to a per-user temp path so unit
-    // invocations don't fail on a fresh box.
-    let state_dir = match std::env::var(STATE_DIR_ENV_VAR) {
-        Ok(s) => PathBuf::from(s),
-        Err(_) => std::env::temp_dir().join("rmpc-state"),
+    // Audit-record skeleton. Filled in incrementally; on every exit
+    // path below we call `audit.build(...)` + `record_audit(&rec)` so
+    // every signing decision (success OR refusal) leaves a trail.
+    let mut audit = AuditRecordBuilder {
+        agent: format!("{agent_address:#x}"),
+        backend: backend_label.to_string(),
+        request_type: "deposit".to_string(),
+        order_id: format!("{order_id:#x}"),
+        idempotency_key: format!("{idempotency_key:#x}"),
+        amount: amount.to_string(),
+        deadline,
+        gateway: format!("{gateway_addr:#x}"),
+        chain_id: cfg.chain_id,
+        tx_hash: None,
+        payment_id: None,
+    };
+    log::info!(
+        "deposit: starting agent={} order_id={} amount={} chain_id={}",
+        audit.agent,
+        audit.order_id,
+        audit.amount,
+        audit.chain_id
+    );
+
+    // State dir for the per-agent lock + replay cache. Resolved via
+    // `Config::resolve_state_dir`: env (`RMPC_STATE_DIR`) → TOML
+    // `state_dir` → fail-fast. No silent `/tmp` fallback (audit M1).
+    let state_dir = match cfg.resolve_state_dir() {
+        Ok(p) => p,
+        Err(e) => {
+            log::error!("rmpc deposit: {e}");
+            return EXIT_STARTUP_FAIL;
+        }
     };
 
     let _lock = match AgentLock::acquire(&state_dir, &agent_address) {
         Ok(l) => l,
         Err(RmpcError::ErrConcurrentInvocation) => {
+            record_audit(&audit.build(
+                AuditDecision::Refused,
+                Some("ErrConcurrentInvocation".to_string()),
+            ));
             emit_refusal(
                 &DepositFailure {
                     status: "refused",
@@ -221,7 +260,7 @@ pub fn run(args: Args) -> i32 {
             return EXIT_REFUSAL;
         }
         Err(e) => {
-            eprintln!("rmpc deposit: lock acquire failed: {e}");
+            log::error!("rmpc deposit: lock acquire failed: {e}");
             return EXIT_STARTUP_FAIL;
         }
     };
@@ -233,7 +272,7 @@ pub fn run(args: Args) -> i32 {
     {
         Ok(rt) => rt,
         Err(e) => {
-            eprintln!("rmpc deposit: tokio runtime build failed: {e}");
+            log::error!("rmpc deposit: tokio runtime build failed: {e}");
             return EXIT_STARTUP_FAIL;
         }
     };
@@ -241,7 +280,7 @@ pub fn run(args: Args) -> i32 {
     let rpc = match RpcClient::new(&cfg.rpc_url) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("rmpc deposit: rpc client init failed: {e}");
+            log::error!("rmpc deposit: rpc client init failed: {e}");
             return EXIT_STARTUP_FAIL;
         }
     };
@@ -258,6 +297,7 @@ pub fn run(args: Args) -> i32 {
     let report = match preflight_result {
         Ok(r) => r,
         Err(err) => {
+            record_audit(&audit.build(AuditDecision::Refused, Some(error_name(&err).to_string())));
             let checks = ChecksOutput::from_err_partial(&err);
             emit_refusal(
                 &DepositFailure {
@@ -278,9 +318,17 @@ pub fn run(args: Args) -> i32 {
     // -- Fees -------------------------------------------------------------
     let fee_history_res = rt.block_on(async { rpc.fee_history(5, "latest", &[50.0]).await });
     let fees = match fee_history_res {
-        Ok(fh) => match compute_fees(&fh, cfg.max_fee_per_gas_cap as u128) {
+        Ok(fh) => match compute_fees(
+            &fh,
+            cfg.max_fee_per_gas_cap as u128,
+            cfg.max_priority_fee_per_gas_cap
+                .map_or(u128::MAX, |v| v as u128),
+        ) {
             Ok(b) => b,
             Err(e) => {
+                record_audit(
+                    &audit.build(AuditDecision::Refused, Some(error_name(&e).to_string())),
+                );
                 emit_refusal(
                     &DepositFailure {
                         status: "refused",
@@ -297,7 +345,7 @@ pub fn run(args: Args) -> i32 {
             }
         },
         Err(e) => {
-            eprintln!("rmpc deposit: eth_feeHistory failed: {e}");
+            log::error!("rmpc deposit: eth_feeHistory failed: {e}");
             return EXIT_STARTUP_FAIL;
         }
     };
@@ -310,7 +358,7 @@ pub fn run(args: Args) -> i32 {
     let nonce = match nonce_res {
         Ok(n) => n,
         Err(e) => {
-            eprintln!("rmpc deposit: eth_getTransactionCount failed: {e}");
+            log::error!("rmpc deposit: eth_getTransactionCount failed: {e}");
             return EXIT_STARTUP_FAIL;
         }
     };
@@ -339,7 +387,7 @@ pub fn run(args: Args) -> i32 {
     let alloy_sig = match signer.sign_eip1559_hash(&hash_bytes) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("rmpc deposit: envelope signing failed: {e}");
+            log::error!("rmpc deposit: envelope signing failed: {e}");
             return EXIT_STARTUP_FAIL;
         }
     };
@@ -349,10 +397,14 @@ pub fn run(args: Args) -> i32 {
     let tx_hash = match rt.block_on(async { broadcast(&rpc, &raw).await }) {
         Ok(h) => h,
         Err(e) => {
-            eprintln!("rmpc deposit: eth_sendRawTransaction failed: {e}");
+            log::error!("rmpc deposit: eth_sendRawTransaction failed: {e}");
             // Treat broadcast failure as a refusal — operator-visible
             // failure with a stable name. Most likely cause is a contract
             // revert simulated by the node ahead of inclusion.
+            record_audit(&audit.build(
+                AuditDecision::BroadcastFailed,
+                Some(error_name(&e).to_string()),
+            ));
             emit_refusal(
                 &DepositFailure {
                     status: "refused",
@@ -369,6 +421,10 @@ pub fn run(args: Args) -> i32 {
         }
     };
 
+    // Stamp the broadcast tx_hash into the audit record so subsequent
+    // refusal/success emissions include it.
+    audit.tx_hash = Some(format!("{tx_hash:#x}"));
+
     // -- Receipt ----------------------------------------------------------
     // 1s polling cadence (RECEIPT_POLL_INTERVAL_MS) × the operator's
     // attempt budget. Issue #19 e2e harness sets this short on Anvil.
@@ -379,6 +435,7 @@ pub fn run(args: Args) -> i32 {
     let receipt = match receipt_res {
         Ok(r) => r,
         Err(e) => {
+            record_audit(&audit.build(AuditDecision::Refused, Some(error_name(&e).to_string())));
             emit_refusal(
                 &DepositFailure {
                     status: "refused",
@@ -399,6 +456,7 @@ pub fn run(args: Args) -> i32 {
         let err = RmpcError::ErrTxReverted {
             tx_hash: format!("{tx_hash:#x}"),
         };
+        record_audit(&audit.build(AuditDecision::Reverted, Some("ErrTxReverted".to_string())));
         emit_refusal(
             &DepositFailure {
                 status: "refused",
@@ -427,6 +485,10 @@ pub fn run(args: Args) -> i32 {
             let err = RmpcError::ErrAgentDepositLogMissing {
                 tx_hash: format!("{tx_hash:#x}"),
             };
+            record_audit(&audit.build(
+                AuditDecision::Refused,
+                Some("ErrAgentDepositLogMissing".to_string()),
+            ));
             emit_refusal(
                 &DepositFailure {
                     status: "refused",
@@ -446,12 +508,14 @@ pub fn run(args: Args) -> i32 {
     let decoded = match RobotMoneyGateway::AgentDeposit::decode_log_data(&log_data, true) {
         Ok(d) => d,
         Err(e) => {
-            eprintln!("rmpc deposit: failed to decode AgentDeposit log: {e}");
+            log::error!("rmpc deposit: failed to decode AgentDeposit log: {e}");
             return EXIT_STARTUP_FAIL;
         }
     };
 
     let block_number = receipt.block_number.unwrap_or(0);
+    audit.payment_id = Some(format!("{:#x}", decoded.paymentId));
+    record_audit(&audit.build(AuditDecision::Signed, None));
     let out = DepositOutput {
         status: "success",
         payment_id: format!("{:#x}", decoded.paymentId),

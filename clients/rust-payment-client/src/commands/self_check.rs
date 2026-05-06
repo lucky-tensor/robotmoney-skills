@@ -127,7 +127,7 @@ pub fn run(config_path: &Path, pretty: bool) -> i32 {
     let cfg = match Config::from_path(config_path) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("rmpc self-check: failed to load config: {e}");
+            log::error!("rmpc self-check: failed to load config: {e}");
             return EXIT_STARTUP_FAIL;
         }
     };
@@ -138,7 +138,7 @@ pub fn run(config_path: &Path, pretty: bool) -> i32 {
     let passphrase = match std::env::var(PASSPHRASE_ENV_VAR) {
         Ok(s) => s,
         Err(_) => {
-            eprintln!(
+            log::error!(
                 "rmpc self-check: ${PASSPHRASE_ENV_VAR} is unset; refusing to prompt on stdin from a non-interactive command"
             );
             return EXIT_STARTUP_FAIL;
@@ -151,7 +151,7 @@ pub fn run(config_path: &Path, pretty: bool) -> i32 {
     ) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("rmpc self-check: signer load failed: {e}");
+            log::error!("rmpc self-check: signer load failed: {e}");
             return EXIT_STARTUP_FAIL;
         }
     };
@@ -167,7 +167,7 @@ pub fn run(config_path: &Path, pretty: bool) -> i32 {
     {
         Ok(rt) => rt,
         Err(e) => {
-            eprintln!("rmpc self-check: tokio runtime build failed: {e}");
+            log::error!("rmpc self-check: tokio runtime build failed: {e}");
             return EXIT_STARTUP_FAIL;
         }
     };
@@ -175,7 +175,7 @@ pub fn run(config_path: &Path, pretty: bool) -> i32 {
     let rpc = match RpcClient::new(&cfg.rpc_url) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("rmpc self-check: rpc client init failed: {e}");
+            log::error!("rmpc self-check: rpc client init failed: {e}");
             return EXIT_STARTUP_FAIL;
         }
     };

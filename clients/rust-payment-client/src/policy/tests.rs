@@ -31,10 +31,13 @@ fn config() -> Config {
         vault_address: format!("{VAULT:#x}"),
         gateway_runtime_hash: format!("0x{}", ahex::encode(hash)),
         max_fee_per_gas_cap: 100_000_000_000,
+        max_priority_fee_per_gas_cap: None,
+        state_dir: None,
         signer: SignerConfig {
             allow_software_fallback: true,
             keystore_path: PathBuf::from("/tmp/ks.enc"),
         },
+        log: Default::default(),
     }
 }
 

@@ -54,7 +54,7 @@ pub fn run(config_path: &Path, payment_id_hex: &str, pretty: bool) -> i32 {
     let cfg = match Config::from_path(config_path) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("rmpc status: failed to load config: {e}");
+            log::error!("rmpc status: failed to load config: {e}");
             return EXIT_STARTUP_FAIL;
         }
     };
@@ -62,7 +62,7 @@ pub fn run(config_path: &Path, payment_id_hex: &str, pretty: bool) -> i32 {
     let payment_id = match B256::from_str(payment_id_hex) {
         Ok(b) => b,
         Err(e) => {
-            eprintln!("rmpc status: --payment-id is not a 32-byte hex string: {e}");
+            log::error!("rmpc status: --payment-id is not a 32-byte hex string: {e}");
             return EXIT_STARTUP_FAIL;
         }
     };
@@ -70,7 +70,7 @@ pub fn run(config_path: &Path, payment_id_hex: &str, pretty: bool) -> i32 {
     let gateway_addr = match Address::from_str(&cfg.gateway_address) {
         Ok(a) => a,
         Err(e) => {
-            eprintln!("rmpc status: gateway_address parse error: {e}");
+            log::error!("rmpc status: gateway_address parse error: {e}");
             return EXIT_STARTUP_FAIL;
         }
     };
@@ -81,7 +81,7 @@ pub fn run(config_path: &Path, payment_id_hex: &str, pretty: bool) -> i32 {
     {
         Ok(rt) => rt,
         Err(e) => {
-            eprintln!("rmpc status: tokio runtime build failed: {e}");
+            log::error!("rmpc status: tokio runtime build failed: {e}");
             return EXIT_STARTUP_FAIL;
         }
     };
@@ -89,7 +89,7 @@ pub fn run(config_path: &Path, payment_id_hex: &str, pretty: bool) -> i32 {
     let rpc = match RpcClient::new(&cfg.rpc_url) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("rmpc status: rpc client init failed: {e}");
+            log::error!("rmpc status: rpc client init failed: {e}");
             return EXIT_STARTUP_FAIL;
         }
     };
@@ -106,7 +106,7 @@ pub fn run(config_path: &Path, payment_id_hex: &str, pretty: bool) -> i32 {
     let logs: Vec<RawLog> = match rt.block_on(rpc.get_logs(filter)) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("rmpc status: eth_getLogs failed: {e}");
+            log::error!("rmpc status: eth_getLogs failed: {e}");
             return EXIT_STARTUP_FAIL;
         }
     };
@@ -130,7 +130,7 @@ pub fn run(config_path: &Path, payment_id_hex: &str, pretty: bool) -> i32 {
     let decoded = match RobotMoneyGateway::AgentDeposit::decode_log_data(&log_data, true) {
         Ok(d) => d,
         Err(e) => {
-            eprintln!("rmpc status: failed to decode AgentDeposit log: {e}");
+            log::error!("rmpc status: failed to decode AgentDeposit log: {e}");
             return EXIT_STARTUP_FAIL;
         }
     };
