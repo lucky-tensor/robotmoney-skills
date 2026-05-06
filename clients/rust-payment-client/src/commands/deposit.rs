@@ -265,6 +265,50 @@ pub fn run(args: Args) -> i32 {
         }
     };
 
+    // -- Replay cache (audit M3) -----------------------------------------
+    // Look up the (order_id, idempotency_key, deadline) tuple in our
+    // own client-side cache. On a hit, surface the prior tx_hash and
+    // exit non-zero with `ErrOrderIdAlreadySubmitted` instead of paying
+    // gas to discover the same dedupe on chain.
+    let replay = match crate::replay_cache::ReplayCache::open(&state_dir) {
+        Ok(c) => c,
+        Err(e) => {
+            log::error!("rmpc deposit: replay cache open failed: {e}");
+            return EXIT_STARTUP_FAIL;
+        }
+    };
+    let order_id_hex = format!("{order_id:#x}");
+    let idem_hex = format!("{idempotency_key:#x}");
+    match replay.lookup(&order_id_hex, &idem_hex, deadline) {
+        Ok(Some(prior_tx)) => {
+            let err = RmpcError::ErrOrderIdAlreadySubmitted {
+                tx_hash: prior_tx.clone(),
+            };
+            record_audit(&audit.build(
+                AuditDecision::Refused,
+                Some("ErrOrderIdAlreadySubmitted".to_string()),
+            ));
+            emit_refusal(
+                &DepositFailure {
+                    status: "refused",
+                    error: "ErrOrderIdAlreadySubmitted".to_string(),
+                    message: Some(format!("{err}")),
+                    agent: Some(format!("{agent_address:#x}")),
+                    order_id: Some(order_id_hex.clone()),
+                    tx_hash: Some(prior_tx),
+                    checks: None,
+                },
+                args.pretty,
+            );
+            return EXIT_REFUSAL;
+        }
+        Ok(None) => {}
+        Err(e) => {
+            log::error!("rmpc deposit: replay cache lookup failed: {e}");
+            return EXIT_STARTUP_FAIL;
+        }
+    }
+
     // Build the runtime; sync rest of the daemon stays sync.
     let rt = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -423,7 +467,14 @@ pub fn run(args: Args) -> i32 {
 
     // Stamp the broadcast tx_hash into the audit record so subsequent
     // refusal/success emissions include it.
-    audit.tx_hash = Some(format!("{tx_hash:#x}"));
+    let tx_hash_hex = format!("{tx_hash:#x}");
+    audit.tx_hash = Some(tx_hash_hex.clone());
+    // Record the (order_id, idempotency_key, deadline) → tx_hash entry
+    // in the replay cache so a future retry hits the local check
+    // before paying gas.
+    if let Err(e) = replay.insert(&order_id_hex, &idem_hex, deadline, &tx_hash_hex) {
+        log::warn!("rmpc deposit: replay cache insert failed (non-fatal): {e}");
+    }
 
     // -- Receipt ----------------------------------------------------------
     // 1s polling cadence (RECEIPT_POLL_INTERVAL_MS) × the operator's
@@ -564,6 +615,7 @@ fn error_name(err: &RmpcError) -> &'static str {
         RmpcError::ErrAllowanceInsufficient => "ErrAllowanceInsufficient",
         RmpcError::ErrBalanceInsufficient => "ErrBalanceInsufficient",
         RmpcError::ErrSoftwareSignerDisallowed => "ErrSoftwareSignerDisallowed",
+        RmpcError::ErrOrderIdAlreadySubmitted { .. } => "ErrOrderIdAlreadySubmitted",
         RmpcError::ErrTxReverted { .. } => "ErrTxReverted",
         RmpcError::ErrAgentDepositLogMissing { .. } => "ErrAgentDepositLogMissing",
         RmpcError::ErrConfig(_) => "ErrConfig",

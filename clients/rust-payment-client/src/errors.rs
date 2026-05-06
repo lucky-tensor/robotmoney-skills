@@ -41,6 +41,15 @@ pub enum RmpcError {
     #[error("ErrSoftwareSignerDisallowed: [signer].allow_software_fallback must be true")]
     ErrSoftwareSignerDisallowed,
 
+    /// The same `(order_id, idempotency_key, deadline)` tuple was
+    /// already submitted from this client; the local replay cache
+    /// returns the prior `tx_hash` instead of re-broadcasting. Audit
+    /// finding M3.
+    #[error(
+        "ErrOrderIdAlreadySubmitted: order_id was already submitted (prior tx_hash={tx_hash})"
+    )]
+    ErrOrderIdAlreadySubmitted { tx_hash: String },
+
     /// The broadcast transaction was mined but reverted (`status == 0` in
     /// the receipt). Carries the transaction hash so operators can pull
     /// the trace.
@@ -105,6 +114,12 @@ mod tests {
             (
                 RmpcError::ErrSoftwareSignerDisallowed,
                 "ErrSoftwareSignerDisallowed",
+            ),
+            (
+                RmpcError::ErrOrderIdAlreadySubmitted {
+                    tx_hash: "0x00".into(),
+                },
+                "ErrOrderIdAlreadySubmitted",
             ),
         ];
         for (err, name) in cases {

@@ -287,6 +287,7 @@ fn error_name(err: &RmpcError) -> &'static str {
         RmpcError::ErrRpcDecode(_) => "ErrRpcDecode",
         RmpcError::ErrTxReverted { .. } => "ErrTxReverted",
         RmpcError::ErrAgentDepositLogMissing { .. } => "ErrAgentDepositLogMissing",
+        RmpcError::ErrOrderIdAlreadySubmitted { .. } => "ErrOrderIdAlreadySubmitted",
     }
 }
 
