@@ -2296,7 +2296,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rmpd-e2e"
+name = "rmpc-e2e"
 version = "0.1.0"
 dependencies = [
  "alloy-primitives",
@@ -2305,7 +2305,7 @@ dependencies = [
  "k256",
  "once_cell",
  "reqwest",
- "rust-payment-daemon",
+ "rust-payment-client",
  "serde",
  "serde_json",
  "tempfile",
@@ -2348,7 +2348,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48fd7bd8a6377e15ad9d42a8ec25371b94ddc67abe7c8b9127bec79bebaaae18"
 
 [[package]]
-name = "rust-payment-daemon"
+name = "rust-payment-client"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
