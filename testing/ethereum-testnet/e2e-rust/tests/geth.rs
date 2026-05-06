@@ -66,6 +66,11 @@ const CAP_TEST_FIRST_LEG: u128 = 60 * ONE_USDC;
 const CAP_TEST_SECOND_LEG: u128 = 60 * ONE_USDC;
 /// Per-window cap used at deploy time. 200 USDC == 200_000_000 in 6dp.
 const AGENT_MAX_PER_WINDOW_E2E: &str = "200000000";
+/// Per-payment cap. The Deploy script defaults to 10_000 USDC, which
+/// the gateway rejects (`InvalidAmount`) when it exceeds the per-window
+/// cap. Set per-payment == per-window so each individual deposit is
+/// allowed but cumulative still trips the window cap on leg 2.
+const AGENT_MAX_PER_PAYMENT_E2E: &str = "200000000";
 
 /// Deterministic order id from a per-test label. Avoids cross-test
 /// payment-id collisions on the shared deployment.
@@ -112,9 +117,11 @@ fn with_fixture<F: FnOnce(&Fixture) -> R, R>(f: F) -> R {
     let cell = shared_fixture();
     let mut guard = cell.lock().expect("shared geth fixture mutex poisoned");
     if guard.is_none() {
-        let fx =
-            Fixture::geth_with_deploy_env(&[("AGENT_MAX_PER_WINDOW", AGENT_MAX_PER_WINDOW_E2E)])
-                .expect("boot geth devnet + deploy");
+        let fx = Fixture::geth_with_deploy_env(&[
+            ("AGENT_MAX_PER_PAYMENT", AGENT_MAX_PER_PAYMENT_E2E),
+            ("AGENT_MAX_PER_WINDOW", AGENT_MAX_PER_WINDOW_E2E),
+        ])
+        .expect("boot geth devnet + deploy");
         *guard = Some(fx);
     }
     f(guard.as_ref().expect("fixture present"))
