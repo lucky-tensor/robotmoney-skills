@@ -1,29 +1,31 @@
-# Specification: Security Architecture for Autonomous-Agent Access to the Robot Money Vault
+# Specification: Autonomous-Agent Security Layer for Robot Money
 
-> **Status — security architecture for the Robot Money vault.** The
-> product is the ERC-4626 yield vault in
+> **Status — security architecture, not product replacement.** Robot
+> Money remains the ERC-4626 yield vault in
 > `contracts/RobotMoneyVault.sol` plus its Aave/Compound/Morpho
-> adapters; see `docs/prd.md`. This document specifies the security
-> architecture that mediates *autonomous-agent* access to that vault:
-> a constrained Rust daemon with hardware-backed signing, plus a
-> single on-chain policy contract (the "gateway") that enforces
-> per-agent caps and bounded calldata before forwarding into the
-> vault.
+> adapters; see `docs/prd.md`. This document specifies a security
+> layer for *autonomous-agent* access to that product: a constrained
+> Rust client with hardware-backed signing, plus an on-chain policy
+> gateway that enforces per-agent caps and bounded calldata.
 >
-> The gateway is the only contract an autonomous agent's key may
-> call. It calls into the vault on the agent's behalf, within policy,
-> and routes the resulting shares to a pre-registered receiver. The
-> gateway never custodies vault shares.
+> The Rust client is the intended replacement path for the TypeScript
+> CLI's relevant supported features. The buildable MVP is deliberately
+> narrower: a guarded deposit path, not a new vault and not yet full CLI
+> parity. In that MVP, the agent key may call only the gateway; the
+> gateway pulls USDC from the agent, calls
+> `vault.deposit(amount, shareReceiver)` within policy, and routes the
+> resulting shares to a pre-registered receiver. The gateway never
+> custodies vault shares.
 >
-> **Reading guidance.** Earlier drafts of this document were written
-> for a generic agent-payment gateway and use "merchant" /
-> "settlement" / "refund" terminology throughout the body. For the
-> Robot Money vault context, read those terms as follows: the
-> "payee" is the vault; "settlement" is `vault.deposit(amount,
-> shareReceiver)`; "refund" is the standard ERC-4626 redemption
-> surface and is out of this layer's scope. The buildable slice in
-> `docs/implementation-plan-mvp.md` already uses vault-native
-> terminology.
+> **Reading guidance.** Sections 1-36 are retained as the fuller
+> payment-control architecture and still use generic "merchant" /
+> "settlement" / "refund" language. They are reference material for
+> future payment flows, not the MVP contract surface. For the Robot
+> Money vault MVP, read the equivalent roles narrowly: the "payee" is
+> the vault, "settlement" is `vault.deposit(amount, shareReceiver)`,
+> and refund/expiry is deferred. The buildable slice in
+> `docs/implementation-plan-mvp.md` is authoritative for what is being
+> implemented now.
 >
 > Section 37 (dead-man's-switch / auto-reversion) is a separate
 > design sketch layered on an ERC-4337 smart account. It is
@@ -36,7 +38,7 @@
 
 ## 0. System goal
 
-Build an agentic-commerce payment system where:
+Long-term goal: build an agentic-commerce payment system where:
 
 ```text
 1. A Rust client/daemon can initiate USDC micropayments.
@@ -56,7 +58,45 @@ Build an agentic-commerce payment system where:
 
 The client is **not a general-purpose wallet**. It is a constrained signing and payment daemon.
 
-### 0.1 Actor vocabulary (normative)
+For the Robot Money MVP, this long-term payment system is reduced to
+one operation: policy-gated USDC deposits into the Robot Money vault.
+It does not implement generalized merchant payments, OWS flows,
+UniversalRouter basket allocation, or adapter/yield logic.
+
+## 0.1 Product boundary and tradeoffs
+
+The key boundary is:
+
+```text
+Robot Money product      = yield vault + adapters + share accounting.
+Autonomous-agent layer   = restricted signing + policy gateway for safe deposits.
+```
+
+The autonomous-agent layer exists to make agent-initiated deposits
+safer. It should be evaluated as a guarded access path that sits in
+front of the vault, not as a replacement for the vault or the web app.
+It is, however, the direction for replacing the deprecated TypeScript
+CLI where the CLI remains relevant. Feature parity beyond the MVP is
+TBD and will require separate architecture decisions for reads,
+withdraw/redeem flows, basket routing, simulation, and any OWS-facing
+UX.
+
+Important tradeoffs are explicit:
+
+- Hardware-backed keys are the preferred control. Software fallback is
+  acceptable for development and low-value deployments, but it weakens
+  the strongest key-extraction defense.
+- Human/master confirmation protects high-value flows, but it adds
+  latency. It is deferred from the MVP and should only be added where
+  the operator accepts that review bottleneck.
+- ERC-20 attribution is not callback-based. Clean tracking requires a
+  wrapper entrypoint that pulls USDC via `transferFrom`; this is a UX
+  cost compared with sending USDC directly to an address.
+- Fixed 24-hour windows permit boundary bursts. Operators must size
+  per-window caps as if a short interval can contain up to two windows
+  of agent-only spend.
+
+## 0.2 Actor vocabulary (normative)
 
 To resolve interchangeable use of "agent," "daemon," and "client" elsewhere
 in this doc, the following definitions are normative:
@@ -2290,10 +2330,9 @@ This document is the design proposal for the agent-payment layer. It is
   canonical "what to build first" pointer; every cut item is keyed back
   to a section here.
 - `docs/prd.md` — product requirements for the *deployed* ERC-4626
-  vault (`contracts/RobotMoneyVault.sol` + adapters). Different
-  product, different surface, different roles. The agent-payment
-  gateway specified here does not interact with the vault and is not
-  yet implemented.
+  vault (`contracts/RobotMoneyVault.sol` + adapters). This remains the
+  product source of truth. The MVP gateway is a constrained access path
+  into this vault, not a replacement product.
 - `docs/project-roadmap.md` — phased delivery plan; positions the
   gateway as future work alongside the vault.
 - `docs/technical/smart-contracts.md` — reference for the deployed
@@ -2303,6 +2342,6 @@ This document is the design proposal for the agent-payment layer. It is
 - `docs/review-2026-05-06-022928.md` — doc-set critique that drove the
   current revision (cross-product disambiguation, §21 paymentId,
   §26.1 hash-pinning-vs-upgrade, §20.1/§20.4 refund destination,
-  §0.1 actor vocabulary).
+  §0.2 actor vocabulary).
 - `docs/testing-strategy-ethereum.md` — local Geth+Lighthouse devnet
   harness used by the MVP plan's e2e suite.
