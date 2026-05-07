@@ -842,6 +842,10 @@ the consequences before execution.
 - Generated/exported config is sufficient for OpenCode/OpenClaw phase 4
   setups.
 
+See `docs/technical/dapp-browser-keygen-review.md` for the browser-keygen security review ADR
+(issue #115) and `docs/technical/dapp-credential-decisions.md` for the credential model
+decisions that govern path 2 (browser-keygen) vs path 1 (external signer).
+
 ## 13. Phase 7 — OpenClaw E2E Demo on Recent Public-Chain Fork
 
 Goal: demonstrate the full autonomous loop without requiring the phase
