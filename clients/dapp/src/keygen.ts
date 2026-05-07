@@ -72,8 +72,11 @@ export async function generateBrowserCredential(
   // Derive the Ethereum address from the private key.
   // We use the ethers library's Wallet abstraction which performs the
   // secp256k1 public key derivation and keccak256 address derivation.
+  // ethers v6 Wallet requires a 0x-prefixed hex string, not a Uint8Array.
   const { ethers } = await import("ethers");
-  const wallet = new ethers.Wallet(privateKeyBytes);
+  const privateKeyHexForWallet =
+    "0x" + Array.from(privateKeyBytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+  const wallet = new ethers.Wallet(privateKeyHexForWallet);
 
   // NOTE: privateKeyBytes is a Uint8Array on the heap. We will zero it after
   // building the TOML so the raw bytes do not linger in memory longer than
