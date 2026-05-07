@@ -8,7 +8,12 @@ Unresolved questions derived from reading the three source documents in `docs/pa
 
 The docs were authored at different moments with different scopes and were not reconciled before being collected here. This document captures (1) cross-document contradictions that require a product decision, (2) open questions the source docs explicitly flag, and (3) gaps that none of the docs address.
 
-For each item, where the **deployed contract** (`contracts/RobotMoneyVault.sol`, `0x4f835c9f54bcf17daf9040f60cb72951ccbb49dd` on Base mainnet), the **adapters** (`contracts/adapters/{Aave,Compound,Morpho}*.sol`), the **gateway** (`contracts/gateway/RobotMoneyGateway.sol`), or the repo's own product spec (`docs/prd.md`) reveal something relevant, an **Implementation evidence** note is included. The code and repo PRD were reverse-engineered from a deployed demo contract — they show what was actually built, which is not necessarily what was intended, agreed, or final. Treat that evidence as one input to the decision, not as the decision itself. Where the code is silent, that silence is noted but does not constitute an answer.
+For each item, two streams of additional context are surfaced inline where applicable:
+
+- **Implementation evidence** — what the deployed contract (`contracts/RobotMoneyVault.sol`, `0x4f835c9f54bcf17daf9040f60cb72951ccbb49dd` on Base mainnet), the adapters (`contracts/adapters/{Aave,Compound,Morpho}*.sol`), the gateway (`contracts/gateway/RobotMoneyGateway.sol`), or the repo's own product spec (`docs/prd.md`) reveal. The code and repo PRD were reverse-engineered from a deployed demo contract — they show what was actually built, which is not necessarily what was intended, agreed, or final.
+- **Product owner input** — direction conveyed verbally by the product owner (Lex Sokolin, 2026-05-06). These are stated intentions, not yet written into specs the repo can verify, but they reflect the team's current thinking about direction.
+
+Both streams are inputs to the decision, not the decision itself. Where a stream is silent on a question, that silence is noted but does not constitute an answer.
 
 ---
 
@@ -28,6 +33,8 @@ These are points where two or more documents make incompatible claims. Each need
 
 **Implementation evidence:** No token contract is in this repo. The repo PRD §5.3 refers to `$ROBOTMONEY` as a single fixed-supply governance token with no staking and no fee distribution to holders. The repo's product narrative is consistent with the whitepaper's single-token model and inconsistent with plan v4's migration path. The absence of a token contract means the repo cannot rule out a future v2 — it simply doesn't reflect one.
 
+**Product owner input:** The token is "a voting heartbeat for AIs to contribute to allocation voting and try to bribe in their own assets to vaults." Framed as governance + designed-in bribery flow, not a yield-bearing instrument. Described as a "separate build attempt … described in specs" not in this repo. Consistent with single-token, governance-only — no v2 mentioned.
+
 ### 1.2 Vault: three-bucket from launch, or stables-first?
 
 - **Whitepaper**: 33/33/33 stables / agent-token trading / revenue tokens **from day one**. Monthly bucket-weight rebalance.
@@ -40,6 +47,8 @@ These are points where two or more documents make incompatible claims. Each need
 
 **Implementation evidence:** `RobotMoneyVault.sol` is an ERC-4626 vault whose asset is USDC. It holds a flat array of strategy adapters — no bucket A/B/C structure. The three deployed adapter types (Aave V3, Compound V3, Morpho) are all USDC stable-yield venues. The repo PRD §5.2 says: *"Bucket-B and bucket-C tokens land directly in the depositor's wallet at deposit time. The treasury custodies stable-yield positions only."* The vault as built only does Bucket A. The code alone cannot distinguish whether that's a permanent stables-only design with B/C as an off-treasury delivery layer, a phased rollout with B/C still to come, or an abandonment of the whitepaper's three-bucket-in-vault model. Repo PRD §5.2 supports the first reading; plan v4 is consistent with the second; the whitepaper is incompatible with both.
 
+**Product owner input:** The intended architecture is multi-vault, not multi-bucket-in-one-vault: *"multi-vault of n vaults, and then receipt tokens for vaults, and then that maybe or maybe not wrapped into a vault. Perhaps people can opt into different mixes of exposure."* Specific vaults named: stables ("sort of done" — matches the deployed contract; Giza and Zyfai mentioned as additional strategy candidates), a protocol vault (ETH/BTC/SOL), an agent-token vault ("not done", with the voting/bribery use case attached), and a possible RWA vault (SP500 via a Hyperliquid position; commodities). Veda was considered as an off-the-shelf provider; the team chose to build in-house ("opened the can of worms"). This reframes the question: it is not three-bucket-vs-stables-first but a sequence of separate vault contracts, with an optional meta-vault wrapper for blended exposure.
+
 ### 1.3 Shortlist curation: top-down or bottom-up?
 
 - **Whitepaper**: the protocol's agent runs the quant screen and **publishes** the shortlist of 10–15 tokens. Holders only rank.
@@ -51,6 +60,8 @@ These are points where two or more documents make incompatible claims. Each need
 
 **Implementation evidence:** No governance contract is in the repo. The vault uses OpenZeppelin `AccessControl` with three roles: `ADMIN_ROLE`, `EMERGENCY_ROLE`, `KEEPER_ROLE`. Adapters are added/removed by ADMIN_ROLE. There is no on-chain proposal, vote, snapshot, or quorum logic. Repo PRD §7 says: *"The path from a vote to an admin action is bounded by the multisig operating within published constraints."* Whatever shortlist curation happens, it currently happens off-chain and is executed by a multisig — silence on the curated-vs-proposal-driven question, not an answer to it.
 
+**Product owner input:** The bribery flow ("AIs … try to bribe in their own assets to vaults") is explicitly designed-in, which reads as bottom-up — agents pay/lobby `$RM` to push their tokens into the agent-token vault. Mechanics deferred to "specs". Consistent with the source PRD's proposal-driven model; inconsistent with the whitepaper's purely-curated model.
+
 ### 1.4 Voting mechanic for weekly allocation
 
 - **Whitepaper**: ranked-choice voting over the shortlist.
@@ -61,6 +72,8 @@ These are points where two or more documents make incompatible claims. Each need
 **Why it matters:** They produce different outcomes from the same inputs and require different UI, tally logic, and gaming-resistance analysis.
 
 **Implementation evidence:** No on-chain voting. Adapter target weights inside the vault are computed dynamically as `targetBps = MAX_BPS / activeAdapterCount` (`_targetBpsFor()`), with per-adapter `capBps` ceilings. No vote inputs feed into this calculation. The voting-mechanism question has no implementation footprint at all yet; readers cannot infer a preference from absence.
+
+**Product owner input:** Mechanics not specified beyond "voting heartbeat" framing and the bribery flow. Treated as part of the separate token-side build described in specs, not a near-term vault concern.
 
 ### 1.5 Tier system: yes or no?
 
@@ -85,6 +98,8 @@ These are points where two or more documents make incompatible claims. Each need
 
 **Implementation evidence:** The vault data model is flat: `AdapterInfo[] public adapters`. No bucket struct. Drift reporting (`getAdapterDrift`) is per-adapter. There is no monthly bucket-weight reweighting surface. As built, "buckets" exist only as a product narrative, not as a contract concept.
 
+**Product owner input:** Neither bucketed nor flat — the model is **multi-vault with receipt tokens, optionally wrapped into a meta-vault** (see §1.2). Each asset class is its own vault; "different mixes of exposure" are produced by combining receipts (or by depositing into a wrapper that holds them). This is a third architecture not described in any of the three source papers, and the closest existing reference is Veda.
+
 ### 1.7 Sequencing: what ships first?
 
 - **Whitepaper**: vault contract Week 1–2, token Week 3, first deposits Weeks 4–8. Vault and token roughly simultaneous.
@@ -96,6 +111,8 @@ These are points where two or more documents make incompatible claims. Each need
 **Why it matters:** The whole strategic story differs. If the vault is not at launch, the whitepaper's day-one fee economics and prop-wallet seeding from launch fees are not yet operative, and `$RM` is purely speculative until the vault ships.
 
 **Implementation evidence:** The vault, adapters, and gateway are deployed (`README.md` cites a BaseScan address for the vault). No `$ROBOTMONEY` token contract, no governance contract, no CFO Feed code is in the repo. As of now, the *vault* shipped first — contradicting the source PRD's premise (which assumes a token-without-vault state) and consistent with the whitepaper's launch sequence. The source PRD's CFO-Feed-as-stopgap rationale presumes a state that has not occurred.
+
+**Product owner input:** Confirms vault-first, with stables vault "sort of done" and the rest staged behind it. Token side is described as a separate build in specs. The current Base deployment is treated as a POC ("this is just POC"); the production deployment target is undecided but explicitly *not* Base — see new question §3.11 below.
 
 ### 1.8 Customer wedge
 
@@ -109,6 +126,8 @@ These are points where two or more documents make incompatible claims. Each need
 
 **Implementation evidence:** The Rust client (`clients/rust-payment-client/`), the gateway's per-agent caps, the windowed limits, idempotent payment IDs, and encrypted-keystore signer — all of it is engineered for autonomous-agent USDC deposits. `docs/architecture.md` §1 names the access-layer goal explicitly: agents depositing USDC into the vault under bounded policy. The infrastructure investment to date is concentrated on the whitepaper's wedge. It does not preclude the others — there is no swap-into-USDC primitive (plan v4) and no CFO Feed (source PRD), but neither is ruled out.
 
+**Product owner input:** Implies a wedge broader than any single source paper: agent-economy treasuries on chains with real payment activity. Polygon is mentioned for its payment-activity user base; mainnet for "real" use cases. The agent-token vault carries the bribery/voting use case (governance demand for `$RM`); the RWA vault carries a "story telling" use case (SP500/commodities exposure for narrative). The customer is still agents, but the product surface is broader than just "park idle USDC."
+
 ---
 
 ## 2. Questions the source docs themselves flag
@@ -120,7 +139,7 @@ These are explicitly listed as open in the originals. Re-stated here for trackin
 - **Legal entity structure.** Vault accepts deposits and charges a management fee; in most jurisdictions this is fund management. Likely needs offshore foundation (Cayman, BVI) or DAO legal wrapper (Wyoming, Marshall Islands). Counsel review pre-launch. *Implementation evidence: no on-chain reflection.*
 - **Performance fee.** Whether to add a 20%-of-gains-above-hurdle fee in addition to the 2% management fee. Deferred to Phase 4 pending track record. *Implementation evidence: not implemented. The vault charges only `exitFeeBps` (capped at 1% by `MAX_EXIT_FEE_BPS`). There is no management-fee accrual and no performance fee in the contract. The whitepaper's 2% management fee and the repo PRD §5.4's three-fee structure are not yet reflected in code.*
 - **Deposit caps.** Whether to cap total deposits during bootstrap to limit smart-contract risk exposure. Whitepaper recommends $500K cap in Phase 2, lifted after 60 days incident-free. *Implementation evidence: both global (`tvlCap`) and per-deposit (`perDepositCap`) caps are present and admin-settable; the gateway adds `maxPerWindow` and `maxPerPayment` per agent. The whitepaper's recommendation is straightforwardly implementable with the existing setters.*
-- **Multi-chain expansion.** Whether to deploy cross-chain (CCIP, LayerZero) if agent activity migrates from Base. Deferred to Phase 5. *Implementation evidence: Base only. Adapter addresses are Base-mainnet pinned. No CCIP, no LayerZero. A second chain would require new deployments.*
+- **Multi-chain expansion.** Whether to deploy cross-chain (CCIP, LayerZero) if agent activity migrates from Base. Deferred to Phase 5. *Implementation evidence: Base only. Adapter addresses are Base-mainnet pinned. No CCIP, no LayerZero. A second chain would require new deployments.* *Product owner input: explicitly reverses the whitepaper's Base-default. "We dont want to stay on base or with the base token, this is just POC." Polygon mentioned for payment activity and potential clients; Ethereum mainnet for "more real" deployments. Peaq was considered for omnichain agent wallets and IDs but the tech is "still half baked." See §3.11 for the open chain-selection question.*
 - **Agent identity verification.** Whether the vault should verify depositors are agents and not humans. Current answer: no — vault is permissionless. *Implementation evidence: split. The vault itself is permissionless via standard ERC-4626 `deposit`. The gateway only accepts deposits from agent addresses an operator has explicitly authorized via `authorizeAgent`. Both readings can be true depending on the path used.*
 
 ### From Plan v4 "Immediate Decisions (Pre-Launch)"
@@ -198,21 +217,55 @@ The protocol agent is a single point of failure: it publishes shortlists, runs t
 
 *Implementation evidence: strong operator override at the contract layer. The vault provides `pause`/`unpause`, `emergencyWithdraw` (yanks all adapter balances and pauses), `emergencyWithdrawAdapter`, `forceRemoveAdapter`, and the irreversible `shutdownVault`. The gateway has its own pause and per-agent revocation. Admin and emergency powers are on roles held by humans/multisig — not on the protocol agent. The keeper role can call `rebalance()` but is bounded by hard ceilings. Whether this surface is sufficient for the agent-driven product narrative is a judgment call; the surface exists.*
 
+### 3.11 Production chain selection
+
+The Base deployment is described by the product owner as a POC, with the production target explicitly elsewhere. Polygon and Ethereum mainnet are named, but no chain is committed. This is a load-bearing decision: it determines the integration set (which DeFi venues, which payment rails, which wallets), the audit scope, and whether the existing adapters need to be re-implemented for new venues.
+
+*Implementation evidence: nothing on chain selection. Existing adapters are Base-pinned.*
+
+*Product owner input: "We dont want to stay on base or with the base token, this is just POC." Polygon for payment activity, mainnet for "more real" use. Peaq considered for omnichain agent wallets/IDs but tech is half-baked.*
+
+### 3.12 Multi-vault wrapping mechanism
+
+The product owner describes "n vaults" with receipt tokens, optionally wrapped into a meta-vault that lets users opt into mixes of exposure. None of the source papers describe this, and the deployed contract is a single ERC-4626. Open: is the wrapper an ERC-4626-of-ERC-4626 (share-of-shares), a router that bundles deposits, an off-chain composite product, or something else? Who sets the mix weights — depositor at deposit time, governance, or the product?
+
+*Implementation evidence: not present.*
+
+*Product owner input: structure described as "multi-vault of n vaults, and then receipt tokens for vaults, and then that maybe or maybe not wrapped into a vault. Perhaps people can opt into different mixes of exposure." Reference point: Veda.*
+
+### 3.13 Build-vs-buy commitment
+
+The product owner introduced existing portfolio-management providers (Veda named as the largest), and the team chose to build in-house anyway — described as "opening the can of worms." This raises an implicit question of scope: how much of the multi-vault platform is in-scope to build, and at what point would integrating Veda (or Giza/Zyfai for the stables vault) be revisited?
+
+*Implementation evidence: in-house implementation underway (the deployed vault is custom, not a Veda integration).*
+
+*Product owner input: build-in-house decision is current; Giza and Zyfai are named as potentially interesting for the stables vault specifically.*
+
+### 3.14 RWA vault feasibility
+
+The product owner mentioned an RWA vault built around a Hyperliquid SP500 perp position, possibly extended to commodities — primarily a "story telling" exposure. None of the source papers describe RWA, and the regulatory and execution mechanics are non-trivial: a perp position is not a spot RWA, and exposing depositors to perp funding/liquidation risk through a "vault" framing has user-protection implications.
+
+*Implementation evidence: not present.*
+
+*Product owner input: RWA vault flagged as a future build for narrative value.*
+
 ---
 
-## 4. Patterns across the implementation evidence
+## 4. Patterns across the implementation evidence and product owner input
 
 A few cross-cutting observations worth weighing — signals, not findings.
 
-1. **The vault as built is a stables-only multi-venue product.** Whatever is decided about Bucket B and C, the current treasury contract does not custody them. Any reader resolving §1.2/§1.6 has to either accept that as the design (per repo PRD §5.2) or plan a different vault for B/C exposure.
+1. **The intended architecture is multi-vault, not multi-bucket.** The product owner describes n separate vaults with receipt tokens and an optional meta-vault wrapper. None of the three source papers describe this; only the deployed stables vault matches it. Reading §1.2 and §1.6 through this lens turns the question from "buckets vs. flat list" into "which vaults, in what order, and how composed" — closer to a Veda-style platform than to the whitepaper's three-bucket fund.
 
-2. **There is no on-chain governance and no token.** Every governance-shaped question (§1.3, §1.4, §1.5, §3.8, §3.9) has zero implementation footprint. Decisions in those areas are unconstrained by existing code.
+2. **The Base deployment is explicitly POC, not the production target.** The current vault address on Base is a working demo, not the chain commitment. Any analysis that treats the Base deployment as canonical (audit scope, integration set, regulatory reading) needs to be re-run once a production chain is chosen (§3.11).
 
-3. **The deployed sequencing inverts the source PRD's premise.** The PRD-paper assumed a token-without-vault state and proposed CFO Feed as a stopgap. The actual deployment is the opposite: vault-without-token. Readers re-evaluating the PRD-paper should ask whether its rationale survives the inverted sequencing.
+3. **There is no on-chain governance and no token.** Every governance-shaped question (§1.3, §1.4, §1.5, §3.8, §3.9) has zero implementation footprint. The product owner places token and governance in a "separate build attempt … described in specs" not in this repo. Decisions in those areas are unconstrained by existing code, and the bribery-driven inclusion mechanism is explicitly designed-in rather than treated as an attack to defend against.
 
-4. **The repo PRD (§5.2 in particular) is the most decisive document about how the implementation is framed.** Where the three source papers conflict, the repo PRD's framing — vault-as-stables-engine, B/C delivered at deposit time, single token, multisig-mediated governance — is the closest to the as-built. Readers may want to treat the repo PRD as the de-facto v1 spec and the three source papers as inputs to a v2 reconciliation rather than treating any source paper as canonical.
+4. **The deployed sequencing inverts the source PRD's premise.** The PRD-paper assumed a token-without-vault state and proposed CFO Feed as a stopgap. The actual deployment is the opposite: vault-without-token. Confirmed by the product owner ("stables vault sort of done"; token described as separate build). Readers re-evaluating the PRD-paper should ask whether its rationale survives the inverted sequencing.
 
-5. **The implementation has reduced surface in some §3 areas by avoiding the underlying mechanism.** Strong operator override (§3.10), per-agent caps (§3.4 partially), bounded keeper actions, and irreversible shutdown all narrow the attack surface relative to what the source papers describe. This is risk-reduction by *what was not built* (no governance contract, no prop wallet, no token), so the gaps reopen as soon as any of those pieces ship.
+5. **The repo PRD (§5.2 in particular) is the closest source-doc match to the as-built, but it is not the full intended product.** It frames the vault as a stables engine with B/C delivered to depositor wallets — consistent with the deployed contract. The product owner's multi-vault platform vision goes beyond it. Readers may want to treat the repo PRD as a faithful v1 spec for the first vault and the multi-vault wrapping as a v2 design problem the source papers do not yet address.
+
+6. **The implementation has reduced surface in some §3 areas by avoiding the underlying mechanism.** Strong operator override (§3.10), per-agent caps (§3.4 partially), bounded keeper actions, and irreversible shutdown all narrow the attack surface relative to what the source papers describe. This is risk-reduction by *what was not built* (no governance contract, no prop wallet, no token), so the gaps reopen as soon as any of those pieces ship — which the product owner's roadmap does plan.
 
 ---
 
@@ -220,10 +273,13 @@ A few cross-cutting observations worth weighing — signals, not findings.
 
 If decisions need to be sequenced:
 
-1. **§1.1 (one token vs. two)** — affects everything downstream including legal structure.
-2. **§1.7 (sequencing)** — determines whether the whitepaper or the PRD describes near-term reality.
-3. **§1.2 (vault shape at launch)** — gates audit scope and Phase 1 deliverables.
-4. **§1.3, §1.4, §1.5, §1.6 (governance shape)** — interlocking; resolve as a set.
-5. **§1.8 (customer wedge)** — narrative; can follow product decisions.
-6. **§2 items** — defer per the source docs' own phasing.
-7. **§3 gaps** — surface as design tasks once §1 and §2 are settled.
+1. **§3.11 (production chain selection)** — gates everything else: integration set, adapter rebuild, audit scope, regulatory reading.
+2. **§1.1 (one token vs. two)** — affects token economics, legal structure, and token-side build.
+3. **§1.2 / §1.6 / §3.12 (multi-vault architecture and wrapping)** — interlocking; resolve as a set. Defines what "Robot Money" actually is as a product.
+4. **§3.13 (build vs. buy)** — once the architecture is clear, decide which vaults to build vs. integrate (Veda, Giza, Zyfai).
+5. **§1.7 (sequencing)** — fall out of §1.2 and §3.13.
+6. **§1.3, §1.4, §1.5 (governance shape)** — interlocking; resolve as a set, after the vault platform shape is settled.
+7. **§1.8 (customer wedge)** — narrative; can follow product decisions.
+8. **§3.14 (RWA vault feasibility)** — separable, can run in parallel.
+9. **§2 items** — defer per the source docs' own phasing.
+10. **Remaining §3 gaps** — surface as design tasks once §1 and §2 are settled.
