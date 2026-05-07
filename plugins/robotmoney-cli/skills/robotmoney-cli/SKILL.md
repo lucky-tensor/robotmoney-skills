@@ -1,156 +1,129 @@
 ---
 name: robotmoney-cli
 description: >
-  Interact with the Robot Money stablecoin yield vault on Base. Use this skill when the user asks to:
-  check the vault's current APY, TVL, caps, or adapter breakdown ("What's rmUSDC yielding right now?");
-  check a user's rmUSDC balance or position value ("What's my balance?", "How much is my position worth?");
-  deposit USDC into the vault ("Deposit 100 USDC into Robot Money", "Put some USDC into rmUSDC");
-  withdraw from the vault ("Withdraw my USDC from rmUSDC", "Redeem all my rmUSDC");
-  bootstrap a new wallet for an agent or machine that doesn't have one yet ("I want to deposit but don't have a wallet", "Create a wallet for me and deposit 100 USDC");
-  actually send a transaction end-to-end ("Execute the deposit", "Actually deposit it, don't just prepare");
-  prepare or simulate any Robot Money vault transaction.
+  Use the `rmpc` Rust client to interact with the Robot Money vault and policy
+  gateway from an agent runtime. Use this skill when the user asks to:
+  inspect vault, gateway, agent-policy, or role state on-chain
+  ("Is the vault healthy?", "What's my agent's deposit cap?", "Who has ADMIN_ROLE?");
+  read an ERC-20 balance, allowance, deposit record, or transaction receipt
+  ("What's my USDC balance?", "Did this deposit go through?");
+  run the signer self-check before any write
+  ("Is my signing backend ready?");
+  submit a guarded USDC deposit through the gateway
+  ("Deposit 100 USDC for order 0x...").
+  Always run reads first, run `self-check` before any write, and refuse to
+  proceed when preflight (caps, allowance, code-hash, fee cap, role,
+  pause) does not pass.
 ---
 
-# robotmoney-cli
+# robotmoney-cli (`rmpc`)
 
-> **Experimental (pre-v1.0)** — Command syntax, response schemas, and available operations may change. Always verify critical outputs independently.
+> **Experimental — pre-v1.0.** Command syntax, flags, and output shapes can
+> change. Verify every transaction. Default to fork/devnet; mainnet must be an
+> explicit operator action.
 
-Query the Robot Money stablecoin vault and either (a) build unsigned transactions for the caller to sign with their own wallet, or (b) sign and broadcast end-to-end via an Open Wallet Standard (OWS) wallet. All commands output JSON to stdout. The CLI never holds private keys — OWS does, under its policy-gated signing flow.
+`rmpc` is the Robot Money Rust payment client. It is the only path to a signed
+deposit on the Robot Money policy gateway. The same binary also exposes
+direct on-chain read commands so an agent can inspect vault, gateway, and
+agent-policy state without an explorer API.
 
-```bash
-npx @robotmoney/cli <command> [options]
-```
-
-**Chain:** `base` only at launch. Every command requires `--chain base`.
-
-**Vault:** `0x4f835c9f54bcf17daf9040f60cb72951ccbb49dd` on Base — a multi-adapter ERC-4626 vault that splits USDC across Morpho Gauntlet USDC Prime, Aave V3, and Compound V3 by dynamic equal weight.
-
-**Basket leg (new):** `prepare-deposit` and `execute-deposit` now also buy a fixed 6-token agent basket (VIRTUAL, ROBOT, BNKR, JUNO, ZFI, GIZA) atomically via Uniswap UniversalRouter — 95% to vault, 5% across the basket by default. `prepare-redeem` / `prepare-withdraw` (and their `execute-*` siblings) can sell back any subset. See [references/basket.md](references/basket.md).
-
-**RPC:** defaults to a built-in pool of 5 free Base endpoints with automatic fallback. Users don't need their own RPC URL. Pass `--rpc-url <url>` or set `RPC_URL` if you want to override.
+All commands take `--config <path-to-config.toml>` and write JSON to stdout;
+exit code 0 means success, non-zero means a named, structured error on stderr.
+Add `--pretty` for indented JSON.
 
 ## Target users
 
-This skill is for **AI agents and autonomous machines** — anything with a wallet (or the need for one) that wants diversified USDC yield. Works the same whether you're a Claude Code session, a Cursor agent, an autonomous trading bot, an IoT device, or a peaq-network machine. Not a retail-wallet UX — all output is JSON and meant to be parsed, not read by humans.
+This skill is for **AI agents and autonomous machines** that have been issued
+an `AGENT_ROLE` key on the Robot Money gateway. It is not a retail wallet UX:
+output is JSON, errors are named, and writes are gated by on-chain policy
+(per-deposit cap, per-window cap, pause, role, share-receiver, code-hash).
 
-## Deciding between `prepare-*` and `execute-*`
+## Reference docs
 
-The CLI has two sign-time models:
+- **[Read commands](references/read.md)** — `self-check`, `get-vault`,
+  `get-gateway`, `get-agent`, `get-roles`, `get-balance`, `get-allowance`,
+  `get-deposit`, `get-tx`. Output envelope, error fields, and call-order
+  recommendations.
+- **[Write commands](references/write.md)** — `deposit`, `status`. Required
+  preflight, idempotency model, deadline semantics, gas/fee cap behavior, and
+  the single-flight nonce lock.
+- **[Safety and refusal cases](references/safety.md)** — every refusal the
+  client emits before broadcast, mapped to implementation-plan §4.4 (preflight),
+  §4.6 (nonce lock), and §4.7 (fee cap), plus the fork-vs-mainnet warning.
+- **[Examples](references/examples.md)** — minimal prompts and expected
+  command traces for read-first inspection, guarded deposit, and refusal
+  handling.
 
-- **`prepare-*`** — returns unsigned calldata as JSON. Use when the caller has their own wallet/signer (Coinbase Smart Wallet, Safe, Fireblocks, hardware, etc.) and will sign and broadcast externally. The CLI never touches keys.
-- **`execute-*`** — signs **and** broadcasts end-to-end via OWS. Use when the caller has run `create-wallet` (or has any OWS keystore in `~/.ows/wallets/`) and wants the CLI to finish the job. Returns confirmed transaction hashes.
+## Command surface
 
-### If the user asks to deposit/withdraw and has not provided a wallet address
+The complete surface (mirrors `rmpc --help`):
 
-1. Ask: *"Do you already have a wallet, or should I create a new one for you via Open Wallet Standard?"*
-2. **If no wallet** → run `create-wallet`, print the generated address + funding instructions (USDC **and** a small amount of ETH for gas on Base), then suggest `execute-*` for the deposit once funds land
-3. **If they have one** → ask for the address, then use `prepare-*` — they'll sign externally
-
-### If the user just wants a transaction prepared (not broadcast)
-
-Use `prepare-*` regardless of whether a wallet exists locally. Return the unsigned calldata and explain they need to sign it with their wallet.
-
-## Response Schemas
-
-- **[Read commands](references/read.md)** — exact JSON shapes for `health-check`, `get-vault`, `get-balance`, `get-apy`
-- **[Write commands](references/write.md)** — exact JSON shapes for `prepare-*`, `execute-*`, `create-wallet`
-- **[Basket leg](references/basket.md)** — token list, defaults, new flags, response shape, `get-basket-holdings`
-
-## Quick Reference
-
-```bash
-# Wallet — bootstrap one if the agent/machine doesn't have one yet
-npx @robotmoney/cli create-wallet [--label <string>] [--storage-path <dir>]
-
-# Read — query protocol state (no wallet required)
-npx @robotmoney/cli health-check         --chain base
-npx @robotmoney/cli get-vault            --chain base [--verbose]
-npx @robotmoney/cli get-balance          --chain base --user-address 0x...
-npx @robotmoney/cli get-apy              --chain base
-npx @robotmoney/cli get-basket-holdings  --chain base --user-address 0x... [--no-pricing]
-
-# Prepare — unsigned calldata for external signing (95% vault + 5% basket by default)
-npx @robotmoney/cli prepare-deposit  --chain base --user-address 0x... --amount 100 --receiver 0x... \
-    [--no-basket | --basket-only] [--slippage-bps 300]
-npx @robotmoney/cli prepare-redeem   --chain base --user-address 0x... --shares max --receiver 0x... \
-    [--sell-all | --sell-percent N | --sell-tokens VIRTUAL,JUNO [--sell-amounts 1.5,200]] [--slippage-bps 300]
-npx @robotmoney/cli prepare-withdraw --chain base --user-address 0x... --amount 50 --receiver 0x... \
-    [...same basket-sell flags...]
-
-# Execute — sign + broadcast end-to-end via OWS
-npx @robotmoney/cli execute-deposit  --chain base --wallet <name> --amount 100 [--no-basket | --basket-only]
-npx @robotmoney/cli execute-redeem   --chain base --wallet <name> --shares max [--sell-all]
-npx @robotmoney/cli execute-withdraw --chain base --wallet <name> --amount 50 [--sell-all]
+```text
+rmpc deposit        Sign and broadcast a USDC deposit through the gateway
+rmpc status         Look up a previously submitted payment by its on-chain `paymentId`
+rmpc self-check     Print the signer-backend self-check report (v0 §9.2 JSON)
+rmpc get-vault      Read vault state directly from chain
+rmpc get-gateway    Read gateway state directly from chain
+rmpc get-agent      Read an agent's authorization + window usage
+rmpc get-roles      Read role membership on the gateway for a target address
+rmpc get-balance    Read an ERC-20 token balance for an address (USDC by default)
+rmpc get-allowance  Read an ERC-20 allowance(owner, spender) on the configured USDC
+rmpc get-deposit    Look up a gateway deposit by its on-chain id (`AgentDeposit.paymentId`)
+rmpc get-tx         Look up a transaction's receipt status by hash
 ```
 
-## Wallet & passphrase resolution (execute-*)
+Every command requires `--config <CONFIG>` (a TOML file pinning chain id,
+gateway address, USDC address, vault address, gateway runtime code hash, fee
+cap, signer backend, and state directory). The config is operator-managed; the
+agent does not edit it at runtime.
 
-- `--wallet <name>` explicit → use that OWS wallet
-- Else if exactly one wallet exists in `~/.ows/wallets/` → auto-pick it
-- Else → error with list of available wallets
+## Operating model
 
-Passphrase:
-- `--passphrase <string>` (highest priority; visible in shell history)
-- `OWS_PASSPHRASE` environment variable (cleanest for agents)
-- Interactive TTY prompt (default for humans)
+1. **Read first.** Before any write, the agent runs `get-vault`, `get-gateway`,
+   `get-agent --agent <self>`, `get-balance --address <self>`, and
+   `get-allowance --owner <self> --spender <gateway>`. These answer "is the
+   vault healthy?", "am I authorized?", "do I have funds and approval?".
+2. **Self-check.** Before any deposit, run `rmpc self-check`. The signer
+   backend, encrypted-keystore status, and `allow_software_fallback` flag must
+   all be acceptable per the operator's policy.
+3. **Guarded write.** Run `rmpc deposit` with the operator-issued
+   `--order-id` (and optional `--idempotency-key`). The client mirrors every
+   contract precondition in `preflight` and refuses to sign if any check
+   fails. Hard refusal is intentional and not advisory.
+4. **Confirm.** Use `rmpc status --payment-id <id>` (or `rmpc get-deposit`) to
+   confirm the on-chain record. The returned `paymentId` is the canonical
+   identity for retry/idempotency.
 
-## Funding a newly-created wallet
+## Refusal cases
 
-`create-wallet` returns a new EVM address. Before running `execute-*`, fund it with:
-1. **USDC** on Base — the amount you want to deposit. Per-deposit cap is 5,000 USDC.
-2. **A small amount of ETH on Base for gas** — roughly $0.01–0.05 covers ~10 vault transactions. Without ETH, every `execute-*` will fail at gas check.
+The agent must surface — not suppress — these refusals:
 
-Funding paths: Coinbase Base withdrawal, https://bridge.base.org, or any CEX/DEX that supports Base.
+- **Preflight (§4.4):** paused gateway, agent inactive or expired, allowance
+  or balance below `--amount`, chain id mismatch, gateway runtime code-hash
+  mismatch.
+- **Caps (gateway):** `--amount > maxPerPayment` or
+  `windowGross + amount > maxPerWindow`.
+- **Nonce lock (§4.6):** another `rmpc deposit` is in flight for the same
+  agent address (`ErrConcurrentInvocation`).
+- **Fee cap (§4.7):** computed `maxFeePerGas` exceeds `max_fee_per_gas_cap`
+  in config (`ErrFeeCapExceeded`).
+- **Signer backend:** software signer selected but
+  `[signer].allow_software_fallback = false` — the binary exits before any
+  RPC.
 
-## Write Workflow
+See [`references/safety.md`](references/safety.md) for the full table.
 
-**For `prepare-*`:**
-1. Run the command. Returns `{operation, simulation}`. `simulation.allSucceeded` should be `true` for a healthy prepare.
-2. Present `operation.summary`, `operation.transactions`, and `simulation.preview` to the caller.
-3. Caller signs and broadcasts externally. Approve + deposit is a two-tx sequence — broadcast them in order.
+## Fork-vs-mainnet
 
-**For `execute-*`:**
-1. Run the command. CLI builds, signs, broadcasts, and waits for on-chain confirmation.
-2. Returns a `transactions` array with each tx's `hash`, `status`, and `blockNumber`. `status` will be `"confirmed"` when everything succeeded.
-3. Broadcast takes ~4–10 seconds end-to-end on Base (2-second blocks, one confirmation per tx). Don't worry about the delay.
+Default to fork or local devnet. Mainnet operation requires an explicit,
+operator-supplied config and is loud by design: a high-severity log line on
+startup notes any mainnet chain id and any software-signer fallback. The
+agent must not silently switch chains.
 
-## Simulation Failures (prepare-*)
+## Harness portability
 
-| Revert | Cause | What to do |
-|--------|-------|------------|
-| `ERC20InsufficientAllowance` | USDC allowance for the vault is below the deposit amount | With `prepare-deposit`, simulation pre-applies the approval via state override, so this shouldn't appear. If it does, it's from a different code path — check the caller's approval flow. |
-| `ERC20InsufficientBalance` | User lacks USDC | Fund the wallet with USDC on Base first |
-| `ERC4626ExceededMaxDeposit` | Deposit exceeds vault's max for this receiver | Reduce amount; check TVL and per-deposit caps |
-| `ERC4626ExceededMaxWithdraw` | Withdraw amount exceeds the owner's current balance | Use `prepare-redeem --shares max` to exit the full position |
-| `ERC4626ExceededMaxRedeem` | Redeem shares exceed the owner's share balance | Use `--shares max`, which reads balanceOf automatically |
-| `TVLCapExceeded` | Deposit would push total vault assets above the TVL cap ($100,000) | Reduce amount or wait for cap raise |
-| `PerDepositCapExceeded` | Single deposit exceeds the per-deposit cap ($5,000) | Split into multiple deposits under the cap |
-| `VaultShutdown` | Vault is permanently shut down — deposits disabled | Withdrawals still work; no new deposits accepted |
-| `EnforcedPause` | Vault is paused (operational emergency) | Wait for unpause; withdrawals may still be available |
-| `NoActiveAdapters` | No adapters are active | Operator attention required before any deposit |
-
-**Note on expected failures:** If `simulation.failures[i].expected === true`, that failure is an artifact of simulating a dependent tx at latest-block state and is not a real error. The `allSucceeded` field already filters these out.
-
-## Vault mechanics
-
-- **Deposit** mints rmUSDC shares and atomically routes USDC across active adapters by equal weight (3 adapters → 33.33% each)
-- **Redeem** burns rmUSDC and returns USDC in one transaction, minus a 0.25% exit fee
-- **Share price** grows over time as yield accrues in Morpho / Aave / Compound — no rebasing, no rebalancing delays
-- **Preview functions** (`previewRedeem`, `previewWithdraw`) return NET USDC after fee — the caller-side exit amount
-- **No cooldown, no lock** — deposit and withdraw are both synchronous, one transaction each
-
-## Partial Withdrawal
-
-If `prepare-withdraw --amount <large>` simulation fails due to insufficient adapter liquidity (rare — Aave/Morpho/Compound are deep), use `prepare-redeem --shares max` instead. It pulls proportionally from all adapters and caps at what's actually available.
-
-## Contract addresses (Base)
-
-| Contract | Address |
-|---|---|
-| Vault (RobotMoneyVault) | `0x4f835c9f54bcf17daf9040f60cb72951ccbb49dd` |
-| USDC | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
-| MorphoAdapter | `0xa6ed7b03bc82d7c6d4ac4feb971a06550a7817e9` |
-| AaveV3Adapter | `0x218695bdab0fe4f8d0a8ee590bc6f35820fc0bea` |
-| CompoundV3Adapter | `0x8247da22a59fce074c102431048d0ce7294c2652` |
-
-Chain ID: 8453 (Base mainnet).
+This skill makes no assumptions about a specific harness. `rmpc` is a plain
+binary that reads JSON config and writes JSON to stdout. Any harness that can
+run a subprocess and parse JSON can use it. Harness-specific install steps
+(OpenCode, OpenClaw) are documented separately under
+`docs/implementation-plan.md` §10.

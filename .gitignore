@@ -9,5 +9,19 @@ coverage/
 !.env.example
 .ows/
 
+# Foundry
+out/
+cache/
+broadcast/
+foundry.lock
+lcov.info
+
+# Rust / Cargo (Cargo.lock is checked in for binary crates)
+target/
+
 # Internal planning docs — not for public history
 plan.md
+
+# Local agent prompts (skills/commands/workflows) — staging dir + Claude Code state
+.agents/
+.claude/

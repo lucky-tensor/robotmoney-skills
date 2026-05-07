@@ -1,159 +1,159 @@
-# Read command response schemas
+# Read commands
 
-All read commands output JSON to stdout. Every numeric value sent on-chain is
-returned twice: once as a human-readable decimal string (e.g. `"100.00"`) and
-once as a raw wei/smallest-unit string (e.g. `"100000000"` for 100 USDC).
+`rmpc` exposes direct JSON-RPC reads for vault, gateway, agent, and ERC-20
+state. No explorer API is used or required for safety-critical reads. Output
+is stable JSON suitable for agents and shell scripts.
 
-Every command accepts:
+Common flags (every read command):
 
-- `--chain base` (required)
-- `--rpc-url <url>` (optional, falls back to `RPC_URL` env, then `https://base.llamarpc.com`)
-- `--pretty` (optional, pretty-print JSON)
+- `-c, --config <CONFIG>` — path to the operator config TOML (required).
+- `--pretty` — pretty-print JSON output.
+
+Per the implementation plan §9 read-output contract:
+
+- All large integers are emitted as **decimal strings** (never JSON numbers).
+- Every read response includes `chain_id`, `block_number`, and
+  `source: "json_rpc"`.
+- Commands that combine multiple reads include a `partial` flag and a
+  per-field error list when some reads fail.
+
+Exit code is 0 on success. Failures emit a structured JSON error on stderr
+and a non-zero exit.
 
 ---
 
-## `health-check`
+## `self-check`
 
 ```bash
-npx @robotmoney/cli health-check --chain base
+rmpc self-check --config ./config.toml [--pretty]
 ```
 
-```json
-{
-  "ok": true,
-  "chain": "base",
-  "chainId": 8453,
-  "blockNumber": "44672337",
-  "rpcLatencyMs": 336,
-  "vault": "0x4f835c9f54bcf17daf9040f60cb72951ccbb49dd",
-  "paused": false,
-  "shutdown": false
-}
-```
-
-Non-zero exit code if the RPC or vault read fails. On failure, stderr contains
-a JSON object with `{ code, error }`.
+Prints the signer-backend self-check report (v0 §9.2 JSON shape). Use this
+**before any write** to confirm the encrypted-keystore is reachable, the
+backend kind matches operator policy, and `allow_software_fallback` is set
+correctly. No RPC reads are required for this command beyond chain-id checks
+performed by the signer module on startup.
 
 ---
 
 ## `get-vault`
 
 ```bash
-npx @robotmoney/cli get-vault --chain base
+rmpc get-vault --config ./config.toml [--pretty]
 ```
 
-```json
-{
-  "address": "0x4f835c9f54bcf17daf9040f60cb72951ccbb49dd",
-  "asset": { "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", "symbol": "USDC", "decimals": 6 },
-  "shareToken": { "symbol": "rmUSDC", "decimals": 6 },
-  "totalAssets": "0",
-  "totalAssetsRaw": "0",
-  "totalShares": "0",
-  "totalSharesRaw": "0",
-  "sharePrice": "1.0",
-  "paused": false,
-  "shutdown": false,
-  "tvlCap": "100000",
-  "tvlCapRaw": "100000000000",
-  "tvlCapReached": false,
-  "perDepositCap": "5000",
-  "perDepositCapRaw": "5000000000",
-  "exitFeeBps": 25,
-  "feeRecipient": "0x88bA7364cC6cE5054981d571b33f8fb3E91475A0",
-  "activeAdapterCount": 3,
-  "currentTargetBps": 3333
-}
+Reads the configured `RobotMoneyVault` (ERC-4626) directly. Returns vault
+address, asset and share metadata, total assets and supply, share price,
+deposit caps, pause/shutdown flags, adapter addresses and balances where the
+ABI exposes them. Fields not exposed on-chain are returned as `unknown` or
+`not_onchain` rather than guessed.
+
+Use it to answer "is the vault healthy?" before any deposit.
+
+---
+
+## `get-gateway`
+
+```bash
+rmpc get-gateway --config ./config.toml [--pretty]
 ```
 
-With `--verbose`, an additional `adapters` array is included:
+Reads the configured `RobotMoneyGateway`. Returns gateway address, chain id,
+configured USDC and vault addresses, the runtime code hash (compared against
+`gateway_runtime_hash` in config), and the pause flag. A code-hash mismatch is
+a hard refusal at write time (see `references/safety.md`).
 
-```json
-{
-  "adapters": [
-    {
-      "index": 0,
-      "address": "0xa6ed7b03bc82d7c6d4ac4feb971a06550a7817e9",
-      "active": true,
-      "capBps": 5000,
-      "currentBalance": "0",
-      "currentBalanceRaw": "0",
-      "targetBps": 3333
-    }
-  ]
-}
+---
+
+## `get-agent`
+
+```bash
+rmpc get-agent --config ./config.toml --agent <0x...> [--pretty]
 ```
+
+Reads `agents[address]` policy: `active`, `validUntil`, `maxPerPayment`,
+`maxPerWindow`, `shareReceiver`, plus the current
+`agentWindowGross[address][windowId]` for the live window. Use it before any
+deposit to confirm the agent is authorized and has remaining cap.
+
+---
+
+## `get-roles`
+
+```bash
+rmpc get-roles --config ./config.toml --address <0x...> [--pretty]
+```
+
+Reports membership of `ADMIN_ROLE`, `PAUSER_ROLE`, and `AGENT_ROLE` on the
+gateway for the supplied address. The gateway enforces an invariant that an
+`AGENT_ROLE` holder must not also hold `ADMIN_ROLE` or `PAUSER_ROLE`; this
+command is the agent-side check.
 
 ---
 
 ## `get-balance`
 
 ```bash
-npx @robotmoney/cli get-balance --chain base --user-address 0xYourAddress
+rmpc get-balance --config ./config.toml --address <0x...> [--pretty]
 ```
 
-```json
-{
-  "user": "0xYourAddress",
-  "shares": "100",
-  "sharesRaw": "100000000",
-  "grossValueUsdc": "102.34",
-  "grossValueUsdcRaw": "102340000",
-  "netValueUsdc": "102.08",
-  "netValueUsdcRaw": "102080000",
-  "exitFeeUsdc": "0.256",
-  "exitFeeUsdcRaw": "256000"
-}
-```
-
-`netValueUsdc` is the amount the user would actually receive if they redeemed
-all shares right now, after the 0.25% exit fee.
+Reads an ERC-20 balance for `address` on the configured USDC. Output includes
+the raw smallest-unit string, the token address, and decimals so callers can
+format without re-deriving constants.
 
 ---
 
-## `get-apy`
+## `get-allowance`
 
 ```bash
-npx @robotmoney/cli get-apy --chain base
+rmpc get-allowance --config ./config.toml \
+  --owner <0x...> --spender <0x...> [--pretty]
 ```
 
-```json
-{
-  "blendedApy": "0.0361",
-  "blendedApyPct": "3.61%",
-  "adapters": [
-    {
-      "index": 0,
-      "protocol": "Morpho Gauntlet USDC Prime",
-      "address": "0xa6Ed7B03BC82d7C6d4AC4fEb971A06550a7817e9",
-      "apy": "0.0505",
-      "apyPct": "5.05%",
-      "weight": 0.3333333333333333
-    },
-    {
-      "index": 1,
-      "protocol": "Aave V3 USDC",
-      "address": "0x218695BdAB0fe4F8d0a8eE590bc6F35820FC0beA",
-      "apy": "0.0264",
-      "apyPct": "2.64%",
-      "weight": 0.3333333333333333
-    },
-    {
-      "index": 2,
-      "protocol": "Compound V3 cUSDCv3",
-      "address": "0x8247DA22A59FcE074c102431048D0CE7294C2652",
-      "apy": "0.0313",
-      "apyPct": "3.13%",
-      "weight": 0.3333333333333333
-    }
-  ]
-}
+Reads `allowance(owner, spender)` on the configured USDC. The agent must
+ensure `allowance(self, gateway) >= amount` before `rmpc deposit` — the
+client mirrors this in preflight (§4.4) and refuses with a structured error
+otherwise.
+
+---
+
+## `get-deposit`
+
+```bash
+rmpc get-deposit --config ./config.toml --deposit-id <0x...> [--pretty]
 ```
 
-### Notes on APY sources
+Looks up a gateway deposit by its `paymentId`. `paymentId` is the keccak hash
+of `(chain_id, gateway, agent, orderId, amount, idempotencyKey)` and is
+returned by `rmpc deposit` and `rmpc status`. Use this to confirm an
+on-chain record after a successful broadcast.
 
-- **Morpho** APY is the vault's `state.netApy` (already net of performance fees) from `https://api.morpho.org/graphql`, with `https://blue.morpho.org/graphql` as a fallback. If both are unreachable, the adapter APY is `null` and a `warnings` array is added to the response.
-- **Aave V3** APY is `pool.getReserveData(USDC).currentLiquidityRate / 1e27` — already annualized.
-- **Compound V3** APY is `comet.getSupplyRate(getUtilization()) × secondsPerYear / 1e18`.
+---
 
-Adapters with a `null` APY are excluded from the `blendedApy` calculation.
+## `get-tx`
+
+```bash
+rmpc get-tx --config ./config.toml --tx-hash <0x...> [--pretty]
+```
+
+Returns the transaction receipt status (success/reverted), block number,
+gas used, and any decoded `AgentDeposit` event from the gateway log set.
+Useful to confirm that a broadcast tx was actually mined and not just
+accepted into the mempool.
+
+---
+
+## Recommended call order before a write
+
+```text
+rmpc self-check         --config ./config.toml
+rmpc get-gateway        --config ./config.toml
+rmpc get-vault          --config ./config.toml
+rmpc get-agent          --config ./config.toml --agent <self>
+rmpc get-balance        --config ./config.toml --address <self>
+rmpc get-allowance      --config ./config.toml --owner <self> --spender <gateway>
+```
+
+Only proceed to `rmpc deposit` if every read returns a healthy state and the
+agent has remaining `maxPerPayment` and `maxPerWindow` capacity for the
+intended amount.
