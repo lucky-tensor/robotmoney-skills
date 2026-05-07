@@ -193,3 +193,68 @@ fn self_check_without_passphrase_env_fails_fast() {
         .assert()
         .failure();
 }
+
+/// Guard: a config with `unsafe_for_production = true` against a production
+/// chain id must exit 2 with `ErrUnsafeForProductionChain` before even
+/// attempting an RPC call.
+///
+/// This is the backstop guard from `docs/technical/dapp-browser-keygen-review.md` §5.
+/// We use Base mainnet chain id 8453 — one of the four production chain ids.
+#[test]
+fn self_check_unsafe_for_production_on_production_chain_exits_nonzero() {
+    // chain_id 8453 = Base mainnet (a production chain); rpc_url points at
+    // nothing — the guard must fire before any RPC call is made.
+    let fix = Fixture::build_unsafe_for_production("http://127.0.0.1:1", 8453);
+
+    let out = rmpc()
+        .env(
+            PASSPHRASE_ENV_VAR,
+            std::str::from_utf8(TEST_PASSPHRASE).unwrap(),
+        )
+        .args(["self-check", "--config", fix.config_path.to_str().unwrap()])
+        .assert()
+        .failure()
+        .get_output()
+        .clone();
+
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "production chain + unsafe flag => exit 2"
+    );
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    let v: Value = serde_json::from_str(stdout.trim()).expect("stdout is JSON");
+    assert_eq!(v["ok"], false);
+    assert_eq!(v["error"], "ErrUnsafeForProductionChain");
+    assert_eq!(v["unsafe_for_production"], true);
+    assert_eq!(v["chain_id"], 8453u64);
+}
+
+/// A config with `unsafe_for_production = true` against a devnet chain id
+/// (31337, anvil default) must NOT be refused by the guard — it should
+/// proceed normally (the mock server handles the preflight).
+#[tokio::test]
+async fn self_check_unsafe_for_production_on_devnet_chain_is_allowed() {
+    let mut server = mockito::Server::new_async().await;
+    let chain_id = 31337u64; // anvil/devnet — not a production chain
+    install_happy_path_mocks(&mut server, chain_id, SIGNER_ADDRESS).await;
+
+    let fix = Fixture::build_unsafe_for_production(&server.url(), chain_id);
+
+    let out = rmpc()
+        .env(
+            PASSPHRASE_ENV_VAR,
+            std::str::from_utf8(TEST_PASSPHRASE).unwrap(),
+        )
+        .args(["self-check", "--config", fix.config_path.to_str().unwrap()])
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    let v: Value = serde_json::from_str(stdout.trim()).expect("stdout is JSON");
+    assert_eq!(v["ok"], true);
+    assert_eq!(v["unsafe_for_production"], true);
+    assert_eq!(v["chain_id"], chain_id);
+}

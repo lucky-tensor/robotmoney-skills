@@ -21,7 +21,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use alloy_primitives::U256;
 use serde::Serialize;
 
-use crate::config::Config;
+use crate::config::{Config, PRODUCTION_CHAIN_IDS};
 use crate::errors::RmpcError;
 use crate::policy::{Preflight, PreflightInputs, PreflightReport};
 use crate::rpc::RpcClient;
@@ -44,6 +44,10 @@ pub struct SelfCheckOutput {
     pub software_fallback_allowed: bool,
     pub key_exportable: bool,
     pub device_bound: bool,
+    /// `true` when the loaded config carries `[signer] unsafe_for_production = true`
+    /// (i.e. it was exported by the dapp browser-keygen path).
+    /// See `docs/technical/dapp-browser-keygen-review.md` §5.
+    pub unsafe_for_production: bool,
     pub timestamp: u64,
     pub checks: ChecksOutput,
     pub ok: bool,
@@ -93,6 +97,7 @@ impl ChecksOutput {
         let mut c = Self::unknown();
         match err {
             RmpcError::ErrChainIdMismatch => {}
+            RmpcError::ErrUnsafeForProductionChain { .. } => {}
             RmpcError::ErrCodeHashMismatch => {
                 c.chain_id_match = true;
             }
@@ -183,6 +188,46 @@ pub fn run(config_path: &Path, pretty: bool) -> i32 {
         }
     };
 
+    // Hard prerequisite from docs/technical/dapp-browser-keygen-review.md §5:
+    // configs exported by the dapp browser-keygen path carry
+    // `[signer] unsafe_for_production = true` and must be refused on any
+    // production chain id before we even attempt the preflight.
+    if cfg.signer.unsafe_for_production && PRODUCTION_CHAIN_IDS.contains(&cfg.chain_id) {
+        log::warn!(
+            "[keygen] unsafe_for_production key detected; refusing production chain {}",
+            cfg.chain_id
+        );
+        let err = RmpcError::ErrUnsafeForProductionChain {
+            chain_id: cfg.chain_id,
+        };
+        let out = SelfCheckOutput {
+            selected_backend: backend,
+            agent_address: format!("{agent_address:#x}"),
+            chain_id: cfg.chain_id,
+            gateway: cfg.gateway_address.clone(),
+            software_fallback_allowed: cfg.signer.allow_software_fallback,
+            key_exportable: matches!(backend, SignerBackendKind::Software),
+            device_bound: false,
+            unsafe_for_production: true,
+            timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
+            checks: ChecksOutput::unknown(),
+            ok: false,
+            error: Some("ErrUnsafeForProductionChain".to_string()),
+        };
+        let json = if pretty {
+            serde_json::to_string_pretty(&out)
+        } else {
+            serde_json::to_string(&out)
+        }
+        .expect("self-check output serialises");
+        println!("{json}");
+        log::error!("rmpc self-check: {err}");
+        return EXIT_PREFLIGHT_FAIL;
+    }
+
     let preflight_result = rt.block_on(async {
         let pf = Preflight::new(&rpc, &cfg);
         pf.run(PreflightInputs {
@@ -248,6 +293,7 @@ pub fn run(config_path: &Path, pretty: bool) -> i32 {
         // mirror v0 §9.2/§9.3 — software keys are exportable, not device-bound.
         key_exportable: matches!(backend, SignerBackendKind::Software),
         device_bound: false,
+        unsafe_for_production: cfg.signer.unsafe_for_production,
         timestamp,
         checks,
         ok,
@@ -282,6 +328,7 @@ fn error_name(err: &RmpcError) -> &'static str {
         RmpcError::ErrAllowanceInsufficient => "ErrAllowanceInsufficient",
         RmpcError::ErrBalanceInsufficient => "ErrBalanceInsufficient",
         RmpcError::ErrSoftwareSignerDisallowed => "ErrSoftwareSignerDisallowed",
+        RmpcError::ErrUnsafeForProductionChain { .. } => "ErrUnsafeForProductionChain",
         RmpcError::ErrConfig(_) => "ErrConfig",
         RmpcError::ErrIo(_) => "ErrIo",
         RmpcError::ErrTomlParse(_) => "ErrTomlParse",

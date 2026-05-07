@@ -1,0 +1,23 @@
+{
+  "name": "@robotmoney/dapp",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Robot Money Phase 6 human-controls dapp (credential management and agent authorization)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "test": "vitest run",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "ethers": "^6.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.4.0",
+    "vite": "^5.0.0",
+    "vitest": "^1.6.0"
+  }
+}

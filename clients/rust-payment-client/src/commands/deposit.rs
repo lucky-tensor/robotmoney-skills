@@ -644,6 +644,7 @@ fn error_name(err: &RmpcError) -> &'static str {
         RmpcError::ErrAllowanceInsufficient => "ErrAllowanceInsufficient",
         RmpcError::ErrBalanceInsufficient => "ErrBalanceInsufficient",
         RmpcError::ErrSoftwareSignerDisallowed => "ErrSoftwareSignerDisallowed",
+        RmpcError::ErrUnsafeForProductionChain { .. } => "ErrUnsafeForProductionChain",
         RmpcError::ErrOrderIdAlreadySubmitted { .. } => "ErrOrderIdAlreadySubmitted",
         RmpcError::ErrTxReverted { .. } => "ErrTxReverted",
         RmpcError::ErrAgentDepositLogMissing { .. } => "ErrAgentDepositLogMissing",

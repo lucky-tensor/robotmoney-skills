@@ -50,6 +50,19 @@ impl Fixture {
     /// Build a temp keystore + config TOML pointing at `rpc_url`, with
     /// `chain_id` baked in.
     pub fn build(rpc_url: &str, chain_id: u64) -> Self {
+        Self::build_with_opts(rpc_url, chain_id, false)
+    }
+
+    /// Build with optional `unsafe_for_production` flag in `[signer]`.
+    ///
+    /// When `unsafe_for_production = true`, `rmpc self-check` will refuse
+    /// to run against any production chain id (the guard introduced by
+    /// `docs/technical/dapp-browser-keygen-review.md` §5).
+    pub fn build_unsafe_for_production(rpc_url: &str, chain_id: u64) -> Self {
+        Self::build_with_opts(rpc_url, chain_id, true)
+    }
+
+    fn build_with_opts(rpc_url: &str, chain_id: u64, unsafe_for_production: bool) -> Self {
         let tmp = TempDir::new().expect("tempdir");
         let keystore_path = tmp.path().join("keystore.json");
         SoftwareSigner::create_keystore(&keystore_path, &TEST_PRIVKEY, TEST_PASSPHRASE)
@@ -57,6 +70,11 @@ impl Fixture {
 
         let runtime_hash = format!("0x{}", ahex::encode(keccak256(GATEWAY_CODE)));
         let config_path = tmp.path().join("rmpc.toml");
+        let unsafe_line = if unsafe_for_production {
+            "unsafe_for_production   = true\n"
+        } else {
+            ""
+        };
         let toml = format!(
             r#"chain_id              = {chain_id}
 rpc_url               = "{rpc_url}"
@@ -68,7 +86,7 @@ max_fee_per_gas_cap   = 100000000000
 
 [signer]
 allow_software_fallback = true
-keystore_path           = "{}"
+{unsafe_line}keystore_path           = "{}"
 "#,
             keystore_path.display(),
         );
