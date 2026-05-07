@@ -1,0 +1,20 @@
+# Fork configuration for the OpenClaw E2E demo.
+# Canonical: docs/technical/demo-runbook.md §1
+# Issue: #116
+
+# Anvil invocation parameters.
+[anvil]
+fork_block_number = 29800000
+chain_id          = 8453
+port              = 8545
+rpc_url_env       = "RMPC_FORK_RPC_URL"
+
+# Refresh cadence: pin should be updated monthly via a chore PR
+# (per ADR §3.2 in docs/technical/fork-e2e-decisions.md).
+# Last updated: 2026-05-07.
+
+# Base mainnet reference addresses (read from the fork; not deployed by the demo).
+[addresses]
+usdc  = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+vault = "0x4f835c9f54bcf17daf9040f60cb72951ccbb49dd"
+# gateway is deployed by the demo's forge script (contracts/script/Deploy.s.sol).

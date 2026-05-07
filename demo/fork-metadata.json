@@ -1,0 +1,17 @@
+{
+  "chain_id": 8453,
+  "chain_name": "Base mainnet",
+  "fork_block_number": 29800000,
+  "pin_date": "2026-05-07",
+  "pin_source": "pinned",
+  "rpc_label": "base-mainnet.g.alchemy.com",
+  "address_set": {
+    "usdc": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "vault": "0x4f835c9f54bcf17daf9040f60cb72951ccbb49dd",
+    "morpho_adapter": "0xa6ed7b03bc82d7c6d4ac4feb971a06550a7817e9",
+    "aave_v3_adapter": "0x218695bdab0fe4f8d0a8ee590bc6f35820fc0bea",
+    "compound_v3_adapter": "0x8247da22a59fce074c102431048d0ce7294c2652",
+    "admin_safe": "0x88ba7364cc6ce5054981d571b33f8fb3e91475a0"
+  },
+  "note": "Gateway is NOT a Base mainnet contract — it is deployed fresh on the fork by contracts/script/Deploy.s.sol during the demo (see demo-runbook.md §4)."
+}
