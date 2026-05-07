@@ -212,7 +212,10 @@ fn rmpc_get_vault_fork_base_mainnet() {
     // read_output::FieldError — the wire key is "message", not "error".
     for e in errors {
         assert!(e["field"].is_string(), "error missing field: {e}");
-        assert!(e["message"].is_string(), "error missing message string: {e}");
+        assert!(
+            e["message"].is_string(),
+            "error missing message string: {e}"
+        );
     }
 
     // ---- get-agent: degradation path. -----------------------------
