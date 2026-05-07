@@ -1,0 +1,41 @@
+# OpenClaw configuration for the E2E demo run.
+# Canonical: docs/technical/demo-runbook.md §8
+# Issue: #116
+#
+# This config is consumed by the OpenClaw harness wrapper at
+# testing/openclaw-config/openclaw_harness.sh.
+# It is not a rmpc TOML; rmpc is pointed at demo/rmpc-config-template.toml.
+#
+# Populate runtime values from the deploy output (demo-runbook.md §4–§5)
+# before use.
+
+[network]
+# Use "fork" (default) for the demo. Never "mainnet" without
+# RMPC_ALLOW_MAINNET=yes.
+network = "fork"
+
+[monitor]
+# rmpc subcommand to loop during the bounded read phase.
+command    = "get-vault"
+iterations = 3
+interval_secs = 1
+
+[skill]
+# Absolute path to the rmpc binary (built from clients/rust-payment-client).
+# Override via RMPC_BIN env var.
+rmpc_bin = "clients/rust-payment-client/target/debug/rmpc"
+
+# Absolute path to the rmpc TOML config populated in demo-runbook.md §5.
+# Must be set via RMPC_CONFIG env var or filled in here.
+rmpc_config = ""   # fill in at runtime
+
+[task]
+# Verbatim OpenClaw task prompt used for the Phase 7 demo.
+# See demo-runbook.md §7.
+prompt = """
+Monitor vault status, verify the agent is authorized and funded,
+deposit exactly 100 USDC (100000000 in 6-decimal units) for order
+0x1111111111111111111111111111111111111111111111111111111111111111
+when all preflight checks pass, then report the tx hash, deposit id,
+vault position (shares minted), and block number in a JSON object.
+"""

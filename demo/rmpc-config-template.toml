@@ -1,0 +1,24 @@
+# rmpc operator config template for the OpenClaw E2E demo.
+# Canonical: docs/technical/demo-runbook.md §5
+# Issue: #116
+#
+# Fill in the UPPER_CASE placeholders from the forge deploy output
+# (demo-runbook.md §4) before use.
+#
+# chain_id, usdc_address, and max_fee_per_gas_cap are pre-filled for
+# the Base mainnet fork. gateway_address, vault_address, and
+# gateway_runtime_hash come from the demo deploy.
+
+chain_id             = 8453
+rpc_url              = "http://127.0.0.1:8545"
+gateway_address      = "GATEWAY_ADDRESS"
+usdc_address         = "USDC_ADDRESS"
+vault_address        = "VAULT_ADDRESS"
+gateway_runtime_hash = "GATEWAY_RUNTIME_HASH"
+max_fee_per_gas_cap  = 100000000000
+
+[signer]
+allow_software_fallback = true
+keystore_path           = "KEYSTORE_PATH"
+
+state_dir = "/tmp/demo-rmpc-state"

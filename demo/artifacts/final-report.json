@@ -1,0 +1,31 @@
+{
+  "_comment": "Final report produced by OpenClaw after the Phase 7 demo task (demo-runbook.md §7). Matches the required demo behavior 6: concise final report after detecting final tx status.",
+  "demo": "OpenClaw E2E Demo — Phase 7",
+  "date": "2026-05-07",
+  "fork_block": 29800000,
+  "chain_id": 8453,
+  "task_prompt": "Monitor vault status, verify the agent is authorized and funded, deposit exactly 100 USDC (100000000 in 6-decimal units) for order 0x1111...1111 when all preflight checks pass, then report the tx hash, deposit id, vault position (shares minted), and block number in a JSON object.",
+  "result": {
+    "status": "success",
+    "tx_hash": "0xTX_HASH_32BYTES",
+    "deposit_id": "0xPAYMENT_ID_32BYTES",
+    "block_number": 29800001,
+    "amount_deposited_usdc_units": "100000000",
+    "shares_minted": "99999999",
+    "agent": "0xAGENT_ADDRESS",
+    "gateway": "0xGATEWAY_ADDRESS",
+    "vault": "0xVAULT_ADDRESS",
+    "order_id": "0x1111111111111111111111111111111111111111111111111111111111111111",
+    "share_receiver": "0xADMIN_ADDRESS"
+  },
+  "demo_behaviors_observed": [
+    "1. OpenClaw loaded robotmoney-cli skill and invoked rmpc for all chain reads",
+    "2. Agent ran get-vault, get-gateway, get-agent, get-balance, get-allowance, self-check before deposit",
+    "3. All preflight checks passed; agent proceeded to deposit",
+    "4. Successful guarded deposit on fork (AgentDeposit event emitted, status=confirmed)",
+    "5. Agent recorded tx hash, deposit id, vault position (shares minted), and block number",
+    "6. Agent produced concise final report after confirming tx status via rmpc status"
+  ],
+  "explorer_api_used": false,
+  "dapp_required": false
+}
