@@ -5,7 +5,7 @@
 > ADR: [`docs/technical/mcp-decision.md`](../technical/mcp-decision.md) — MCP
 > deferred; harnesses run `rmpc` as a process-per-call shell command.
 > Skill package: [`plugins/robotmoney-cli/`](../../plugins/robotmoney-cli/).
-> Implements: issue #53.
+> Implements: issue #112.
 >
 > Every command, flag, and config field referenced in this document is
 > covered by an automated parity test in

@@ -2,12 +2,12 @@
 name = "opencode-walkthrough-tests"
 version = "0.1.0"
 edition = "2021"
-description = "Automated tests backing docs/walkthroughs/opencode-readonly-fork.md (issue #53)."
+description = "Automated tests backing docs/walkthroughs/opencode-readonly-fork.md (issue #112)."
 license = "MIT"
 publish = false
 
 # Canonical: docs/implementation-plan.md §10 — Phase 4, Agent-Harness
-# Installation. Implements issue #53.
+# Installation. Implements issue #112.
 #
 # This crate contains no library code of its own; it depends on
 # `rust-payment-client` (a path dependency on the rmpc crate) so that
