@@ -24,9 +24,13 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: "pnpm dev",
+    // Use the production preview server in CI: it does not need a
+    // long Vite dev-server warmup, which on slow CI runners blows
+    // through the default 60s timeout. Locally we still spin up the
+    // dev server for fast iteration.
+    command: process.env.CI ? "pnpm build && pnpm preview --port 5173 --host 127.0.0.1" : "pnpm dev",
     url: "http://127.0.0.1:5173",
     reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
+    timeout: 180_000,
   },
 });
