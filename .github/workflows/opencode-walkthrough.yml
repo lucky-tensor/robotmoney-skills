@@ -2,19 +2,25 @@
 #
 # Canonical: docs/walkthroughs/opencode-readonly-fork.md
 # Implementation plan: docs/implementation-plan.md §10.
+# Fixes: issue #107 (fork block pin, get-gateway test, deeper assertions,
+#        fmt/clippy).
 #
 # The crate at testing/opencode-walkthrough/ owns the test pyramid for
 # the walkthrough doc:
 #
 # - Three offline tests (`walkthrough_parity`, `config_template_parses`,
 #   `refusal_walkthrough`) need only the rmpc binary; they run on every
-#   PR.
-# - One online test (`read_only_walkthrough`) boots anvil-fork against
-#   `RMPC_FORK_RPC_URL` and asserts the rmpc envelope contract. It
-#   skip-cleans when the secret is unset, so a missing-secret state is
-#   loud-but-non-blocking.
+#   PR. fmt + clippy also run in this job.
+# - Two online tests (`read_only_walkthrough`) boot anvil-fork against
+#   `RMPC_FORK_RPC_URL` pinned to `RMPC_FORK_BLOCK` and assert the rmpc
+#   envelope + data contracts. They skip-clean when the secret is unset.
 
 name: opencode-walkthrough
+
+# Pinned fork block per fork-e2e ADR §3.2. Refresh monthly alongside
+# fork-e2e.yml; the bump must be visible in PR diff.
+env:
+  RMPC_FORK_BLOCK: "23500000"
 
 on:
   push:
@@ -46,6 +52,8 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
       - name: Cargo cache
         uses: actions/cache@v4
@@ -58,6 +66,12 @@ jobs:
           key: ${{ runner.os }}-cargo-opencode-walkthrough-${{ hashFiles('testing/opencode-walkthrough/Cargo.toml', 'clients/rust-payment-client/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-opencode-walkthrough-
+
+      - name: fmt + clippy
+        working-directory: testing/opencode-walkthrough
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
 
       - name: Build offline tests
         working-directory: testing/opencode-walkthrough
@@ -102,8 +116,9 @@ jobs:
         working-directory: testing/opencode-walkthrough
         env:
           RMPC_FORK_RPC_URL: ${{ secrets.RMPC_FORK_RPC_URL }}
+          RMPC_FORK_BLOCK: ${{ env.RMPC_FORK_BLOCK }}
         run: |
           if [ -z "$RMPC_FORK_RPC_URL" ]; then
-            echo "::warning::RMPC_FORK_RPC_URL secret not configured; the fork test will skip-clean. Set the secret in repo settings to actually exercise the fork."
+            echo "::warning::RMPC_FORK_RPC_URL secret not configured; the fork tests will skip-clean. Set the secret in repo settings to actually exercise the fork."
           fi
           cargo test --test read_only_walkthrough -- --nocapture

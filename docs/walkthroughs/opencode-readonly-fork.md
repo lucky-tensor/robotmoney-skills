@@ -195,8 +195,11 @@ a Rust test crate that runs in CI on every PR via
 | `walkthrough_parity::skill_package_referenced` | This doc points at `plugins/robotmoney-cli/` and the referenced files exist. |
 | `config_template_parses::fixture_parses_with_rmpc_config_loader` | The `rmpc-fork.toml.template` shipped under `fixtures/` deserializes with `rust_payment_client::config::Config`. |
 | `refusal_walkthrough::unknown_subcommand_refuses_with_nonzero_exit` | `rmpc not-a-real-subcommand` exits non-zero with stderr text — the structured refusal contract step 6 documents. |
-| `read_only_walkthrough::get_vault_against_fork` *(skip-clean without `RMPC_FORK_RPC_URL`)* | Boots anvil against the same fork URL, runs `rmpc get-vault` against it, asserts the envelope contract (`chain_id`, `block_number`, `source`). |
+| `read_only_walkthrough::get_vault_against_fork_envelope_contract` *(skip-clean without `RMPC_FORK_RPC_URL`)* | Boots anvil pinned to `RMPC_FORK_BLOCK`, runs `rmpc get-vault`, asserts the envelope contract (`chain_id`, `block_number`, `source`, `partial`, `errors`) and vault data fields (`asset == Base USDC`, `symbol == "rmUSDC"`, `decimals == 6`). |
+| `read_only_walkthrough::get_gateway_against_fork_is_partial` *(skip-clean without `RMPC_FORK_RPC_URL`)* | Same fork; runs `rmpc get-gateway` with the dead-EOA `gateway_address` in the fixture. Asserts `partial: true` and at least one named per-field error — the documented degradation shape from step 5. |
 
-The two fork-driven tests skip cleanly when no archive RPC is
-configured, mirroring [`testing/fork-e2e-rust`](../../testing/fork-e2e-rust)
-— a contributor laptop without an RPC stays green.
+The fork-driven tests skip cleanly when no archive RPC is configured,
+mirroring [`testing/fork-e2e-rust`](../../testing/fork-e2e-rust) — a
+contributor laptop without an RPC stays green. The fork is pinned to
+`RMPC_FORK_BLOCK` (set in the workflow `env:` block; refresh monthly
+alongside `fork-e2e.yml`).
