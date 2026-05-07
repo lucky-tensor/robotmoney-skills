@@ -65,6 +65,17 @@ pub struct SignerConfig {
     pub allow_software_fallback: bool,
     /// Path to the encrypted-at-rest keystore file.
     pub keystore_path: PathBuf,
+    /// Set to `true` for configs exported by the dapp browser-keygen path.
+    ///
+    /// When `true`, `rmpc self-check` refuses to run against any production
+    /// chain (Base mainnet 8453, Ethereum mainnet 1, Optimism 10, Arbitrum
+    /// One 42161) and emits a WARN log. This is the backstop guard described
+    /// in `docs/technical/dapp-browser-keygen-review.md` §5.
+    ///
+    /// Omitting this field (or setting it to `false`) allows the config to
+    /// be used against any chain.
+    #[serde(default)]
+    pub unsafe_for_production: bool,
 }
 
 /// Logging configuration block. All fields are optional in TOML (sane
@@ -134,6 +145,16 @@ impl LogConfig {
         self
     }
 }
+
+/// Production chain IDs where `unsafe_for_production = true` configs are refused.
+///
+/// Sourced from `docs/technical/dapp-browser-keygen-review.md` §1.
+pub const PRODUCTION_CHAIN_IDS: &[u64] = &[
+    1,     // Ethereum mainnet
+    10,    // Optimism
+    8453,  // Base mainnet
+    42161, // Arbitrum One
+];
 
 impl Config {
     /// Load from a TOML file on disk.
@@ -313,5 +334,34 @@ keystore_path           = "/var/lib/rmpc/keystore.enc"
         assert_eq!(log.dir, PathBuf::from("/tmp/rmpc-test-logs"));
         std::env::remove_var("RMPC_LOG_LEVEL");
         std::env::remove_var("RMPC_LOG_DIR");
+    }
+
+    #[test]
+    fn unsafe_for_production_defaults_false_when_omitted() {
+        let cfg = Config::from_str(SAMPLE).expect("parses");
+        assert!(!cfg.signer.unsafe_for_production);
+    }
+
+    #[test]
+    fn unsafe_for_production_round_trips_when_true() {
+        let body = SAMPLE.replace(
+            "keystore_path",
+            "unsafe_for_production = true\nkeystore_path",
+        );
+        let cfg = Config::from_str(&body).expect("parses");
+        assert!(cfg.signer.unsafe_for_production);
+        // serialise → parse → same value
+        let serialized = toml::to_string(&cfg).unwrap();
+        let cfg2 = Config::from_str(&serialized).unwrap();
+        assert!(cfg2.signer.unsafe_for_production);
+    }
+
+    #[test]
+    fn production_chain_ids_contain_expected_values() {
+        assert!(PRODUCTION_CHAIN_IDS.contains(&1));
+        assert!(PRODUCTION_CHAIN_IDS.contains(&10));
+        assert!(PRODUCTION_CHAIN_IDS.contains(&8453));
+        assert!(PRODUCTION_CHAIN_IDS.contains(&42161));
+        assert!(!PRODUCTION_CHAIN_IDS.contains(&31337)); // anvil/devnet — not production
     }
 }

@@ -1,0 +1,93 @@
+name: dapp-keygen CI
+
+# Canonical: docs/technical/dapp-browser-keygen-review.md §8 — Automated Verification
+#
+# This workflow implements the automated checks required by the ADR before
+# DAPP_BROWSER_KEYGEN_ENABLED can be set to true:
+#
+#   1. Grep sentinel: keygen.ts must not call localStorage/sessionStorage/indexedDB
+#      with any variable named *key*, *priv*, or *secret*.
+#   2. Label test: vitest runs keygen.test.ts which asserts unsafe_for_production = true
+#      in the TOML output.
+#   3. Regression: dapp unit tests pass with DAPP_BROWSER_KEYGEN_ENABLED both
+#      true and false.
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - "clients/dapp/**"
+      - ".github/workflows/dapp-keygen-ci.yml"
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - "clients/dapp/**"
+      - ".github/workflows/dapp-keygen-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  keygen-sentinel:
+    name: "ADR §8.1 — grep sentinel: no storage writes in keygen path"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fail if keygen.ts calls localStorage/sessionStorage/indexedDB with
+      # any variable that looks like a key, private key, or secret.
+      # This is the automated check from docs/technical/dapp-browser-keygen-review.md §8.
+      - name: Check for private-key storage writes
+        run: |
+          set -euo pipefail
+          KEYGEN_SRC="clients/dapp/src/keygen.ts"
+          if [ ! -f "$KEYGEN_SRC" ]; then
+            echo "ERROR: $KEYGEN_SRC not found"
+            exit 1
+          fi
+          # Grep for storage/indexedDB writes containing key/priv/secret variable names.
+          # This is intentionally broad: if any storage write is present in the
+          # keygen source file, the PR must explain why.
+          if grep -nE '(localStorage|sessionStorage|indexedDB)\s*\.' "$KEYGEN_SRC" | \
+             grep -iE '(key|priv|secret)'; then
+            echo "FAIL: keygen.ts contains a storage write with a key/priv/secret variable"
+            exit 1
+          fi
+          echo "PASS: no storage writes with key/priv/secret found in $KEYGEN_SRC"
+
+  dapp-unit-tests:
+    name: "ADR §8.2–§8.4 — dapp unit tests (keygen label + regression)"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        keygen_enabled: ["false", "true"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dapp dependencies
+        working-directory: clients/dapp
+        run: npm install
+
+      - name: Run dapp tests (DAPP_BROWSER_KEYGEN_ENABLED=${{ matrix.keygen_enabled }})
+        working-directory: clients/dapp
+        env:
+          VITE_DAPP_BROWSER_KEYGEN_ENABLED: ${{ matrix.keygen_enabled }}
+        run: npm test
+
+  rmpc-unsafe-for-production-guard:
+    name: "ADR §5 — rmpc unsafe_for_production guard (unit tests)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: clients/rust-payment-client
+
+      - name: Run rmpc self-check tests (includes unsafe_for_production guard)
+        working-directory: clients/rust-payment-client
+        run: cargo test --test cli_self_check

@@ -38,6 +38,7 @@ fn config() -> Config {
         signer: SignerConfig {
             allow_software_fallback: true,
             keystore_path: PathBuf::from("/tmp/ks.enc"),
+            unsafe_for_production: false,
         },
         log: Default::default(),
     }

@@ -43,6 +43,16 @@ pub enum RmpcError {
     #[error("ErrSoftwareSignerDisallowed: [signer].allow_software_fallback must be true")]
     ErrSoftwareSignerDisallowed,
 
+    /// The loaded config has `[signer] unsafe_for_production = true` but the
+    /// connected chain id is in the production set.  `rmpc` refuses to
+    /// proceed — operator must use a non-production RPC endpoint.
+    ///
+    /// See `docs/technical/dapp-browser-keygen-review.md` §5.
+    #[error(
+        "ErrUnsafeForProductionChain: config is marked unsafe_for_production but chain_id={chain_id} is a production chain; refusing"
+    )]
+    ErrUnsafeForProductionChain { chain_id: u64 },
+
     /// The same `(order_id, idempotency_key, deadline)` tuple was
     /// already submitted from this client; the local replay cache
     /// returns the prior `tx_hash` instead of re-broadcasting. Audit
@@ -122,6 +132,10 @@ mod tests {
                     tx_hash: "0x00".into(),
                 },
                 "ErrOrderIdAlreadySubmitted",
+            ),
+            (
+                RmpcError::ErrUnsafeForProductionChain { chain_id: 8453 },
+                "ErrUnsafeForProductionChain",
             ),
         ];
         for (err, name) in cases {
