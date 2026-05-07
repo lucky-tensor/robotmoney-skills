@@ -1,4 +1,4 @@
-//! Canonical: docs/walkthroughs/opencode-readonly-fork.md (issue #53),
+//! Canonical: docs/walkthroughs/opencode-readonly-fork.md (issue #112),
 //! step 3 (operator config template).
 //!
 //! Asserts that the `rmpc-fork.toml.template` shipped under

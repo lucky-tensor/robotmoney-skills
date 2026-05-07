@@ -1,4 +1,4 @@
-//! Canonical: docs/walkthroughs/opencode-readonly-fork.md (issue #53),
+//! Canonical: docs/walkthroughs/opencode-readonly-fork.md (issue #112),
 //! step 6 (refusal demonstration).
 //!
 //! Asserts the structured refusal contract the walkthrough promises:

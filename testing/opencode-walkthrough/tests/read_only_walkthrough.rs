@@ -1,4 +1,4 @@
-//! Canonical: docs/walkthroughs/opencode-readonly-fork.md (issue #53),
+//! Canonical: docs/walkthroughs/opencode-readonly-fork.md (issue #112),
 //! step 5 (read-only inspection).
 //!
 //! Boots an `anvil --fork-url $RMPC_FORK_RPC_URL` against Base mainnet
