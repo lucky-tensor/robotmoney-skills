@@ -190,8 +190,13 @@ jobs:
             "Deployment/postgres" \
             "Deployment/explorer-indexer" \
             "Deployment/explorer-api" \
-            "Deployment/dapp" \
-            "ConfigMap/fork-state"; do
+            "Deployment/dapp"; do
+            # NOTE: The fork-state and deployment-artifact ConfigMaps and
+            # the postgres-credentials Secret are intentionally NOT in
+            # the kustomize tree — scripts/devnet/k3d-up.sh creates them
+            # imperatively from real fixture data BEFORE applying this
+            # tree, so anvil-fork boots once with real state instead of
+            # a placeholder. See deploy/k3d/kustomization.yaml.
             kind="${kind_name%%/*}"; name="${kind_name##*/}"
             if ! awk -v k="$kind" -v n="$name" '
               /^kind:/ {kind=$2}
