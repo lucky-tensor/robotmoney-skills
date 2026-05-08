@@ -11,7 +11,7 @@ VALIDATOR_KEYS_DIR="$SHARED_ROOT/validator_keys"
 JWT_SECRET_PATH="$SHARED_ROOT/jwtsecret"
 
 # Clean shared volume
-rm -rf $SHARED_ROOT/*
+rm -rf "${SHARED_ROOT:?}/"*
 # Clean ephemeral /data volume (if inherited from base image)
 rm -rf /data/*
 
@@ -23,7 +23,8 @@ echo "🧬 Generating Artifacts..."
 
 # Explicitly set genesis timestamp to current time if not provided
 if [ -z "$GENESIS_TIMESTAMP" ]; then
-    export GENESIS_TIMESTAMP=$(date +%s)
+    GENESIS_TIMESTAMP=$(date +%s)
+    export GENESIS_TIMESTAMP
     echo "⏰ Set GENESIS_TIMESTAMP to $GENESIS_TIMESTAMP"
 fi
 
@@ -64,7 +65,7 @@ eth2-val-tools keystores \
   --out-loc="/keys/out" \
   --source-mnemonic="giant issue aisle success illegal bike spike question tent bar rely arctic volcano long crawl hungry vocal artwork sniff fantasy very lucky have athlete" \
   --source-min=0 \
-  --source-max=$NUMBER_OF_VALIDATORS
+  --source-max="$NUMBER_OF_VALIDATORS"
 
 # Move raw keys to shared volume and organize by index for the validator nodes
 echo "📂 Organizing keys by index..."

@@ -34,7 +34,7 @@ export DEPLOYMENT_OUT="${DEPLOYMENT_OUT:-${REPO_ROOT}/deployments/devnet.json}"
 
 # Wait for RPC.
 echo "[deploy-gateway] waiting for RPC at ${RPC_URL}"
-for i in $(seq 1 60); do
+for _i in $(seq 1 60); do
   if curl -fsS -X POST -H "Content-Type: application/json" \
       --data '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' \
       "${RPC_URL}" >/dev/null 2>&1; then

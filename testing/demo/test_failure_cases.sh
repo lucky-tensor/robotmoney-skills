@@ -46,7 +46,7 @@ for entry in "${CASES[@]}"; do
     echo "===== failure case: ${case_id} ====="
     echo "expected outcome substring: '${expected}'"
 
-    run_dir="$(mktemp -d -t demo-fc-${case_id}-XXXXXX)"
+    run_dir="$(mktemp -d -t "demo-fc-${case_id}-XXXXXX")"
     set +e
     RMPC_DEMO_FAILURE_CASE="$case_id" \
     RMPC_DEMO_RUN_DIR="$run_dir" \

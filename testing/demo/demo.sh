@@ -100,6 +100,7 @@ anvil \
     --silent >"$ANVIL_LOG" 2>&1 &
 ANVIL_PID=$!
 
+# shellcheck disable=SC2317,SC2329
 cleanup() {
     if kill -0 "$ANVIL_PID" 2>/dev/null; then
         kill "$ANVIL_PID" 2>/dev/null || true
@@ -109,7 +110,7 @@ cleanup() {
 trap cleanup EXIT
 
 # Wait for anvil to become responsive.
-for i in $(seq 1 30); do
+for _i in $(seq 1 30); do
     if cast block-number --rpc-url "$ANVIL_RPC" >/dev/null 2>&1; then
         break
     fi
@@ -126,6 +127,7 @@ GATEWAY="${RMPC_DEMO_GATEWAY:-0x4f835c9f54bcf17daf9040f60cb72951ccbb49dd}"   # v
 USDC="${RMPC_DEMO_USDC:-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913}"
 VAULT="${RMPC_DEMO_VAULT:-0x4f835c9f54bcf17daf9040f60cb72951ccbb49dd}"
 ADMIN_ADDRESS="${RMPC_DEMO_ADMIN:-0x88ba7364cc6ce5054981d571b33f8fb3e91475a0}"
+# shellcheck disable=SC2034
 USDC_WHALE="${RMPC_DEMO_WHALE:-0x0b25c51637c43decd6cc1c1e3da4518d54ddb528}"
 
 # Generate a fresh agent address for this run.
@@ -284,7 +286,8 @@ SEQ=0
 rmpc_call() {
     SEQ=$(( SEQ + 1 ))
     local subcmd="$1"; shift
-    local out="${RUN_DIR}/outputs/$(printf '%03d' $SEQ)-${subcmd}.json"
+    local out
+    out="${RUN_DIR}/outputs/$(printf '%03d' "$SEQ")-${subcmd}.json"
     local err
     err="$(mktemp)"
     local ts; ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
