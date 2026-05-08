@@ -263,14 +263,24 @@ jobs:
           curl -sf "http://127.0.0.1:8080/v1/agents/$AGENT/deposits" || true
           exit 1
 
-      - name: Tear down (always)
-        if: always() && steps.secret_check.outputs.skip != 'true'
-        run: bash scripts/devnet/k3d-down.sh
-
-      - name: Idempotent tear-down assertion
+      - name: Tear down + idempotent re-up assertion
         if: steps.secret_check.outputs.skip != 'true'
+        env:
+          RMPC_FORK_RPC_URL: ${{ secrets.RMPC_FORK_RPC_URL }}
+          RMPC_FORK_BLOCK: "29800000"
         run: |
-          # Running k3d-down again must succeed and report nothing to do.
-          out=$(bash scripts/devnet/k3d-down.sh 2>&1)
-          echo "$out"
+          set -euo pipefail
+          # 1. Down — must succeed.
+          bash scripts/devnet/k3d-down.sh
+          # 2. Down again — must report nothing to do (idempotent).
+          out=$(bash scripts/devnet/k3d-down.sh 2>&1); echo "$out"
           echo "$out" | grep -q "nothing to do"
+          # 3. Up again — must succeed (idempotent up after a clean
+          #    tear-down). Quick re-up is enough; we don't re-run the
+          #    AgentDeposit assertion here.
+          bash scripts/devnet/k3d-up.sh
+          curl -fsS http://127.0.0.1:8080/health
+
+      - name: Final tear-down (always)
+        if: always() && steps.secret_check.outputs.skip != 'true'
+        run: bash scripts/devnet/k3d-down.sh || true
