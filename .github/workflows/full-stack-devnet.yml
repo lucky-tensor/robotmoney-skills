@@ -263,15 +263,22 @@ jobs:
           # secret either. Pattern: an `if:` line that mentions
           # secrets_check together with skip near _devnet-k3d.yml usage.
           for f in $(grep -lE "_devnet-k3d.yml|devnet-k3d/action" .github/workflows/*.yml 2>/dev/null || true); do
-            # Skip the devnet workflow itself (already covered above).
+            # Skip the devnet workflow itself + this guard file (which
+            # legitimately mentions the forbidden patterns by name).
             case "$f" in
               ".github/workflows/_devnet-k3d.yml") continue ;;
+              ".github/workflows/full-stack-devnet.yml") continue ;;
             esac
             if grep -nE "skip[ ]*=[ ]*'?true'?.*RMPC_FORK_RPC_URL|RMPC_FORK_RPC_URL.*skip[ ]*=[ ]*'?true'?" "$f" >/dev/null 2>&1; then
               echo "::error file=$f::forbidden skip-gate near RMPC_FORK_RPC_URL" >&2
               fail=1
             fi
-            if grep -nE "secrets_check.outputs.skip" "$f" | grep -i 'RMPC_FORK_RPC_URL\|fork.rpc\|devnet-k3d' >/dev/null 2>&1; then
+            # Architecture-violation pattern: a step `if:` that uses
+            # secrets_check.outputs.skip. The guard's own grep arguments
+            # are excluded because the guard mentions these names by
+            # design. Restrict to lines that look like an actual step
+            # condition (`if: steps.secrets_check...`).
+            if grep -nE "if:.*steps\.secrets_check\.outputs\.skip" "$f" >/dev/null 2>&1; then
               echo "::error file=$f::forbidden secrets_check skip wired to devnet-k3d" >&2
               fail=1
             fi
