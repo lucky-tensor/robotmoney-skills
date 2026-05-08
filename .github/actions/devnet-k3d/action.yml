@@ -6,6 +6,11 @@
 # workflows run on their own runner and can't share cluster state, so
 # this composite is the right granularity for in-job consumers.
 #
+# The cluster's anvil-fork loads the checked-in fork-state fixture at
+# `testing/fixtures/fork-state/CURRENT.anvil-state`. No upstream RPC is
+# contacted at runtime; refresh the fixture offline with
+# `bash scripts/devnet/snapshot-fork.sh`.
+#
 # Canonical: docs/technical/full-stack-devnet.md
 # Issue: #146.
 
@@ -13,13 +18,6 @@ name: Boot k3d devnet (composite)
 description: Install k3d, build images, apply manifests, wait for explorer-api /health.
 
 inputs:
-  fork-rpc-url:
-    description: "Archive RPC for `anvil --fork-url`."
-    required: true
-  fork-block:
-    description: "Pinned fork block."
-    required: false
-    default: "23500000"
   chain-id:
     description: "Anvil --chain-id."
     required: false
@@ -58,7 +56,5 @@ runs:
     - name: Boot devnet
       shell: bash
       env:
-        RMPC_FORK_RPC_URL: ${{ inputs.fork-rpc-url }}
-        RMPC_FORK_BLOCK: ${{ inputs.fork-block }}
         FORK_CHAIN_ID: ${{ inputs.chain-id }}
       run: bash scripts/devnet/k3d-up.sh

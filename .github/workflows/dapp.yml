@@ -25,15 +25,11 @@ on:
 jobs:
   # Issue #146 — the dapp Playwright job is the multi-service E2E in
   # this workflow; provision its devnet through the reusable k3d
-  # workflow. Skip-cleans when RMPC_FORK_RPC_URL is absent (the
-  # in-job Playwright runs continue to use a lightweight local anvil).
+  # workflow. The cluster boots from the checked-in fork-state fixture,
+  # so no upstream RPC secret is needed.
   devnet-up:
     name: Reusable k3d devnet boot (Playwright)
     uses: ./.github/workflows/_devnet-k3d.yml
-    secrets:
-      RMPC_FORK_RPC_URL: ${{ secrets.RMPC_FORK_RPC_URL }}
-    with:
-      fork-block: "23500000"
 
   lint-unit:
     name: lint + unit

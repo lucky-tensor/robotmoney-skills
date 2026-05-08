@@ -40,16 +40,12 @@ on:
 
 jobs:
   # Issue #146 — provision the demo's devnet through the reusable k3d
-  # workflow so multi-service wiring is centralized. The reusable
-  # workflow skip-cleans when RMPC_FORK_RPC_URL is absent.
+  # workflow so multi-service wiring is centralized. The cluster boots
+  # from the checked-in fork-state fixture; no RPC secret needed.
   devnet-up:
     name: Reusable k3d devnet boot
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || github.event_name == 'pull_request'
     uses: ./.github/workflows/_devnet-k3d.yml
-    secrets:
-      RMPC_FORK_RPC_URL: ${{ secrets.RMPC_FORK_RPC_URL }}
-    with:
-      fork-block: "29800000"
 
   demo:
     name: OpenClaw E2E demo (happy path + 5 failure cases)

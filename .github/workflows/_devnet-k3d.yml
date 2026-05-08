@@ -10,10 +10,13 @@
 #   jobs:
 #     up:
 #       uses: ./.github/workflows/_devnet-k3d.yml
-#       secrets:
-#         RMPC_FORK_RPC_URL: ${{ secrets.RMPC_FORK_RPC_URL }}
 #       with:
-#         fork-block: "29800000"
+#         chain-id: "8453"
+#
+# The cluster boots from the checked-in fork-state fixture
+# (`testing/fixtures/fork-state/CURRENT.anvil-state`); no upstream RPC
+# secret is consulted at runtime. To refresh the fixture, run
+# `bash scripts/devnet/snapshot-fork.sh` locally and commit.
 #
 # Outputs the host-reachable endpoints (constant — they're produced by
 # the k3d-up.sh contract — but exposed as outputs so downstream jobs can
@@ -32,20 +35,11 @@ name: _devnet-k3d
 on:
   workflow_call:
     inputs:
-      fork-block:
-        description: "Pinned fork block (matches fork-e2e.yml)."
-        type: string
-        required: false
-        default: "23500000"
       chain-id:
         description: "Anvil --chain-id."
         type: string
         required: false
         default: "8453"
-    secrets:
-      RMPC_FORK_RPC_URL:
-        description: "Archive RPC for `anvil --fork-url`. If empty, the workflow skip-cleans."
-        required: false
     outputs:
       anvil-rpc-url:
         description: "Host-reachable anvil-fork JSON-RPC URL."
@@ -59,9 +53,6 @@ on:
       postgres-url:
         description: "Host-reachable postgres TCP endpoint (host:port)."
         value: ${{ jobs.devnet.outputs.postgres-url }}
-      skipped:
-        description: "true when RMPC_FORK_RPC_URL was unset and the devnet was skipped."
-        value: ${{ jobs.devnet.outputs.skipped }}
 
 jobs:
   devnet:
@@ -73,37 +64,20 @@ jobs:
       explorer-api-url: ${{ steps.endpoints.outputs.explorer-api-url }}
       dapp-url: ${{ steps.endpoints.outputs.dapp-url }}
       postgres-url: ${{ steps.endpoints.outputs.postgres-url }}
-      skipped: ${{ steps.secret_check.outputs.skip }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Check fork-RPC secret
-        id: secret_check
-        env:
-          HAVE_FORK_RPC: ${{ secrets.RMPC_FORK_RPC_URL != '' }}
-        run: |
-          if [ "$HAVE_FORK_RPC" != "true" ]; then
-            echo "::warning::_devnet-k3d: RMPC_FORK_RPC_URL secret unset; skipping cluster boot."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Install Foundry (for cast smoke step)
-        if: steps.secret_check.outputs.skip != 'true'
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: stable
 
       - name: Bring up devnet (composite)
-        if: steps.secret_check.outputs.skip != 'true'
         uses: ./.github/actions/devnet-k3d
         with:
-          fork-rpc-url: ${{ secrets.RMPC_FORK_RPC_URL }}
-          fork-block: ${{ inputs.fork-block }}
           chain-id: ${{ inputs.chain-id }}
 
       - name: Emit endpoints
@@ -111,20 +85,12 @@ jobs:
         run: |
           # Endpoints are constant by contract — k3d-up.sh publishes the
           # cluster on these host ports.
-          if [ "${{ steps.secret_check.outputs.skip }}" = "true" ]; then
-            echo "anvil-rpc-url=" >> "$GITHUB_OUTPUT"
-            echo "explorer-api-url=" >> "$GITHUB_OUTPUT"
-            echo "dapp-url=" >> "$GITHUB_OUTPUT"
-            echo "postgres-url=" >> "$GITHUB_OUTPUT"
-          else
-            echo "anvil-rpc-url=http://127.0.0.1:8545" >> "$GITHUB_OUTPUT"
-            echo "explorer-api-url=http://127.0.0.1:8080" >> "$GITHUB_OUTPUT"
-            echo "dapp-url=http://127.0.0.1:5173" >> "$GITHUB_OUTPUT"
-            echo "postgres-url=127.0.0.1:5432" >> "$GITHUB_OUTPUT"
-          fi
+          echo "anvil-rpc-url=http://127.0.0.1:8545" >> "$GITHUB_OUTPUT"
+          echo "explorer-api-url=http://127.0.0.1:8080" >> "$GITHUB_OUTPUT"
+          echo "dapp-url=http://127.0.0.1:5173" >> "$GITHUB_OUTPUT"
+          echo "postgres-url=127.0.0.1:5432" >> "$GITHUB_OUTPUT"
 
       - name: Reachability smoke
-        if: steps.secret_check.outputs.skip != 'true'
         run: |
           set -e
           curl -fsS http://127.0.0.1:8080/health
@@ -132,5 +98,5 @@ jobs:
           cast chain-id --rpc-url http://127.0.0.1:8545
 
       - name: Tear down on failure
-        if: failure() && steps.secret_check.outputs.skip != 'true'
+        if: failure()
         run: bash scripts/devnet/k3d-down.sh || true

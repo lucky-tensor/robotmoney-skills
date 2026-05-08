@@ -2,14 +2,18 @@
 #
 # Canonical: docs/technical/full-stack-devnet.md.
 #
-# Two milestones share this workflow:
+# Three milestones share this workflow:
 #
 #   - compose-validate / build-images: hermetic smoke for
 #     docker-compose.full-stack.yaml on every PR.
 #   - manifest-validate: kustomize render of deploy/k3d/ on every PR.
-#   - k3d-smoke: schedule + workflow_dispatch only — boots the live k3d
-#     devnet, submits an AgentDeposit, asserts the explorer indexes it,
-#     then asserts a clean tear-down. Requires RMPC_FORK_RPC_URL.
+#   - k3d-smoke: schedule + workflow_dispatch — boots the live k3d
+#     devnet from the checked-in fork-state fixture, submits an
+#     AgentDeposit, asserts the explorer indexes it, then asserts a
+#     clean tear-down. NO upstream RPC is consulted; if the fixture is
+#     stale, refresh it with `bash scripts/devnet/snapshot-fork.sh`.
+#   - architecture-guard: greps the workflow tree for the legacy
+#     fork-RPC skip-gate pattern and fails if it reappears.
 
 name: full-stack-devnet
 
@@ -24,6 +28,8 @@ on:
       - "clients/dapp/Dockerfile"
       - "deploy/k3d/**"
       - "scripts/devnet/**"
+      - "testing/fixtures/fork-state/**"
+      - "deployments/full-stack.json"
       - "docs/technical/full-stack-devnet.md"
       - ".github/workflows/full-stack-devnet.yml"
       - ".github/workflows/_devnet-k3d.yml"
@@ -38,6 +44,8 @@ on:
       - "clients/dapp/Dockerfile"
       - "deploy/k3d/**"
       - "scripts/devnet/**"
+      - "testing/fixtures/fork-state/**"
+      - "deployments/full-stack.json"
       - "docs/technical/full-stack-devnet.md"
       - ".github/workflows/full-stack-devnet.yml"
       - ".github/workflows/_devnet-k3d.yml"
@@ -56,18 +64,24 @@ jobs:
 
       - name: docker compose config (with placeholder env)
         env:
-          RMPC_FORK_RPC_URL: https://example.invalid/rpc
-          RMPC_FORK_BLOCK: "29800000"
           POSTGRES_PASSWORD: smoke
         run: |
           docker compose -f docker-compose.full-stack.yaml config > /tmp/compose.rendered.yaml
-          # Sanity: every expected service is present.
-          for svc in anvil-fork gateway-deployer postgres explorer-indexer explorer-api dapp; do
+          # Sanity: every expected service is present. (gateway-deployer
+          # is intentionally absent — the fork-state fixture already
+          # contains the deployed contracts.)
+          for svc in anvil-fork postgres explorer-indexer explorer-api dapp; do
             if ! grep -qE "^[[:space:]]+${svc}:" /tmp/compose.rendered.yaml; then
               echo "missing service: $svc" >&2
               exit 1
             fi
           done
+          # Sanity: gateway-deployer must NOT reappear. The fork-state
+          # fixture supersedes it.
+          if grep -qE "^[[:space:]]+gateway-deployer:" /tmp/compose.rendered.yaml; then
+            echo "gateway-deployer service must not be present (fixture supersedes it)" >&2
+            exit 1
+          fi
           # Sanity: required ports are mapped. `docker compose config`
           # expands short port syntax into structured `published:` blocks.
           for port in 8545 5432 5173; do
@@ -80,7 +94,7 @@ jobs:
       - name: env-example covers every required variable
         run: |
           set -euo pipefail
-          for var in RMPC_FORK_RPC_URL RMPC_FORK_BLOCK FORK_CHAIN_ID \
+          for var in FORK_CHAIN_ID \
                     ANVIL_MNEMONIC \
                     POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB \
                     INDEXER_CHAIN_NAME INDEXER_TICK_SECONDS INDEXER_MAX_BLOCKS_PER_TICK \
@@ -92,6 +106,21 @@ jobs:
               exit 1
             fi
           done
+
+      - name: fork-state fixture is committed
+        run: |
+          set -euo pipefail
+          for f in \
+            testing/fixtures/fork-state/CURRENT.anvil-state \
+            testing/fixtures/fork-state/CURRENT.json \
+            deployments/full-stack.json; do
+            if [ ! -s "$f" ]; then
+              echo "missing required checked-in artifact: $f" >&2
+              exit 1
+            fi
+          done
+          # CURRENT.anvil-state must be valid JSON (anvil --dump-state output).
+          python3 -c 'import json,sys; json.load(open("testing/fixtures/fork-state/CURRENT.anvil-state"))'
 
   build-images:
     name: Build full-stack images
@@ -143,8 +172,6 @@ jobs:
 
       - name: kustomize render
         # `kubectl kustomize` validates structure offline (no API server).
-        # Equivalent to `kubectl apply --dry-run=client -k` once a context
-        # is available; we use `kustomize` so the check is hermetic.
         run: |
           kubectl kustomize deploy/k3d/ > /tmp/manifests.yaml
           test -s /tmp/manifests.yaml
@@ -164,7 +191,7 @@ jobs:
             "Deployment/explorer-indexer" \
             "Deployment/explorer-api" \
             "Deployment/dapp" \
-            "Job/gateway-deployer"; do
+            "ConfigMap/fork-state"; do
             kind="${kind_name%%/*}"; name="${kind_name##*/}"
             if ! awk -v k="$kind" -v n="$name" '
               /^kind:/ {kind=$2}
@@ -175,6 +202,16 @@ jobs:
               exit 1
             fi
           done
+          # gateway-deployer Job must NOT reappear.
+          if awk '
+            /^kind: Job/ {flag=1; next}
+            flag && /^[[:space:]]+name: gateway-deployer/ {found=1; exit}
+            /^---/ {flag=0}
+            END {exit found?0:1}
+          ' /tmp/manifests.yaml; then
+            echo "gateway-deployer Job must not be in the manifest tree (fixture supersedes it)" >&2
+            exit 1
+          fi
           # Required host port surface.
           for port in 8545 5432 8080 5173; do
             if ! grep -qE "port:[[:space:]]*${port}\b" /tmp/manifests.yaml; then
@@ -183,12 +220,74 @@ jobs:
             fi
           done
 
+  architecture-guard:
+    name: Architecture guard (no fork-RPC skip gates)
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fixture artifacts must exist
+        run: |
+          set -euo pipefail
+          test -s testing/fixtures/fork-state/CURRENT.anvil-state
+          test -s testing/fixtures/fork-state/CURRENT.json
+          test -s deployments/full-stack.json
+
+      - name: No skip-gate pattern in devnet workflows
+        run: |
+          set -euo pipefail
+          # The reusable devnet workflow + its composite action must
+          # never gate on a fork-RPC secret again.
+          BAD_FILES=(
+            ".github/workflows/_devnet-k3d.yml"
+            ".github/actions/devnet-k3d/action.yml"
+          )
+          PATTERNS=(
+            "secrets_check"
+            "HAVE_FORK_RPC"
+            "secrets.RMPC_FORK_RPC_URL"
+            "fork-rpc-url"
+          )
+          fail=0
+          for f in "${BAD_FILES[@]}"; do
+            for p in "${PATTERNS[@]}"; do
+              if grep -nE "$p" "$f" >/dev/null 2>&1; then
+                echo "::error file=$f::forbidden pattern '$p' (architecture: load fixture, do not fork)" >&2
+                grep -nE "$p" "$f" >&2 || true
+                fail=1
+              fi
+            done
+          done
+          # Caller workflows must not gate any step on the fork-RPC
+          # secret either. Pattern: an `if:` line that mentions
+          # secrets_check together with skip near _devnet-k3d.yml usage.
+          for f in $(grep -lE "_devnet-k3d.yml|devnet-k3d/action" .github/workflows/*.yml 2>/dev/null || true); do
+            # Skip the devnet workflow itself (already covered above).
+            case "$f" in
+              ".github/workflows/_devnet-k3d.yml") continue ;;
+            esac
+            if grep -nE "skip[ ]*=[ ]*'?true'?.*RMPC_FORK_RPC_URL|RMPC_FORK_RPC_URL.*skip[ ]*=[ ]*'?true'?" "$f" >/dev/null 2>&1; then
+              echo "::error file=$f::forbidden skip-gate near RMPC_FORK_RPC_URL" >&2
+              fail=1
+            fi
+            if grep -nE "secrets_check.outputs.skip" "$f" | grep -i 'RMPC_FORK_RPC_URL\|fork.rpc\|devnet-k3d' >/dev/null 2>&1; then
+              echo "::error file=$f::forbidden secrets_check skip wired to devnet-k3d" >&2
+              fail=1
+            fi
+          done
+          if [ $fail -ne 0 ]; then
+            echo "Architecture guard failed: see https://github.com/$GITHUB_REPOSITORY/issues/146" >&2
+            exit 1
+          fi
+          echo "architecture-guard OK"
+
   k3d-smoke:
     name: k3d devnet smoke (up → AgentDeposit → indexed → down)
-    # Live cluster boot requires a real archive RPC; skip on PR by
-    # default. Runs nightly + on workflow_dispatch.
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
-    needs: [compose-validate, manifest-validate]
+    # Live cluster boot from the checked-in fixture. Runs on every push
+    # touching the relevant paths, on dispatch, and nightly.
+    if: github.event_name != 'pull_request'
+    needs: [compose-validate, manifest-validate, architecture-guard]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -196,41 +295,24 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Skip-clean if RMPC_FORK_RPC_URL absent
-        id: secret_check
-        env:
-          HAVE_FORK_RPC: ${{ secrets.RMPC_FORK_RPC_URL != '' }}
-        run: |
-          if [ "$HAVE_FORK_RPC" != "true" ]; then
-            echo "::warning::k3d-smoke: RMPC_FORK_RPC_URL absent; skipping."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Install Foundry
-        if: steps.secret_check.outputs.skip != 'true'
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: stable
 
       - name: Bring up devnet
-        if: steps.secret_check.outputs.skip != 'true'
         uses: ./.github/actions/devnet-k3d
         with:
-          fork-rpc-url: ${{ secrets.RMPC_FORK_RPC_URL }}
-          fork-block: "29800000"
           chain-id: "8453"
 
       - name: Verify reachability + AgentDeposit round-trip
-        if: steps.secret_check.outputs.skip != 'true'
         run: |
           set -euo pipefail
           # health + dapp reachable
           curl -fsS http://127.0.0.1:8080/health
           curl -fsS -o /dev/null http://127.0.0.1:5173/
 
-          # Read deployment artifact persisted by k3d-up.sh.
+          # Read deployment artifact persisted by snapshot-fork.sh.
           GATEWAY=$(grep -o '"gateway":[[:space:]]*"0x[0-9a-fA-F]*"' deployments/full-stack.json | grep -o '0x[0-9a-fA-F]*')
           USDC=$(grep -o '"usdc":[[:space:]]*"0x[0-9a-fA-F]*"' deployments/full-stack.json | grep -o '0x[0-9a-fA-F]*')
           # Foundry mnemonic index 2 — matches Deploy.s.sol's AGENT_ADDRESS default.
@@ -274,10 +356,6 @@ jobs:
           exit 1
 
       - name: Tear down + idempotent re-up assertion
-        if: steps.secret_check.outputs.skip != 'true'
-        env:
-          RMPC_FORK_RPC_URL: ${{ secrets.RMPC_FORK_RPC_URL }}
-          RMPC_FORK_BLOCK: "29800000"
         run: |
           set -euo pipefail
           # 1. Down — must succeed.
@@ -292,5 +370,5 @@ jobs:
           curl -fsS http://127.0.0.1:8080/health
 
       - name: Final tear-down (always)
-        if: always() && steps.secret_check.outputs.skip != 'true'
+        if: always()
         run: bash scripts/devnet/k3d-down.sh || true

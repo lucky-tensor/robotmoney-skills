@@ -39,16 +39,11 @@ env:
 jobs:
   # Issue #146 — every multi-service E2E workflow proves the migrated
   # k3d devnet brings the stack up before the per-workflow assertions
-  # run. The reusable workflow boots the cluster on its own runner and
-  # smoke-tests reachability; it skip-cleans when RMPC_FORK_RPC_URL is
-  # absent so PR runs that lack the secret stay green.
+  # run. The reusable workflow boots the cluster on its own runner from
+  # the checked-in fork-state fixture (no upstream RPC secret needed).
   devnet-up:
     name: Reusable k3d devnet boot
     uses: ./.github/workflows/_devnet-k3d.yml
-    secrets:
-      RMPC_FORK_RPC_URL: ${{ secrets.RMPC_FORK_RPC_URL }}
-    with:
-      fork-block: "23500000"
 
   pr-smoke:
     name: Fork PR-smoke (abi_address_sanity + vault_deposit_redeem_smoke)
