@@ -10,12 +10,15 @@
 #   2. Build the three custom images (explorer-indexer, explorer-api,
 #      dapp) and `k3d image import` them. (No gateway-deployer image —
 #      the fork-state fixture already contains the deployed contracts.)
-#   3. Apply the kustomize tree at deploy/k3d/.
-#   4. Override the `fork-state` ConfigMap with the real contents of
-#      `testing/fixtures/fork-state/CURRENT.anvil-state` and the
-#      `deployment-artifact` ConfigMap with `deployments/full-stack.json`,
-#      then restart anvil-fork so it loads the real state.
-#   5. Roll out indexer + api + dapp.
+#   3. Create namespace, then create the `fork-state` and
+#      `deployment-artifact` ConfigMaps + `postgres-credentials` Secret
+#      with REAL data. This MUST happen before step 4 so the anvil-fork
+#      pod boots once with real state — booting against placeholder data
+#      and then `rollout restart`ing produces a CrashLoopBackOff race
+#      that wedges the deployment (kubelet exponential backoff +
+#      RollingUpdate maxUnavailable=0 with replicas=1).
+#   4. Apply the kustomize tree at deploy/k3d/.
+#   5. Wait for anvil-fork rollout, then roll out indexer + api + dapp.
 #   6. Poll `explorer-api /health` from the host until 200.
 #
 # This script never contacts an upstream RPC. The fork-state fixture is
@@ -92,15 +95,12 @@ k3d image import \
   --cluster "$CLUSTER_NAME"
 
 # ---------------------------------------------------------------------------
-# 3. Apply manifests.
+# 3. Seed namespace + real-data ConfigMaps/Secrets BEFORE the manifest
+#    apply, so the anvil-fork pod boots once with real fork state.
 # ---------------------------------------------------------------------------
-echo "[k3d-up] applying manifests"
-kubectl apply -k deploy/k3d/
+kubectl get namespace robotmoney >/dev/null 2>&1 || \
+  kubectl create namespace robotmoney
 
-# ---------------------------------------------------------------------------
-# 4. Override the fork-state + deployment-artifact ConfigMaps with real
-#    contents, then restart anvil-fork to load the real state.
-# ---------------------------------------------------------------------------
 echo "[k3d-up] uploading fork-state fixture as ConfigMap (size=$(wc -c < "$FIXTURE_STATE") bytes)"
 kubectl create configmap fork-state \
   --namespace robotmoney \
@@ -118,20 +118,39 @@ kubectl create secret generic postgres-credentials \
   --from-literal="POSTGRES_PASSWORD=$POSTGRES_PASSWORD" \
   --dry-run=client -o yaml | kubectl apply -f -
 
-# Restart anvil-fork pod so it re-mounts the ConfigMap with the real
-# state and reloads it via --load-state.
-echo "[k3d-up] restarting anvil-fork to consume real fork-state"
-kubectl -n robotmoney rollout restart deployment/anvil-fork
-kubectl -n robotmoney rollout status deployment/anvil-fork --timeout=180s
+# ---------------------------------------------------------------------------
+# 4. Apply the rest of the kustomize tree. The fork-state ConfigMap is
+#    already populated with real data, so the anvil-fork pod boots once
+#    with the real state instead of the placeholder.
+# ---------------------------------------------------------------------------
+echo "[k3d-up] applying manifests"
+kubectl apply -k deploy/k3d/
 
 # ---------------------------------------------------------------------------
-# 5. Roll out indexer + api + dapp.
+# 5. Wait for anvil-fork to roll out, then roll out indexer + api + dapp.
 # ---------------------------------------------------------------------------
+echo "[k3d-up] waiting for anvil-fork rollout"
+if ! kubectl -n robotmoney rollout status deployment/anvil-fork --timeout=300s; then
+  echo "[k3d-up] anvil-fork rollout did not complete; capturing diagnostics" >&2
+  kubectl -n robotmoney get pods -l app=anvil-fork -o wide >&2 || true
+  kubectl -n robotmoney describe deployment/anvil-fork >&2 || true
+  for pod in $(kubectl -n robotmoney get pods -l app=anvil-fork -o jsonpath='{.items[*].metadata.name}'); do
+    echo "[k3d-up] === pod $pod describe ===" >&2
+    kubectl -n robotmoney describe pod "$pod" >&2 || true
+    echo "[k3d-up] === pod $pod logs (last 200 lines) ===" >&2
+    kubectl -n robotmoney logs "$pod" --tail=200 >&2 || true
+    echo "[k3d-up] === pod $pod previous logs (last 200 lines) ===" >&2
+    kubectl -n robotmoney logs "$pod" --previous --tail=200 >&2 || true
+  done
+  echo "[k3d-up] === recent namespace events ===" >&2
+  kubectl -n robotmoney get events --sort-by=.lastTimestamp 2>&1 | tail -50 >&2 || true
+  exit 1
+fi
+
 echo "[k3d-up] rolling out indexer/api/dapp"
-kubectl -n robotmoney rollout restart deployment/explorer-indexer
-kubectl -n robotmoney rollout status  deployment/explorer-indexer --timeout=180s
-kubectl -n robotmoney rollout status  deployment/explorer-api     --timeout=180s
-kubectl -n robotmoney rollout status  deployment/dapp             --timeout=180s
+kubectl -n robotmoney rollout status deployment/explorer-indexer --timeout=180s
+kubectl -n robotmoney rollout status deployment/explorer-api     --timeout=180s
+kubectl -n robotmoney rollout status deployment/dapp             --timeout=180s
 
 # ---------------------------------------------------------------------------
 # 6. Poll explorer-api /health from the host.
@@ -151,5 +170,11 @@ for i in $(seq 1 60); do
 done
 
 echo "[k3d-up] explorer-api did not become healthy within 120s" >&2
-kubectl -n robotmoney get pods
+kubectl -n robotmoney get pods -o wide >&2 || true
+echo "[k3d-up] === explorer-api logs (last 200 lines) ===" >&2
+kubectl -n robotmoney logs deployment/explorer-api --tail=200 >&2 || true
+echo "[k3d-up] === explorer-indexer logs (last 200 lines) ===" >&2
+kubectl -n robotmoney logs deployment/explorer-indexer --tail=200 >&2 || true
+echo "[k3d-up] === recent namespace events ===" >&2
+kubectl -n robotmoney get events --sort-by=.lastTimestamp 2>&1 | tail -50 >&2 || true
 exit 1

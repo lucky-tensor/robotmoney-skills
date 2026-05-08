@@ -37,10 +37,19 @@ ANVIL_PORT="${ANVIL_PORT:-18545}"
 ANVIL_HOST="127.0.0.1"
 ANVIL_RPC="http://${ANVIL_HOST}:${ANVIL_PORT}"
 
+# IMPORTANT: anvil's `--dump-state` JSON schema differs slightly between
+# anvil versions; a fixture generated with one version may fail to load
+# in another. To avoid drift, anvil itself runs INSIDE the same Docker
+# image used by the runtime devnet (docker-compose + k3d both use
+# `ghcr.io/foundry-rs/foundry:latest`). Override `FOUNDRY_IMAGE` only
+# if you also changed the runtime references.
+FOUNDRY_IMAGE="${FOUNDRY_IMAGE:-ghcr.io/foundry-rs/foundry:latest}"
+ANVIL_CONTAINER_NAME="rm-snapshot-anvil-$$"
+
 FIXTURE_DIR="testing/fixtures/fork-state"
 mkdir -p "$FIXTURE_DIR"
 
-for tool in anvil cast forge jq curl; do
+for tool in cast forge jq curl docker; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "ERROR: required tool '$tool' not on PATH" >&2
     exit 1
@@ -63,41 +72,57 @@ TIP=$((UPSTREAM_BLOCK_HEX))
 PIN_BLOCK=$((TIP - 100))
 echo "[snapshot] upstream tip=$TIP pinning at block=$PIN_BLOCK"
 
-# 2. Boot Anvil with --dump-state so the structured JSON snapshot is
-#    written on shutdown. (`anvil_dumpState` JSON-RPC returns a
-#    gzipped-hex blob that `--load-state` does NOT accept; only the
-#    `--dump-state` file format round-trips into `--load-state`.)
+# 2. Boot Anvil INSIDE the foundry Docker image so the dump-state JSON
+#    schema matches the version that runtime devnet consumers will use
+#    (docker-compose / k3d both pull `ghcr.io/foundry-rs/foundry:latest`).
+#    Running a host-installed anvil here would risk schema drift: a
+#    fixture written by anvil 1.5 cannot be `--load-state`'d into anvil
+#    1.7+ (the SerializableTransactionType enum is stricter).
+#
+#    Anvil's `--dump-state` writes a structured JSON file on shutdown.
+#    `anvil_dumpState` JSON-RPC returns a gzipped-hex blob that
+#    `--load-state` does NOT accept; only the `--dump-state` file format
+#    round-trips into `--load-state`.
 ANVIL_LOG=$(mktemp)
-ANVIL_STATE_FILE_TMP=$(mktemp -t anvil-state.XXXXXX.json)
-rm -f "$ANVIL_STATE_FILE_TMP"  # anvil writes it; must not exist
-echo "[snapshot] starting anvil --fork-url <upstream> --fork-block-number $PIN_BLOCK"
-anvil \
-  --fork-url "$RMPC_FORK_RPC_URL" \
-  --fork-block-number "$PIN_BLOCK" \
-  --chain-id "$FORK_CHAIN_ID" \
-  --host "$ANVIL_HOST" \
-  --port "$ANVIL_PORT" \
-  --mnemonic "test test test test test test test test test test test junk" \
-  --accounts 10 \
-  --balance 10000 \
-  --dump-state "$ANVIL_STATE_FILE_TMP" \
-  --silent \
-  >"$ANVIL_LOG" 2>&1 &
-ANVIL_PID=$!
+ANVIL_STATE_HOST_DIR=$(mktemp -d -t anvil-state.XXXXXX)
+ANVIL_STATE_FILE_TMP="$ANVIL_STATE_HOST_DIR/state.json"
+# The foundry image runs as `foundry` (uid 1000). The mktemp dir
+# defaults to mode 700 owned by the host user (typically NOT uid 1000),
+# so the container cannot write the dump file via the bind mount.
+# Open the directory permissions so the container user can write.
+chmod 0777 "$ANVIL_STATE_HOST_DIR"
+
+echo "[snapshot] pulling $FOUNDRY_IMAGE"
+docker pull --quiet "$FOUNDRY_IMAGE"
+
+echo "[snapshot] starting anvil (in $FOUNDRY_IMAGE) --fork-url <upstream> --fork-block-number $PIN_BLOCK"
+# The foundry image's entrypoint is a shell wrapper that takes a single
+# command string. Pass the anvil invocation as a one-liner so the image
+# starts anvil in-process; we publish the RPC port to the host on
+# $ANVIL_PORT and bind-mount $ANVIL_STATE_HOST_DIR so the dumped state
+# is visible on the host after shutdown.
+docker run --rm --detach \
+  --name "$ANVIL_CONTAINER_NAME" \
+  --publish "127.0.0.1:${ANVIL_PORT}:8545" \
+  --volume "$ANVIL_STATE_HOST_DIR:/state" \
+  "$FOUNDRY_IMAGE" \
+  "exec anvil --fork-url $RMPC_FORK_RPC_URL --fork-block-number $PIN_BLOCK --chain-id $FORK_CHAIN_ID --host 0.0.0.0 --port 8545 --mnemonic 'test test test test test test test test test test test junk' --accounts 10 --balance 10000 --dump-state /state/state.json --silent" \
+  >/dev/null
 
 cleanup() {
-  if kill -0 "$ANVIL_PID" 2>/dev/null; then
-    echo "[snapshot] tearing down anvil (pid=$ANVIL_PID)"
-    # SIGINT (not SIGTERM) so anvil flushes --dump-state on exit.
-    kill -INT "$ANVIL_PID" 2>/dev/null || true
+  if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$ANVIL_CONTAINER_NAME"; then
+    echo "[snapshot] tearing down anvil container $ANVIL_CONTAINER_NAME"
+    # SIGINT so anvil flushes --dump-state on exit. `docker kill -s INT`
+    # delivers it to PID 1 inside the container.
+    docker kill --signal=INT "$ANVIL_CONTAINER_NAME" >/dev/null 2>&1 || true
     for _ in $(seq 1 30); do
-      kill -0 "$ANVIL_PID" 2>/dev/null || break
+      docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$ANVIL_CONTAINER_NAME" || break
       sleep 1
     done
-    kill -KILL "$ANVIL_PID" 2>/dev/null || true
-    wait "$ANVIL_PID" 2>/dev/null || true
+    docker rm --force "$ANVIL_CONTAINER_NAME" >/dev/null 2>&1 || true
   fi
   rm -f "$ANVIL_LOG"
+  rm -rf "$ANVIL_STATE_HOST_DIR"
 }
 trap cleanup EXIT
 
@@ -107,9 +132,9 @@ for i in $(seq 1 60); do
     echo "[snapshot] anvil ready after ${i}s"
     break
   fi
-  if ! kill -0 "$ANVIL_PID" 2>/dev/null; then
-    echo "ERROR: anvil exited prematurely; log follows:" >&2
-    cat "$ANVIL_LOG" >&2
+  if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$ANVIL_CONTAINER_NAME"; then
+    echo "ERROR: anvil container exited prematurely; logs follow:" >&2
+    docker logs "$ANVIL_CONTAINER_NAME" 2>&1 | tail -40 >&2 || true
     exit 1
   fi
   sleep 1
@@ -117,7 +142,7 @@ done
 
 if ! cast chain-id --rpc-url "$ANVIL_RPC" >/dev/null 2>&1; then
   echo "ERROR: anvil did not become ready within 60s" >&2
-  cat "$ANVIL_LOG" >&2
+  docker logs "$ANVIL_CONTAINER_NAME" 2>&1 | tail -40 >&2 || true
   exit 1
 fi
 
@@ -176,20 +201,21 @@ for addr in "${WARM_ADDRESSES[@]}"; do
   echo "[snapshot]   $addr: cached $(printf '%s' "$CODE" | wc -c) hex chars of bytecode"
 done
 
-# 4. Trigger Anvil's on-shutdown --dump-state by sending SIGINT, then
-#    waiting for the file to appear.
-echo "[snapshot] flushing --dump-state via SIGINT"
-kill -INT "$ANVIL_PID"
+# 4. Trigger Anvil's on-shutdown --dump-state by sending SIGINT to the
+#    container's PID 1, then waiting for the dump file to appear on the
+#    bind-mounted volume.
+echo "[snapshot] flushing --dump-state via SIGINT (docker kill -s INT)"
+docker kill --signal=INT "$ANVIL_CONTAINER_NAME" >/dev/null 2>&1 || true
 for i in $(seq 1 60); do
-  if [ -s "$ANVIL_STATE_FILE_TMP" ] && ! kill -0 "$ANVIL_PID" 2>/dev/null; then
+  if [ -s "$ANVIL_STATE_FILE_TMP" ] && \
+     ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$ANVIL_CONTAINER_NAME"; then
     break
   fi
   sleep 1
 done
-wait "$ANVIL_PID" 2>/dev/null || true
+docker rm --force "$ANVIL_CONTAINER_NAME" >/dev/null 2>&1 || true
 if [ ! -s "$ANVIL_STATE_FILE_TMP" ]; then
   echo "ERROR: anvil --dump-state did not produce a state file" >&2
-  cat "$ANVIL_LOG" >&2
   exit 1
 fi
 # Sanity: the file is JSON.

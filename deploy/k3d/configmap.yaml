@@ -1,8 +1,9 @@
 # Shared environment for all services.
 #
 # Mirrors the env block of docker-compose.full-stack.yaml. Values that are
-# secret (postgres password) live in postgres-secret.yaml. The deployer
-# Job and the indexer Deployment add per-service envFrom entries.
+# secret (postgres password) live in the `postgres-credentials` Secret
+# created imperatively by scripts/devnet/k3d-up.sh. The indexer
+# Deployment adds per-service envFrom entries.
 #
 # Canonical: docs/technical/full-stack-devnet.md
 # Issue: #146.

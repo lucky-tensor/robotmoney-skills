@@ -19,8 +19,14 @@ namespace: robotmoney
 resources:
   - namespace.yaml
   - configmap.yaml
-  - postgres-secret.yaml
-  - fork-state-configmap.yaml
+  # The fork-state and deployment-artifact ConfigMaps and the
+  # postgres-credentials Secret are created imperatively by
+  # scripts/devnet/k3d-up.sh from real data BEFORE this kustomize tree
+  # is applied. They are intentionally not declared here so the
+  # anvil-fork pod boots once with real fork-state data (avoiding the
+  # placeholder-then-restart CrashLoopBackOff race) and so the postgres
+  # password can be overridden via the POSTGRES_PASSWORD env var without
+  # being clobbered by a static manifest re-apply.
   - postgres.yaml
   - anvil-fork.yaml
   - explorer-indexer.yaml

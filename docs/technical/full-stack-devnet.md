@@ -240,14 +240,23 @@ Expected sequence:
    balancer (`klipper-lb`).
 2. `docker build` then `k3d image import` for the three custom images
    (`rm-explorer-indexer`, `rm-explorer-api`, `rm-dapp`).
-3. `kubectl apply -k deploy/k3d/` applies all services with the
-   placeholder `fork-state` ConfigMap.
-4. The script overrides the `fork-state` ConfigMap with the real
-   contents of `testing/fixtures/fork-state/CURRENT.anvil-state` and
-   the `deployment-artifact` ConfigMap with `deployments/full-stack.json`,
-   then restarts `anvil-fork` so it `--load-state`s the real fixture.
-5. `explorer-indexer` rolls out and starts ticking; `explorer-api`
-   becomes healthy on `:8080`; `dapp` serves on `:5173`.
+3. The script creates the `robotmoney` namespace, then imperatively
+   creates the `fork-state` ConfigMap (from
+   `testing/fixtures/fork-state/CURRENT.anvil-state`), the
+   `deployment-artifact` ConfigMap (from `deployments/full-stack.json`),
+   and the `postgres-credentials` Secret. Doing this BEFORE step 4
+   ensures the `anvil-fork` pod boots once with real state — booting
+   against a placeholder and then `kubectl rollout restart`ing produces
+   a CrashLoopBackOff race (kubelet exponential backoff +
+   `RollingUpdate` with `replicas=1` defaulting to `maxUnavailable=0`)
+   that wedges the deployment for several minutes.
+4. `kubectl apply -k deploy/k3d/` applies the rest of the services.
+   Because the `fork-state` ConfigMap is no longer in the kustomize
+   tree (intentionally — see `deploy/k3d/kustomization.yaml`), this
+   step does not overwrite the real data uploaded in step 3.
+5. `anvil-fork` rolls out with the real fork state on first boot;
+   `explorer-indexer` starts ticking; `explorer-api` becomes healthy
+   on `:8080`; `dapp` serves on `:5173`.
 6. The script polls `http://127.0.0.1:8080/health` and exits 0 on the
    first 200.
 
