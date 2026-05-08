@@ -226,41 +226,51 @@ jobs:
         if: steps.secret_check.outputs.skip != 'true'
         run: |
           set -euo pipefail
-          # health
+          # health + dapp reachable
           curl -fsS http://127.0.0.1:8080/health
           curl -fsS -o /dev/null http://127.0.0.1:5173/
 
           # Read deployment artifact persisted by k3d-up.sh.
           GATEWAY=$(grep -o '"gateway":[[:space:]]*"0x[0-9a-fA-F]*"' deployments/full-stack.json | grep -o '0x[0-9a-fA-F]*')
           USDC=$(grep -o '"usdc":[[:space:]]*"0x[0-9a-fA-F]*"' deployments/full-stack.json | grep -o '0x[0-9a-fA-F]*')
+          # Foundry mnemonic index 2 — matches Deploy.s.sol's AGENT_ADDRESS default.
           AGENT="0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"
           AGENT_PK="0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a"
-          DEPLOYER_PK="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 
-          echo "[smoke] gateway=$GATEWAY usdc=$USDC"
+          echo "[smoke] gateway=$GATEWAY usdc=$USDC agent=$AGENT"
 
-          # The agent has been minted USDC by Deploy.s.sol. Approve the
-          # gateway and submit a deposit.
+          # 1. Approve the gateway to pull USDC.
           cast send "$USDC" "approve(address,uint256)" "$GATEWAY" "1000000000000" \
             --rpc-url http://127.0.0.1:8545 --private-key "$AGENT_PK"
 
-          # AgentDeposit through the gateway. Function signature comes
-          # from RobotMoneyGateway: `agentDeposit(uint256 amount, uint256 maxFeeBps)`.
-          BEFORE=$(curl -sf "http://127.0.0.1:8080/v1/agents/$AGENT/deposits" | tr -d '[:space:]' | wc -c)
-          cast send "$GATEWAY" "agentDeposit(uint256,uint256)" 1000000 50 \
+          # 2. Snapshot deposit count BEFORE.
+          BEFORE_BODY=$(curl -sf "http://127.0.0.1:8080/v1/agents/$AGENT/deposits" || echo "[]")
+          BEFORE_LEN=$(printf '%s' "$BEFORE_BODY" | tr -d '[:space:]' | wc -c)
+          echo "[smoke] deposits before: $BEFORE_BODY"
+
+          # 3. AgentDeposit via the gateway's `deposit(bytes32,uint256,uint64,bytes32)`.
+          ORDER_ID=$(cast keccak "smoke-$(date +%s)")
+          IDEM_KEY=$(cast keccak "idem-$(date +%s)")
+          DEADLINE=$(($(date +%s) + 600))
+          cast send "$GATEWAY" \
+            "deposit(bytes32,uint256,uint64,bytes32)" \
+            "$ORDER_ID" 1000000 "$DEADLINE" "$IDEM_KEY" \
             --rpc-url http://127.0.0.1:8545 --private-key "$AGENT_PK"
 
-          # Wait one tick (default 12s) plus margin for the indexer to pick it up.
-          for i in $(seq 1 30); do
-            CUR=$(curl -sf "http://127.0.0.1:8080/v1/agents/$AGENT/deposits" | tr -d '[:space:]' | wc -c)
-            if [ "$CUR" -gt "$BEFORE" ]; then
+          # 4. Poll the explorer for the indexed event (one tick = 12s default).
+          for i in $(seq 1 45); do
+            CUR_BODY=$(curl -sf "http://127.0.0.1:8080/v1/agents/$AGENT/deposits" || echo "[]")
+            CUR_LEN=$(printf '%s' "$CUR_BODY" | tr -d '[:space:]' | wc -c)
+            if [ "$CUR_LEN" -gt "$BEFORE_LEN" ]; then
               echo "[smoke] explorer indexed AgentDeposit after ${i} polls"
+              echo "[smoke] deposits after: $CUR_BODY"
               exit 0
             fi
             sleep 2
           done
-          echo "[smoke] explorer did not index the deposit within 60s" >&2
+          echo "[smoke] explorer did not index the deposit within 90s" >&2
           curl -sf "http://127.0.0.1:8080/v1/agents/$AGENT/deposits" || true
+          kubectl -n robotmoney logs deployment/explorer-indexer --tail=100 || true
           exit 1
 
       - name: Tear down + idempotent re-up assertion
