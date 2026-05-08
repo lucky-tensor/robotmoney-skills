@@ -98,6 +98,8 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      gateway-deployer:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-rmoney}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-rmoney_explorer}
       INDEXER_RPC_URL: http://anvil-fork:8545

@@ -1,0 +1,113 @@
+# Issue: #146 — full-stack containerized devnet.
+#
+# Canonical: docs/technical/full-stack-devnet.md.
+#
+# This job is a hermetic smoke test for docker-compose.full-stack.yaml. It
+# validates the compose graph (`docker compose config`) and builds the
+# three custom images (explorer-indexer, explorer-api, dapp) without
+# booting them. The fork-RPC dependency makes a real `up` non-hermetic, so
+# we keep the boot-time test in the runbook and rely on per-service CI
+# (explorer-indexer.yml, explorer-api.yml, dapp.yml) for runtime coverage.
+
+name: full-stack-devnet
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - "docker-compose.full-stack.yaml"
+      - ".env.example"
+      - "services/explorer-indexer/Dockerfile"
+      - "clients/explorer-api/Dockerfile"
+      - "clients/dapp/Dockerfile"
+      - "docs/technical/full-stack-devnet.md"
+      - ".github/workflows/full-stack-devnet.yml"
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - "docker-compose.full-stack.yaml"
+      - ".env.example"
+      - "services/explorer-indexer/Dockerfile"
+      - "clients/explorer-api/Dockerfile"
+      - "clients/dapp/Dockerfile"
+      - "docs/technical/full-stack-devnet.md"
+      - ".github/workflows/full-stack-devnet.yml"
+  workflow_dispatch:
+
+jobs:
+  compose-validate:
+    name: Validate compose graph
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: docker compose config (with placeholder env)
+        env:
+          RMPC_FORK_RPC_URL: https://example.invalid/rpc
+          RMPC_FORK_BLOCK: "29800000"
+          POSTGRES_PASSWORD: smoke
+        run: |
+          docker compose -f docker-compose.full-stack.yaml config > /tmp/compose.rendered.yaml
+          # Sanity: every expected service is present.
+          for svc in anvil-fork gateway-deployer postgres explorer-indexer explorer-api dapp; do
+            if ! grep -qE "^[[:space:]]+${svc}:" /tmp/compose.rendered.yaml; then
+              echo "missing service: $svc" >&2
+              exit 1
+            fi
+          done
+          # Sanity: required ports are mapped.
+          grep -q "8545:8545" /tmp/compose.rendered.yaml
+          grep -q "5432:5432" /tmp/compose.rendered.yaml
+          grep -q "5173:5173" /tmp/compose.rendered.yaml
+
+      - name: env-example covers every required variable
+        run: |
+          set -euo pipefail
+          for var in RMPC_FORK_RPC_URL RMPC_FORK_BLOCK FORK_CHAIN_ID \
+                    ANVIL_MNEMONIC \
+                    POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB \
+                    INDEXER_CHAIN_NAME INDEXER_TICK_SECONDS INDEXER_MAX_BLOCKS_PER_TICK \
+                    EXPLORER_API_PORT \
+                    VITE_FORK_RPC_URL VITE_EXPLORER_API_URL VITE_ENV_CLASS \
+                    VITE_USE_MOCK_WALLET VITE_BROWSER_KEYGEN VITE_HISTORY_PANE; do
+            if ! grep -qE "^${var}=" .env.example; then
+              echo ".env.example missing: $var" >&2
+              exit 1
+            fi
+          done
+
+  build-images:
+    name: Build full-stack images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: compose-validate
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build explorer-indexer image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/explorer-indexer/Dockerfile
+          push: false
+          tags: rm-explorer-indexer:smoke
+
+      - name: Build explorer-api image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: clients/explorer-api/Dockerfile
+          push: false
+          tags: rm-explorer-api:smoke
+
+      - name: Build dapp image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: clients/dapp/Dockerfile
+          push: false
+          tags: rm-dapp:smoke
