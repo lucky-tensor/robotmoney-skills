@@ -39,9 +39,15 @@ RUN pnpm run build
 
 FROM node:20-bookworm-slim
 WORKDIR /app
-RUN npm install -g pnpm@9 vite
+# `vite preview` needs vite + the config's imported plugins resolvable
+# at runtime; the simplest hermetic answer is to copy the builder's
+# fully-resolved node_modules and run vite from there. (A previous
+# revision used `npx vite preview` against a global vite, but vite's
+# preview entry imports @vitejs/plugin-react via vite.config.ts, which
+# fails to resolve when only vite itself is globally installed.)
 COPY --from=builder /build/dist ./dist
 COPY --from=builder /build/vite.config.ts ./vite.config.ts
 COPY --from=builder /build/package.json ./package.json
+COPY --from=builder /build/node_modules ./node_modules
 EXPOSE 5173
-CMD ["npx", "vite", "preview", "--host", "0.0.0.0", "--port", "5173"]
+CMD ["./node_modules/.bin/vite", "preview", "--host", "0.0.0.0", "--port", "5173"]
