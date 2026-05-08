@@ -56,10 +56,14 @@ jobs:
               exit 1
             fi
           done
-          # Sanity: required ports are mapped.
-          grep -q "8545:8545" /tmp/compose.rendered.yaml
-          grep -q "5432:5432" /tmp/compose.rendered.yaml
-          grep -q "5173:5173" /tmp/compose.rendered.yaml
+          # Sanity: required ports are mapped. `docker compose config`
+          # expands short port syntax into structured `published:` blocks.
+          for port in 8545 5432 5173; do
+            if ! grep -qE "published:[[:space:]]*\"?${port}\"?" /tmp/compose.rendered.yaml; then
+              echo "missing host port: $port" >&2
+              exit 1
+            fi
+          done
 
       - name: env-example covers every required variable
         run: |
