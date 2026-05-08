@@ -3,7 +3,7 @@
 # Canonical: docs/implementation-plan.md §11 — Phase 5.
 # Used by: docker-compose.full-stack.yaml (issue #146).
 
-FROM rust:1.83-bookworm AS builder
+FROM rust:1-bookworm AS builder
 WORKDIR /build
 
 RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libssl-dev ca-certificates \
