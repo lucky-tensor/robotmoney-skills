@@ -4,15 +4,17 @@
 # ADR:       docs/technical/opencode-headless-invocation.md
 # Implementation plan: docs/implementation-plan.md §10.
 #
-# Invokes OpenCode headlessly with the step-5 read-only prompt against
-# a pinned Anvil fork. Asserts the captured transcript contains:
+# Boots a fresh local anvil node (no fork, no RMPC_FORK_RPC_URL).
+# Deploys MockUSDC + MockVault + RobotMoneyGateway, then drives OpenCode
+# headlessly to read vault state via rmpc get-vault and get-gateway.
+# Only ANTHROPIC_API_KEY is required. When absent check-secrets outputs
+# ok=false and headless-read is marked SKIPPED (not passed).
+#
+# Asserts the captured transcript contains:
 #   - rmpc get-vault with exit 0 and valid JSON envelope
 #     (chain_id, block_number, source).
 #   - rmpc get-gateway with exit 0 and partial: true.
-#   - No reference to explorer APIs or the dapp (guards json_rpc-only source).
-#
-# When ANTHROPIC_API_KEY or RMPC_FORK_RPC_URL are absent the check-secrets
-# job outputs ok=false and headless-read is marked SKIPPED (not passed).
+#   - No reference to explorer APIs or the dapp.
 
 name: opencode-headless-read
 
@@ -24,15 +26,15 @@ on:
     branches: [main, dev]
     paths:
       - "clients/rust-payment-client/**"
+      - "contracts/**"
       - "plugins/robotmoney-cli/**"
       - ".github/workflows/opencode-headless-read.yml"
       - ".github/scripts/assert_headless_read_transcript.py"
 
-# Pinned fork block — must match fork-e2e.yml and opencode-walkthrough.yml.
-# Refresh monthly alongside those workflows.
 env:
-  RMPC_FORK_BLOCK: "23500000"
   OPENCODE_VERSION: "1.14.29"
+  DEPLOYER_PK:   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+  DEPLOYER_ADDR: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 
 jobs:
   check-secrets:
@@ -45,12 +47,11 @@ jobs:
         id: check
         env:
           HAS_ANTHROPIC: ${{ secrets.ANTHROPIC_API_KEY != '' }}
-          HAS_FORK_RPC:  ${{ secrets.RMPC_FORK_RPC_URL != '' }}
         run: |
-          if [ "$HAS_ANTHROPIC" = "true" ] && [ "$HAS_FORK_RPC" = "true" ]; then
+          if [ "$HAS_ANTHROPIC" = "true" ]; then
             echo "ok=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::notice::opencode-headless-read: ANTHROPIC_API_KEY or RMPC_FORK_RPC_URL not configured — job will be skipped"
+            echo "::notice::opencode-headless-read: ANTHROPIC_API_KEY not configured — job will be skipped"
             echo "ok=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -64,6 +65,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install bun
         uses: oven-sh/setup-bun@v2
@@ -108,33 +111,11 @@ jobs:
       - name: Confirm rmpc is on PATH
         run: rmpc --help > /dev/null
 
-      - name: Write rmpc-fork.toml
+      - name: Boot local anvil
         run: |
-          cat > rmpc-fork.toml <<'TOML'
-          chain_id              = 8453
-          rpc_url               = "http://127.0.0.1:8545"
-          gateway_address       = "0x000000000000000000000000000000000000dEaD"
-          usdc_address          = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
-          vault_address         = "0xCd9BB6428180c89cC0E5b9F1Bf6Bb98155Cf9CFf"
-          gateway_runtime_hash  = "0x0000000000000000000000000000000000000000000000000000000000000000"
-          max_fee_per_gas_cap   = 100000000000
-
-          [signer]
-          allow_software_fallback = true
-          keystore_path            = "./keystore.json"
-          TOML
-
-      - name: Boot anvil fork
-        env:
-          RMPC_FORK_RPC_URL: ${{ secrets.RMPC_FORK_RPC_URL }}
-        run: |
-          anvil \
-            --fork-url "$RMPC_FORK_RPC_URL" \
-            --fork-block-number "$RMPC_FORK_BLOCK" \
-            --port 8545 \
-            --silent &
+          anvil --chain-id 8453 --port 8545 --silent &
           echo "ANVIL_PID=$!" >> "$GITHUB_ENV"
-          for i in $(seq 1 30); do
+          for i in $(seq 1 15); do
             if curl -sf -X POST -H "Content-Type: application/json" \
                 --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
                 http://127.0.0.1:8545 > /dev/null; then
@@ -144,12 +125,49 @@ jobs:
             sleep 1
           done
 
+      - name: Deploy mock contracts
+        env:
+          ADMIN_ADDRESS:          ${{ env.DEPLOYER_ADDR }}
+          PAUSER_ADDRESS:         ${{ env.DEPLOYER_ADDR }}
+          AGENT_ADDRESS:          ${{ env.DEPLOYER_ADDR }}
+          SHARE_RECEIVER_ADDRESS: ${{ env.DEPLOYER_ADDR }}
+          DEPLOYMENT_OUT: "./deployments/ci-headless-read.json"
+        run: |
+          mkdir -p deployments
+          forge script contracts/script/Deploy.s.sol:Deploy \
+            --rpc-url http://127.0.0.1:8545 \
+            --private-key "$DEPLOYER_PK" \
+            --broadcast \
+            --slow \
+            -vv
+          cat deployments/ci-headless-read.json
+          echo "GATEWAY_ADDR=$(jq -r .gateway              deployments/ci-headless-read.json)" >> "$GITHUB_ENV"
+          echo "USDC_ADDR=$(jq -r    .usdc                 deployments/ci-headless-read.json)" >> "$GITHUB_ENV"
+          echo "VAULT_ADDR=$(jq -r   .vault                deployments/ci-headless-read.json)" >> "$GITHUB_ENV"
+          echo "GATEWAY_HASH=$(jq -r .gateway_runtime_hash deployments/ci-headless-read.json)" >> "$GITHUB_ENV"
+
+      - name: Write rmpc-read.toml
+        run: |
+          cat > rmpc-read.toml <<TOML
+          chain_id              = 8453
+          rpc_url               = "http://127.0.0.1:8545"
+          gateway_address       = "${GATEWAY_ADDR}"
+          usdc_address          = "${USDC_ADDR}"
+          vault_address         = "${VAULT_ADDR}"
+          gateway_runtime_hash  = "${GATEWAY_HASH}"
+          max_fee_per_gas_cap   = 100000000000
+
+          [signer]
+          allow_software_fallback = true
+          keystore_path           = "./keystore.json"
+          TOML
+
       - name: Run OpenCode headless read (step-5 prompt)
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           opencode run \
-            "Using the robotmoney-cli skill, inspect the Robot Money vault on the configured fork. Run get-vault and get-gateway with --config ./rmpc-fork.toml --pretty. Do not propose any writes; this is a read-only inspection." \
+            "Using the robotmoney-cli skill, inspect the Robot Money vault on the configured local devnet. Run get-vault and get-gateway with --config ./rmpc-read.toml --pretty. Do not propose any writes; this is a read-only inspection." \
             --format json \
             --model anthropic/claude-sonnet-4-5 \
             --dangerously-skip-permissions \
@@ -181,4 +199,5 @@ jobs:
           echo "### opencode-headless-read — PASSED" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- OpenCode ${{ env.OPENCODE_VERSION }} drove rmpc get-vault and rmpc get-gateway headlessly" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Local devnet (no fork, no RMPC_FORK_RPC_URL)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Transcript asserted: valid JSON envelope, partial: true on get-gateway, no explorer references" >> "$GITHUB_STEP_SUMMARY"

@@ -4,8 +4,10 @@
 # ADR:       docs/technical/opencode-headless-invocation.md
 # Implementation plan: docs/implementation-plan.md §10.
 #
-# When ANTHROPIC_API_KEY or RMPC_FORK_RPC_URL are absent the check-secrets
-# job outputs ok=false and both downstream jobs are marked SKIPPED (not passed).
+# MockUSDC + MockVault + RobotMoneyGateway are self-contained; no mainnet
+# fork or RMPC_FORK_RPC_URL is needed. Only ANTHROPIC_API_KEY is required
+# to drive OpenCode. When absent check-secrets outputs ok=false and both
+# downstream jobs are marked SKIPPED (not passed).
 
 name: opencode-headless-deposit
 
@@ -44,12 +46,11 @@ jobs:
         id: check
         env:
           HAS_ANTHROPIC: ${{ secrets.ANTHROPIC_API_KEY != '' }}
-          HAS_FORK_RPC:  ${{ secrets.RMPC_FORK_RPC_URL != '' }}
         run: |
-          if [ "$HAS_ANTHROPIC" = "true" ] && [ "$HAS_FORK_RPC" = "true" ]; then
+          if [ "$HAS_ANTHROPIC" = "true" ]; then
             echo "ok=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::notice::opencode-headless-deposit: ANTHROPIC_API_KEY or RMPC_FORK_RPC_URL not configured — jobs will be skipped"
+            echo "::notice::opencode-headless-deposit: ANTHROPIC_API_KEY not configured — jobs will be skipped"
             echo "ok=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -109,18 +110,11 @@ jobs:
       - name: Confirm rmpc is on PATH
         run: rmpc --help > /dev/null
 
-      - name: Boot anvil fork
-        env:
-          RMPC_FORK_RPC_URL: ${{ secrets.RMPC_FORK_RPC_URL }}
+      - name: Boot local anvil
         run: |
-          anvil \
-            --fork-url "$RMPC_FORK_RPC_URL" \
-            --fork-block-number "$RMPC_FORK_BLOCK" \
-            --chain-id 8453 \
-            --port 8545 \
-            --silent &
+          anvil --chain-id 8453 --port 8545 --silent &
           echo "ANVIL_PID=$!" >> "$GITHUB_ENV"
-          for i in $(seq 1 30); do
+          for i in $(seq 1 15); do
             if curl -sf -X POST -H "Content-Type: application/json" \
                 --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
                 http://127.0.0.1:8545 > /dev/null; then
@@ -345,18 +339,11 @@ jobs:
             --manifest-path clients/rust-payment-client/Cargo.toml
           echo "$GITHUB_WORKSPACE/clients/rust-payment-client/target/release" >> "$GITHUB_PATH"
 
-      - name: Boot anvil fork
-        env:
-          RMPC_FORK_RPC_URL: ${{ secrets.RMPC_FORK_RPC_URL }}
+      - name: Boot local anvil
         run: |
-          anvil \
-            --fork-url "$RMPC_FORK_RPC_URL" \
-            --fork-block-number "$RMPC_FORK_BLOCK" \
-            --chain-id 8453 \
-            --port 8545 \
-            --silent &
+          anvil --chain-id 8453 --port 8545 --silent &
           echo "ANVIL_PID=$!" >> "$GITHUB_ENV"
-          for i in $(seq 1 30); do
+          for i in $(seq 1 15); do
             if curl -sf -X POST -H "Content-Type: application/json" \
                 --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
                 http://127.0.0.1:8545 > /dev/null; then

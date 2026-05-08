@@ -1,21 +1,21 @@
-# Contract integration tests against a live forked devnet.
+# Contract integration tests against a local devnet.
 #
 # Canonical: docs/implementation-plan.md §3 — Phase 1 Contracts
-# Implements: issue #TBD
+#
+# Boots a fresh local anvil node (no fork, no external secrets).
+# MockUSDC + MockVault + RobotMoneyGateway are all self-contained;
+# no real mainnet state is required.
 #
 # Three phases:
 #
-# 1. Sanity — confirms the forked devnet is live and a standard wallet can
-#    send ETH before any of our code is involved.
-# 2. Deploy — forge script Deploy.s.sol broadcasts MockUSDC + MockVault +
-#    RobotMoneyGateway; asserts code is present at all three addresses.
+# 1. Sanity — confirms the local devnet is live and a standard wallet
+#    can send ETH before any of our code is involved.
+# 2. Deploy — forge script Deploy.s.sol broadcasts all three contracts;
+#    asserts bytecode is present at all three addresses.
 # 3. Contract endpoints — a plain EOA (anvil well-known account; no rmpc)
 #    drives every public gateway surface: read paused(), read agent policy,
 #    ERC20 approve, deposit, vault share assertion, idempotency revert,
 #    pause + deposit revert + unpause.
-#
-# RMPC_FORK_RPC_URL is required. When absent the check-fork-rpc job outputs
-# ok=false and devnet-integration is marked SKIPPED (not passed).
 
 name: devnet-integration
 
@@ -35,7 +35,6 @@ on:
   workflow_dispatch:
 
 env:
-  RMPC_FORK_BLOCK: "23500000"
   # Anvil well-known accounts — safe for CI use only.
   DEPLOYER_PK:   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
   DEPLOYER_ADDR: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
@@ -47,30 +46,10 @@ env:
   SHARE_RECV:    "0x90F79bf6EB2c4f870365E785982E1f101E93b906"
 
 jobs:
-  check-fork-rpc:
-    name: Check RMPC_FORK_RPC_URL
-    runs-on: ubuntu-latest
-    outputs:
-      ok: ${{ steps.check.outputs.ok }}
-    steps:
-      - name: Verify secret present
-        id: check
-        env:
-          HAS_FORK_RPC: ${{ secrets.RMPC_FORK_RPC_URL != '' }}
-        run: |
-          if [ "$HAS_FORK_RPC" = "true" ]; then
-            echo "ok=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::RMPC_FORK_RPC_URL not configured — devnet-integration will be skipped"
-            echo "ok=false" >> "$GITHUB_OUTPUT"
-          fi
-
   devnet-integration:
     name: Devnet integration — standard wallet → contracts
-    needs: check-fork-rpc
-    if: needs.check-fork-rpc.outputs.ok == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -94,18 +73,11 @@ jobs:
       - name: Build contracts
         run: forge build
 
-      - name: Boot anvil fork
-        env:
-          RMPC_FORK_RPC_URL: ${{ secrets.RMPC_FORK_RPC_URL }}
+      - name: Boot local anvil
         run: |
-          anvil \
-            --fork-url "$RMPC_FORK_RPC_URL" \
-            --fork-block-number "$RMPC_FORK_BLOCK" \
-            --chain-id 8453 \
-            --port 8545 \
-            --silent &
+          anvil --chain-id 8453 --port 8545 --silent &
           echo "ANVIL_PID=$!" >> "$GITHUB_ENV"
-          for i in $(seq 1 30); do
+          for i in $(seq 1 15); do
             if curl -sf -X POST -H "Content-Type: application/json" \
                 --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
                 http://127.0.0.1:8545 > /dev/null; then
@@ -155,7 +127,7 @@ jobs:
           echo "USDC_ADDR=$(jq -r    .usdc     deployments/devnet-integration.json)" >> "$GITHUB_ENV"
           echo "VAULT_ADDR=$(jq -r   .vault    deployments/devnet-integration.json)" >> "$GITHUB_ENV"
 
-      - name: "Assert: contract code present at all three addresses"
+      - name: "Assert: bytecode present at all three addresses"
         run: |
           for ADDR in "$GATEWAY_ADDR" "$USDC_ADDR" "$VAULT_ADDR"; do
             CODE=$(cast code "$ADDR" --rpc-url http://127.0.0.1:8545)
@@ -174,8 +146,6 @@ jobs:
 
       - name: "Gateway view: agent policy active after deploy"
         run: |
-          # agents() returns (bool active, uint64 validUntil, uint256 maxPerPayment,
-          #                   uint256 maxPerWindow, address shareReceiver)
           ACTIVE=$(cast call "$GATEWAY_ADDR" \
             "agents(address)(bool,uint64,uint256,uint256,address)" \
             "$AGENT_ADDR" --rpc-url http://127.0.0.1:8545 | head -1)
@@ -204,7 +174,6 @@ jobs:
 
       - name: "Gateway: deposit via standard agent wallet"
         run: |
-          # deadline must be <= block.timestamp + 600 (MAX_DEADLINE_SKEW).
           DEADLINE=$(( $(date +%s) + 300 ))
           ORDER_ID="0x$(openssl rand -hex 32)"
           IDEM_KEY="0x$(openssl rand -hex 32)"
@@ -239,7 +208,6 @@ jobs:
       - name: "Gateway: duplicate paymentId must revert (idempotency)"
         run: |
           DEADLINE=$(( $(date +%s) + 300 ))
-          # Reuse the same ORDER_ID + IDEM_KEY — must hit PaymentIdAlreadyUsed.
           if cast send "$GATEWAY_ADDR" \
               "deposit(bytes32,uint256,uint64,bytes32)" \
               "$ORDER_ID" "1000000" "$DEADLINE" "$IDEM_KEY" \
@@ -252,7 +220,6 @@ jobs:
 
       - name: "Gateway: pause() blocks deposit, unpause() restores"
         run: |
-          # Pause.
           cast send "$GATEWAY_ADDR" "pause()" \
             --private-key "$PAUSER_PK" \
             --rpc-url http://127.0.0.1:8545 > /dev/null
@@ -273,7 +240,6 @@ jobs:
           fi
           echo "paused deposit correctly reverted ✓"
 
-          # Unpause.
           cast send "$GATEWAY_ADDR" "unpause()" \
             --private-key "$DEPLOYER_PK" \
             --rpc-url http://127.0.0.1:8545 > /dev/null
@@ -290,10 +256,10 @@ jobs:
         run: |
           echo "### devnet-integration — PASSED" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Devnet live (anvil fork, chain 8453, block $RMPC_FORK_BLOCK)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Local devnet (chain 8453, no fork, no secrets)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Standard wallet ETH transfer confirmed" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Contracts deployed: MockUSDC, MockVault, RobotMoneyGateway" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Code present at all three addresses" >> "$GITHUB_STEP_SUMMARY"
+          echo "- MockUSDC + MockVault + RobotMoneyGateway deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Bytecode present at all three addresses" >> "$GITHUB_STEP_SUMMARY"
           echo "- Standard EOA: approve → deposit → shares received" >> "$GITHUB_STEP_SUMMARY"
           echo "- Idempotency revert confirmed" >> "$GITHUB_STEP_SUMMARY"
           echo "- Pause + deposit revert + unpause confirmed" >> "$GITHUB_STEP_SUMMARY"
