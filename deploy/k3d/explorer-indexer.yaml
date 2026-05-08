@@ -1,10 +1,12 @@
 # Explorer indexer Deployment.
 #
 # Reads gateway/vault addresses from the `deployment-artifact` ConfigMap
-# (populated by scripts/devnet/k3d-up.sh after the gateway-deployer Job
-# succeeds), then runs the long-running indexer poll loop.
+# (populated by scripts/devnet/k3d-up.sh from the checked-in
+# `deployments/full-stack.json`, which is itself produced by
+# `scripts/devnet/snapshot-fork.sh` alongside the fork-state fixture),
+# then runs the long-running indexer poll loop.
 #
-# Canonical: docs/technical/full-stack-devnet.md
+# Canonical: docs/technical/full-stack-devnet.md §"Fork-state fixture"
 # Issue: #146.
 apiVersion: apps/v1
 kind: Deployment

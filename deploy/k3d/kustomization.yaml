@@ -20,10 +20,9 @@ resources:
   - namespace.yaml
   - configmap.yaml
   - postgres-secret.yaml
-  - fork-rpc-secret.yaml
+  - fork-state-configmap.yaml
   - postgres.yaml
   - anvil-fork.yaml
-  - gateway-deployer-job.yaml
   - explorer-indexer.yaml
   - explorer-api.yaml
   - dapp.yaml

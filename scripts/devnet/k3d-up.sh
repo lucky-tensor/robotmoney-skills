@@ -7,22 +7,21 @@
 # Steps:
 #   1. Create (or reuse) a k3d cluster with the same host port surface as
 #      docker-compose.full-stack.yaml (8545/5432/8080/5173).
-#   2. Build the four custom images (explorer-indexer, explorer-api, dapp,
-#      gateway-deployer) and `k3d image import` them.
-#   3. Apply the kustomize tree at deploy/k3d/, overriding the fork-rpc
-#      Secret with the values from the environment (RMPC_FORK_RPC_URL,
-#      RMPC_FORK_BLOCK).
-#   4. Wait for the gateway-deployer Job to complete; copy the deployment
-#      JSON out via `kubectl cp` and re-apply it as a ConfigMap so the
-#      indexer can read it.
-#   5. Roll out the indexer Deployment now that the artifact is present.
+#   2. Build the three custom images (explorer-indexer, explorer-api,
+#      dapp) and `k3d image import` them. (No gateway-deployer image —
+#      the fork-state fixture already contains the deployed contracts.)
+#   3. Apply the kustomize tree at deploy/k3d/.
+#   4. Override the `fork-state` ConfigMap with the real contents of
+#      `testing/fixtures/fork-state/CURRENT.anvil-state` and the
+#      `deployment-artifact` ConfigMap with `deployments/full-stack.json`,
+#      then restart anvil-fork so it loads the real state.
+#   5. Roll out indexer + api + dapp.
 #   6. Poll `explorer-api /health` from the host until 200.
 #
-# Required env:
-#   RMPC_FORK_RPC_URL    archive RPC for `anvil --fork-url`
+# This script never contacts an upstream RPC. The fork-state fixture is
+# refreshed offline by `scripts/devnet/snapshot-fork.sh`.
 #
 # Optional env (with defaults):
-#   RMPC_FORK_BLOCK      pinned block (default 29800000)
 #   K3D_CLUSTER_NAME     cluster name (default rm-devnet)
 #   POSTGRES_PASSWORD    devnet password (default rmoney_dev)
 #
@@ -34,11 +33,20 @@ REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT"
 
 CLUSTER_NAME="${K3D_CLUSTER_NAME:-rm-devnet}"
-RMPC_FORK_BLOCK="${RMPC_FORK_BLOCK:-29800000}"
 POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-rmoney_dev}"
 
-if [ -z "${RMPC_FORK_RPC_URL:-}" ]; then
-  echo "ERROR: RMPC_FORK_RPC_URL must be set (archive RPC for anvil --fork-url)" >&2
+FIXTURE_STATE="testing/fixtures/fork-state/CURRENT.anvil-state"
+FIXTURE_MANIFEST="testing/fixtures/fork-state/CURRENT.json"
+DEPLOY_ARTIFACT="deployments/full-stack.json"
+
+if [ ! -s "$FIXTURE_STATE" ] || [ ! -s "$FIXTURE_MANIFEST" ]; then
+  echo "ERROR: fork-state fixture missing at $FIXTURE_STATE" >&2
+  echo "       run: bash scripts/devnet/snapshot-fork.sh" >&2
+  exit 1
+fi
+if [ ! -s "$DEPLOY_ARTIFACT" ]; then
+  echo "ERROR: deployment artifact missing at $DEPLOY_ARTIFACT" >&2
+  echo "       run: bash scripts/devnet/snapshot-fork.sh" >&2
   exit 1
 fi
 
@@ -75,29 +83,34 @@ echo "[k3d-up] building images"
 docker build --tag rm-explorer-indexer:k3d --file services/explorer-indexer/Dockerfile .
 docker build --tag rm-explorer-api:k3d     --file clients/explorer-api/Dockerfile     .
 docker build --tag rm-dapp:k3d             --file clients/dapp/Dockerfile             .
-docker build --tag rm-gateway-deployer:k3d --file deploy/k3d/Dockerfile.gateway-deployer .
 
 echo "[k3d-up] importing images into k3d"
 k3d image import \
   rm-explorer-indexer:k3d \
   rm-explorer-api:k3d \
   rm-dapp:k3d \
-  rm-gateway-deployer:k3d \
   --cluster "$CLUSTER_NAME"
 
 # ---------------------------------------------------------------------------
-# 3. Apply manifests + override fork-rpc secret with real values.
+# 3. Apply manifests.
 # ---------------------------------------------------------------------------
 echo "[k3d-up] applying manifests"
 kubectl apply -k deploy/k3d/
 
-# Override the fork-rpc Secret with the real archive RPC. Using
-# `kubectl create --dry-run=client -o yaml | apply -f -` keeps this
-# idempotent without leaking the URL into the kustomize tree.
-kubectl create secret generic fork-rpc \
+# ---------------------------------------------------------------------------
+# 4. Override the fork-state + deployment-artifact ConfigMaps with real
+#    contents, then restart anvil-fork to load the real state.
+# ---------------------------------------------------------------------------
+echo "[k3d-up] uploading fork-state fixture as ConfigMap (size=$(wc -c < "$FIXTURE_STATE") bytes)"
+kubectl create configmap fork-state \
   --namespace robotmoney \
-  --from-literal="RMPC_FORK_RPC_URL=$RMPC_FORK_RPC_URL" \
-  --from-literal="RMPC_FORK_BLOCK=$RMPC_FORK_BLOCK" \
+  --from-file="CURRENT.anvil-state=$FIXTURE_STATE" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+echo "[k3d-up] uploading deployment artifact as ConfigMap"
+kubectl create configmap deployment-artifact \
+  --namespace robotmoney \
+  --from-file="full-stack.json=$DEPLOY_ARTIFACT" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl create secret generic postgres-credentials \
@@ -105,51 +118,11 @@ kubectl create secret generic postgres-credentials \
   --from-literal="POSTGRES_PASSWORD=$POSTGRES_PASSWORD" \
   --dry-run=client -o yaml | kubectl apply -f -
 
-# Restart anvil-fork pod to pick up the real fork-rpc secret values.
+# Restart anvil-fork pod so it re-mounts the ConfigMap with the real
+# state and reloads it via --load-state.
+echo "[k3d-up] restarting anvil-fork to consume real fork-state"
 kubectl -n robotmoney rollout restart deployment/anvil-fork
 kubectl -n robotmoney rollout status deployment/anvil-fork --timeout=180s
-
-# ---------------------------------------------------------------------------
-# 4. Wait for gateway-deployer Job + extract deployment artifact.
-# ---------------------------------------------------------------------------
-echo "[k3d-up] waiting for gateway-deployer Job"
-# Re-trigger the Job in case anvil restarted; delete + reapply just the Job.
-kubectl -n robotmoney delete job gateway-deployer --ignore-not-found
-kubectl apply -k deploy/k3d/
-
-# Wait for the Job to complete (10 min cap).
-if ! kubectl -n robotmoney wait --for=condition=complete --timeout=600s job/gateway-deployer; then
-  echo "[k3d-up] gateway-deployer Job did not complete; logs follow:" >&2
-  kubectl -n robotmoney logs job/gateway-deployer || true
-  exit 1
-fi
-
-# Extract the deployment artifact from the Job's Pod (container is still
-# alive due to the trailing `sleep 5`). Retry briefly to race the sleep.
-DEPLOY_POD=$(kubectl -n robotmoney get pods -l app=gateway-deployer -o jsonpath='{.items[0].metadata.name}')
-echo "[k3d-up] copying deployment artifact from $DEPLOY_POD"
-TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"' EXIT
-for i in $(seq 1 10); do
-  if kubectl -n robotmoney cp "$DEPLOY_POD:/shared/full-stack.json" "$TMP/full-stack.json" 2>/dev/null; then
-    break
-  fi
-  sleep 2
-done
-if [ ! -s "$TMP/full-stack.json" ]; then
-  echo "[k3d-up] failed to copy deployment artifact" >&2
-  exit 1
-fi
-
-# Apply as a ConfigMap so the indexer Deployment can mount it.
-kubectl create configmap deployment-artifact \
-  --namespace robotmoney \
-  --from-file="full-stack.json=$TMP/full-stack.json" \
-  --dry-run=client -o yaml | kubectl apply -f -
-
-# Persist a copy on the host so the runbook commands work outside the cluster.
-mkdir -p deployments
-cp "$TMP/full-stack.json" deployments/full-stack.json
 
 # ---------------------------------------------------------------------------
 # 5. Roll out indexer + api + dapp.
