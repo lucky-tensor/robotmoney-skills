@@ -40,6 +40,17 @@ env:
   RMPC_FORK_BLOCK: "23500000"
 
 jobs:
+  # Issue #146 — provision the walkthrough's devnet through the reusable
+  # k3d workflow so multi-service wiring is centralized. Skip-cleans
+  # when RMPC_FORK_RPC_URL is absent.
+  devnet-up:
+    name: Reusable k3d devnet boot
+    uses: ./.github/workflows/_devnet-k3d.yml
+    secrets:
+      RMPC_FORK_RPC_URL: ${{ secrets.RMPC_FORK_RPC_URL }}
+    with:
+      fork-block: "23500000"
+
   offline-checks:
     name: Walkthrough parity + config + refusal (offline)
     runs-on: ubuntu-latest

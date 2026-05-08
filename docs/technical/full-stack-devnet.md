@@ -118,13 +118,103 @@ hostnames.
 every PR that touches the file or the Phase 5/6 service Dockerfiles. The
 job runs `docker compose config` to validate the file and then builds the
 three custom images (without booting them) so dependency drift in
-`Cargo.toml` / `package.json` fails fast.
+`Cargo.toml` / `package.json` fails fast. A `manifest-validate` job in
+the same workflow renders `deploy/k3d/` with `kubectl kustomize` so
+manifest-level breakage fails fast, and a nightly `k3d-smoke` job boots
+the live cluster end-to-end (see below).
 
-## k3d / Helm variant (stretch)
+## k3d single-command bring-up
 
-Not yet implemented in this issue. The compose service names map 1:1 to
-intended Deployment names. A future `deploy/k3d/` directory will translate
-the same graph to a Kubernetes manifest set or Helm chart.
+Same six services, same host port surface (8545/5432/8080/5173), running
+inside a [k3d](https://k3d.io) Kubernetes cluster instead of Compose.
+Manifests live under `deploy/k3d/` and are applied through a
+kustomization so the bring-up is a single `kubectl apply -k`. The
+script-level entry point handles cluster create, image build/import,
+manifest apply, deploy-Job extraction, and the final
+`explorer-api /health` poll.
+
+### Prerequisites
+
+- [`docker`](https://docs.docker.com/engine/install/) (image build +
+  k3d node runtime).
+- [`k3d`](https://k3d.io) v5.7+ (`brew install k3d` or `curl -fsSL
+  https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.7.4
+  bash`).
+- [`kubectl`](https://kubernetes.io/docs/tasks/tools/) (any 1.27+ release
+  works against the k3d-shipped k3s server).
+
+### Required environment variables
+
+The same vars as the Compose flow:
+
+| Var | Purpose | Example |
+|---|---|---|
+| `RMPC_FORK_RPC_URL` | Archive RPC for `anvil --fork-url`. | `https://base-mainnet.g.alchemy.com/v2/...` |
+| `RMPC_FORK_BLOCK` | Pin block (default `29800000`). | `29800000` |
+| `POSTGRES_PASSWORD` | Postgres password (default `rmoney_dev`). | `rmoney_dev` |
+| `K3D_CLUSTER_NAME` | Override cluster name (default `rm-devnet`). | `rm-devnet` |
+
+### Bring up
+
+```bash
+export RMPC_FORK_RPC_URL=https://base-mainnet.g.alchemy.com/v2/<key>
+export RMPC_FORK_BLOCK=29800000
+bash scripts/devnet/k3d-up.sh
+```
+
+Expected sequence:
+
+1. `k3d cluster create` (or reuse) with host ports
+   `8545/5432/8080/5173` published through `k3d`'s built-in load
+   balancer (`klipper-lb`).
+2. `docker build` then `k3d image import` for the four custom images
+   (`rm-explorer-indexer`, `rm-explorer-api`, `rm-dapp`,
+   `rm-gateway-deployer` — the deployer is a fourth image because k3d
+   cannot bind-mount the host repo into a vanilla Foundry container).
+3. `kubectl apply -k deploy/k3d/` applies all six services.
+4. The script overrides the placeholder `fork-rpc` Secret with the real
+   archive RPC then restarts `anvil-fork` to pick it up.
+5. `gateway-deployer` Job runs `forge script Deploy.s.sol` and writes
+   `/shared/full-stack.json`; the script `kubectl cp`s it out, applies
+   it as the `deployment-artifact` ConfigMap (consumed by the indexer
+   Deployment), and persists a copy at `deployments/full-stack.json` on
+   the host.
+6. `explorer-indexer` rolls out and starts ticking; `explorer-api`
+   becomes healthy on `:8080`; `dapp` serves on `:5173`.
+7. The script polls `http://127.0.0.1:8080/health` and exits 0 on the
+   first 200.
+
+### Tear down
+
+```bash
+bash scripts/devnet/k3d-down.sh
+```
+
+Idempotent: succeeds whether or not the cluster exists.
+
+### CI integration
+
+`.github/workflows/_devnet-k3d.yml` is a reusable workflow (`uses:`)
+that any caller can consume to provision the same devnet inside a
+GitHub Actions runner. It wraps the
+`.github/actions/devnet-k3d/action.yml` composite action, which is the
+right granularity for callers that need to run their assertions in the
+same job as the cluster (reusable workflows run on their own runner and
+can't share cluster state with the caller).
+
+Workflows that consume the reusable workflow (issue #146 migration):
+
+- `fork-e2e.yml`
+- `demo.yml`
+- `opencode-walkthrough.yml`
+- `opencode-headless-deposit.yml`
+- `opencode-headless-read.yml`
+- `dapp.yml` (Playwright path)
+
+The nightly `k3d-smoke` job in `full-stack-devnet.yml` boots the live
+cluster, submits an `agentDeposit`, asserts the explorer indexes the
+event, then runs `k3d-down.sh` and re-runs it to assert idempotent
+tear-down.
 
 ## Troubleshooting
 

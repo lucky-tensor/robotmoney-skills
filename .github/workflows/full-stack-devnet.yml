@@ -2,12 +2,14 @@
 #
 # Canonical: docs/technical/full-stack-devnet.md.
 #
-# This job is a hermetic smoke test for docker-compose.full-stack.yaml. It
-# validates the compose graph (`docker compose config`) and builds the
-# three custom images (explorer-indexer, explorer-api, dapp) without
-# booting them. The fork-RPC dependency makes a real `up` non-hermetic, so
-# we keep the boot-time test in the runbook and rely on per-service CI
-# (explorer-indexer.yml, explorer-api.yml, dapp.yml) for runtime coverage.
+# Two milestones share this workflow:
+#
+#   - compose-validate / build-images: hermetic smoke for
+#     docker-compose.full-stack.yaml on every PR.
+#   - manifest-validate: kustomize render of deploy/k3d/ on every PR.
+#   - k3d-smoke: schedule + workflow_dispatch only — boots the live k3d
+#     devnet, submits an AgentDeposit, asserts the explorer indexes it,
+#     then asserts a clean tear-down. Requires RMPC_FORK_RPC_URL.
 
 name: full-stack-devnet
 
@@ -20,8 +22,12 @@ on:
       - "services/explorer-indexer/Dockerfile"
       - "clients/explorer-api/Dockerfile"
       - "clients/dapp/Dockerfile"
+      - "deploy/k3d/**"
+      - "scripts/devnet/**"
       - "docs/technical/full-stack-devnet.md"
       - ".github/workflows/full-stack-devnet.yml"
+      - ".github/workflows/_devnet-k3d.yml"
+      - ".github/actions/devnet-k3d/**"
   pull_request:
     branches: [main, dev]
     paths:
@@ -30,8 +36,14 @@ on:
       - "services/explorer-indexer/Dockerfile"
       - "clients/explorer-api/Dockerfile"
       - "clients/dapp/Dockerfile"
+      - "deploy/k3d/**"
+      - "scripts/devnet/**"
       - "docs/technical/full-stack-devnet.md"
       - ".github/workflows/full-stack-devnet.yml"
+      - ".github/workflows/_devnet-k3d.yml"
+      - ".github/actions/devnet-k3d/**"
+  schedule:
+    - cron: "37 5 * * *"  # nightly k3d-smoke
   workflow_dispatch:
 
 jobs:
@@ -115,3 +127,150 @@ jobs:
           file: clients/dapp/Dockerfile
           push: false
           tags: rm-dapp:smoke
+
+  # ── k3d milestone ──────────────────────────────────────────────────────
+  manifest-validate:
+    name: Validate k3d manifests (kustomize)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.30.0
+
+      - name: kustomize render
+        # `kubectl kustomize` validates structure offline (no API server).
+        # Equivalent to `kubectl apply --dry-run=client -k` once a context
+        # is available; we use `kustomize` so the check is hermetic.
+        run: |
+          kubectl kustomize deploy/k3d/ > /tmp/manifests.yaml
+          test -s /tmp/manifests.yaml
+          echo "Rendered $(grep -c '^---' /tmp/manifests.yaml) documents"
+
+      - name: Sanity — every expected resource is present
+        run: |
+          set -euo pipefail
+          for kind_name in \
+            "Namespace/robotmoney" \
+            "Service/anvil-fork" \
+            "Service/postgres" \
+            "Service/explorer-api" \
+            "Service/dapp" \
+            "Deployment/anvil-fork" \
+            "Deployment/postgres" \
+            "Deployment/explorer-indexer" \
+            "Deployment/explorer-api" \
+            "Deployment/dapp" \
+            "Job/gateway-deployer"; do
+            kind="${kind_name%%/*}"; name="${kind_name##*/}"
+            if ! awk -v k="$kind" -v n="$name" '
+              /^kind:/ {kind=$2}
+              /^[[:space:]]+name:/ && kind==k {if ($2==n) {found=1; exit}}
+              END {exit found?0:1}
+            ' /tmp/manifests.yaml; then
+              echo "missing $kind/$name" >&2
+              exit 1
+            fi
+          done
+          # Required host port surface.
+          for port in 8545 5432 8080 5173; do
+            if ! grep -qE "port:[[:space:]]*${port}\b" /tmp/manifests.yaml; then
+              echo "missing service port: $port" >&2
+              exit 1
+            fi
+          done
+
+  k3d-smoke:
+    name: k3d devnet smoke (up → AgentDeposit → indexed → down)
+    # Live cluster boot requires a real archive RPC; skip on PR by
+    # default. Runs nightly + on workflow_dispatch.
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    needs: [compose-validate, manifest-validate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Skip-clean if RMPC_FORK_RPC_URL absent
+        id: secret_check
+        env:
+          HAVE_FORK_RPC: ${{ secrets.RMPC_FORK_RPC_URL != '' }}
+        run: |
+          if [ "$HAVE_FORK_RPC" != "true" ]; then
+            echo "::warning::k3d-smoke: RMPC_FORK_RPC_URL absent; skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Foundry
+        if: steps.secret_check.outputs.skip != 'true'
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Bring up devnet
+        if: steps.secret_check.outputs.skip != 'true'
+        uses: ./.github/actions/devnet-k3d
+        with:
+          fork-rpc-url: ${{ secrets.RMPC_FORK_RPC_URL }}
+          fork-block: "29800000"
+          chain-id: "8453"
+
+      - name: Verify reachability + AgentDeposit round-trip
+        if: steps.secret_check.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          # health
+          curl -fsS http://127.0.0.1:8080/health
+          curl -fsS -o /dev/null http://127.0.0.1:5173/
+
+          # Read deployment artifact persisted by k3d-up.sh.
+          GATEWAY=$(grep -o '"gateway":[[:space:]]*"0x[0-9a-fA-F]*"' deployments/full-stack.json | grep -o '0x[0-9a-fA-F]*')
+          USDC=$(grep -o '"usdc":[[:space:]]*"0x[0-9a-fA-F]*"' deployments/full-stack.json | grep -o '0x[0-9a-fA-F]*')
+          AGENT="0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"
+          AGENT_PK="0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a"
+          DEPLOYER_PK="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+
+          echo "[smoke] gateway=$GATEWAY usdc=$USDC"
+
+          # The agent has been minted USDC by Deploy.s.sol. Approve the
+          # gateway and submit a deposit.
+          cast send "$USDC" "approve(address,uint256)" "$GATEWAY" "1000000000000" \
+            --rpc-url http://127.0.0.1:8545 --private-key "$AGENT_PK"
+
+          # AgentDeposit through the gateway. Function signature comes
+          # from RobotMoneyGateway: `agentDeposit(uint256 amount, uint256 maxFeeBps)`.
+          BEFORE=$(curl -sf "http://127.0.0.1:8080/v1/agents/$AGENT/deposits" | tr -d '[:space:]' | wc -c)
+          cast send "$GATEWAY" "agentDeposit(uint256,uint256)" 1000000 50 \
+            --rpc-url http://127.0.0.1:8545 --private-key "$AGENT_PK"
+
+          # Wait one tick (default 12s) plus margin for the indexer to pick it up.
+          for i in $(seq 1 30); do
+            CUR=$(curl -sf "http://127.0.0.1:8080/v1/agents/$AGENT/deposits" | tr -d '[:space:]' | wc -c)
+            if [ "$CUR" -gt "$BEFORE" ]; then
+              echo "[smoke] explorer indexed AgentDeposit after ${i} polls"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "[smoke] explorer did not index the deposit within 60s" >&2
+          curl -sf "http://127.0.0.1:8080/v1/agents/$AGENT/deposits" || true
+          exit 1
+
+      - name: Tear down (always)
+        if: always() && steps.secret_check.outputs.skip != 'true'
+        run: bash scripts/devnet/k3d-down.sh
+
+      - name: Idempotent tear-down assertion
+        if: steps.secret_check.outputs.skip != 'true'
+        run: |
+          # Running k3d-down again must succeed and report nothing to do.
+          out=$(bash scripts/devnet/k3d-down.sh 2>&1)
+          echo "$out"
+          echo "$out" | grep -q "nothing to do"

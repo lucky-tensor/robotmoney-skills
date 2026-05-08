@@ -1,0 +1,101 @@
+# Anvil fork node.
+#
+# Forks `RMPC_FORK_RPC_URL` at `RMPC_FORK_BLOCK` and exposes JSON-RPC on
+# port 8545. k3d's klipper-lb publishes the Service to the host on the
+# same port (the cluster is created with `--port 8545:8545@loadbalancer`
+# in scripts/devnet/k3d-up.sh).
+#
+# Canonical: docs/technical/full-stack-devnet.md
+# Issue: #146.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: anvil-fork
+  namespace: robotmoney
+  labels:
+    app: anvil-fork
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: anvil-fork
+  template:
+    metadata:
+      labels:
+        app: anvil-fork
+    spec:
+      containers:
+        - name: anvil
+          image: ghcr.io/foundry-rs/foundry:latest
+          # `foundry-rs/foundry` ships with a non-root entrypoint script.
+          # Override to invoke anvil directly.
+          command: ["anvil"]
+          args:
+            - --fork-url
+            - "$(RMPC_FORK_RPC_URL)"
+            - --fork-block-number
+            - "$(RMPC_FORK_BLOCK)"
+            - --chain-id
+            - "$(FORK_CHAIN_ID)"
+            - --host
+            - "0.0.0.0"
+            - --port
+            - "8545"
+            - --mnemonic
+            - "$(ANVIL_MNEMONIC)"
+            - --accounts
+            - "10"
+            - --balance
+            - "10000"
+          env:
+            - name: RMPC_FORK_RPC_URL
+              valueFrom:
+                secretKeyRef:
+                  name: fork-rpc
+                  key: RMPC_FORK_RPC_URL
+            - name: RMPC_FORK_BLOCK
+              valueFrom:
+                secretKeyRef:
+                  name: fork-rpc
+                  key: RMPC_FORK_BLOCK
+            - name: FORK_CHAIN_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: devnet-config
+                  key: FORK_CHAIN_ID
+            - name: ANVIL_MNEMONIC
+              valueFrom:
+                configMapKeyRef:
+                  name: devnet-config
+                  key: ANVIL_MNEMONIC
+          ports:
+            - name: rpc
+              containerPort: 8545
+          readinessProbe:
+            tcpSocket:
+              port: 8545
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            tcpSocket:
+              port: 8545
+            initialDelaySeconds: 30
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: anvil-fork
+  namespace: robotmoney
+  labels:
+    app: anvil-fork
+spec:
+  type: LoadBalancer
+  selector:
+    app: anvil-fork
+  ports:
+    - name: rpc
+      port: 8545
+      targetPort: 8545
+      protocol: TCP
