@@ -128,29 +128,50 @@ kubectl apply -k deploy/k3d/
 
 # ---------------------------------------------------------------------------
 # 5. Wait for anvil-fork to roll out, then roll out indexer + api + dapp.
+#    On rollout-status timeout for any of these, dump enough diagnostics
+#    (pods, describe, current+previous logs across all containers
+#    including initContainers, namespace events) for CI logs to root-
+#    cause the failure without re-running locally.
 # ---------------------------------------------------------------------------
-echo "[k3d-up] waiting for anvil-fork rollout"
-if ! kubectl -n robotmoney rollout status deployment/anvil-fork --timeout=300s; then
-  echo "[k3d-up] anvil-fork rollout did not complete; capturing diagnostics" >&2
-  kubectl -n robotmoney get pods -l app=anvil-fork -o wide >&2 || true
-  kubectl -n robotmoney describe deployment/anvil-fork >&2 || true
-  for pod in $(kubectl -n robotmoney get pods -l app=anvil-fork -o jsonpath='{.items[*].metadata.name}'); do
+dump_deployment_diagnostics() {
+  local deploy="$1"
+  local label="$2"
+  echo "[k3d-up] === $deploy diagnostics ===" >&2
+  kubectl -n robotmoney get pods -l "$label" -o wide >&2 || true
+  kubectl -n robotmoney describe deployment/"$deploy" >&2 || true
+  for pod in $(kubectl -n robotmoney get pods -l "$label" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
     echo "[k3d-up] === pod $pod describe ===" >&2
     kubectl -n robotmoney describe pod "$pod" >&2 || true
-    echo "[k3d-up] === pod $pod logs (last 200 lines) ===" >&2
-    kubectl -n robotmoney logs "$pod" --tail=200 >&2 || true
-    echo "[k3d-up] === pod $pod previous logs (last 200 lines) ===" >&2
-    kubectl -n robotmoney logs "$pod" --previous --tail=200 >&2 || true
+    echo "[k3d-up] === pod $pod logs (all containers, last 200 lines) ===" >&2
+    kubectl -n robotmoney logs "$pod" --all-containers --tail=200 >&2 || true
+    echo "[k3d-up] === pod $pod previous logs (all containers, last 200 lines) ===" >&2
+    kubectl -n robotmoney logs "$pod" --all-containers --previous --tail=200 >&2 || true
   done
   echo "[k3d-up] === recent namespace events ===" >&2
-  kubectl -n robotmoney get events --sort-by=.lastTimestamp 2>&1 | tail -50 >&2 || true
-  exit 1
-fi
+  kubectl -n robotmoney get events --sort-by=.lastTimestamp 2>&1 | tail -80 >&2 || true
+}
 
-echo "[k3d-up] rolling out indexer/api/dapp"
-kubectl -n robotmoney rollout status deployment/explorer-indexer --timeout=180s
-kubectl -n robotmoney rollout status deployment/explorer-api     --timeout=180s
-kubectl -n robotmoney rollout status deployment/dapp             --timeout=180s
+wait_rollout_or_dump() {
+  local deploy="$1"
+  local label="$2"
+  local timeout="${3:-180s}"
+  echo "[k3d-up] waiting for $deploy rollout"
+  if ! kubectl -n robotmoney rollout status "deployment/$deploy" --timeout="$timeout"; then
+    echo "[k3d-up] $deploy rollout did not complete; capturing diagnostics" >&2
+    dump_deployment_diagnostics "$deploy" "$label"
+    # Also dump postgres on indexer failure since the initContainer
+    # blocks on it.
+    if [ "$deploy" = "explorer-indexer" ]; then
+      dump_deployment_diagnostics postgres app=postgres
+    fi
+    exit 1
+  fi
+}
+
+wait_rollout_or_dump anvil-fork       app=anvil-fork       300s
+wait_rollout_or_dump explorer-indexer app=explorer-indexer 180s
+wait_rollout_or_dump explorer-api     app=explorer-api     180s
+wait_rollout_or_dump dapp             app=dapp             180s
 
 # ---------------------------------------------------------------------------
 # 6. Poll explorer-api /health from the host.
