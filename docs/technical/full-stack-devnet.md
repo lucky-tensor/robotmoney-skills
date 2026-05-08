@@ -6,23 +6,18 @@
 >
 > One documented command spins up the entire Robot Money stack against a
 > public-chain fork: Anvil fork node, gateway/vault deployment, Postgres,
-> the explorer indexer + API placeholders, and the dapp placeholder.
+> the explorer indexer + API, and the human dapp.
 
-## Status
+## Service map
 
-| Service | State | Notes |
-|---|---|---|
-| `anvil-fork` | Functional | Foundry Anvil with `--fork-url` + pinned block. |
-| `gateway-deployer` | Functional | Runs `forge script Deploy` against the fork; writes `deployments/full-stack.json`. |
-| `postgres` | Functional | Postgres 16; schema applied by the indexer once it lands. |
-| `explorer-indexer` | Placeholder | Phase 5 not yet implemented. Container documents the env-var seam (`DATABASE_URL`, `RMPC_FORK_RPC_URL`) and exits 0. |
-| `explorer-api` | Placeholder | Phase 5 not yet implemented. Reserves port `:8080` and `DATABASE_URL`. |
-| `dapp` | Placeholder | Phase 6 dapp source is library-style — no Vite entrypoint yet. Reserves port `:5173` and `VITE_*` env contract. |
-
-The placeholder services are intentional: they fix the compose-graph wiring,
-port assignments, and env-var contract so that the Phase 5 / Phase 6
-implementations can drop in by swapping `image:` and `command:` without
-rewriting the compose file.
+| Service | Image / Build context | Port (host) | Purpose |
+|---|---|---|---|
+| `anvil-fork` | `ghcr.io/foundry-rs/foundry:latest` | `8545` | Anvil fork at `RMPC_FORK_BLOCK`. |
+| `gateway-deployer` | `ghcr.io/foundry-rs/foundry:latest` | — | One-shot Forge deploy; writes `deployments/full-stack.json`. |
+| `postgres` | `postgres:16-alpine` | `5432` | Indexer + API database. |
+| `explorer-indexer` | build `services/explorer-indexer/Dockerfile` | — | §11 long-running poll loop. Reads gateway/vault from deployment artifact. |
+| `explorer-api` | build `clients/explorer-api/Dockerfile` | `8080` | §11 GET-only HTTP API. |
+| `dapp` | build `clients/dapp/Dockerfile` | `5173` | §12 Vite-built bundle, served via `vite preview`. |
 
 ## One-command bring-up
 
@@ -31,24 +26,26 @@ rewriting the compose file.
 cp .env.example .env
 # Edit .env to set RMPC_FORK_RPC_URL to a real archive RPC.
 
-# 2. Boot the stack.
-docker compose -f docker-compose.full-stack.yaml up
+# 2. Boot the stack (first run builds three Rust/JS images; ~3-5 min).
+docker compose -f docker-compose.full-stack.yaml up --build
 ```
 
 Expected sequence:
 
-1. `anvil-fork` becomes healthy (cast chain-id returns).
-2. `gateway-deployer` runs `forge build` + `forge script Deploy` and writes
-   `deployments/full-stack.json` to the host. Container exits 0.
+1. `anvil-fork` becomes healthy (`cast chain-id` returns).
+2. `gateway-deployer` runs `forge build` + `forge script Deploy`, writes
+   `deployments/full-stack.json`, exits 0.
 3. `postgres` becomes healthy.
-4. `explorer-indexer`, `explorer-api`, `dapp` print their placeholder
-   messages and exit 0.
-5. `anvil-fork` and `postgres` continue running.
+4. `explorer-indexer` reads gateway+vault from the deployment artifact,
+   applies migrations, and starts ticking.
+5. `explorer-api` serves `/health` on `:8080`.
+6. `dapp` serves on `:5173` (configured via build-time `VITE_*` args to
+   point the browser at `http://localhost:8545` and `http://localhost:8080`).
 
-To run only the functional core (skip the placeholders):
+To run only the chain + deploy (skip explorer + dapp):
 
 ```bash
-docker compose -f docker-compose.full-stack.yaml up anvil-fork gateway-deployer postgres
+docker compose -f docker-compose.full-stack.yaml up anvil-fork gateway-deployer
 ```
 
 ## Required environment variables
@@ -59,16 +56,19 @@ docker compose -f docker-compose.full-stack.yaml up anvil-fork gateway-deployer 
 | `RMPC_FORK_BLOCK` | Pin block (refresh per ADR §3.2). | `29800000` |
 | `POSTGRES_PASSWORD` | Postgres password. | `rmoney_dev` |
 
-Optional overrides are documented inline in `.env.example`.
+Optional overrides (chain id, indexer tick, dapp env class, wallet flags)
+are documented inline in `.env.example`.
 
-## Verifying `rmpc self-check` from the host
+## Verifying `rmpc self-check` from outside the compose network
 
 The Anvil fork publishes JSON-RPC on `127.0.0.1:8545` (mapped from the
 container's `:8545`). After `gateway-deployer` exits, the gateway address
 is in `deployments/full-stack.json` on the host:
 
 ```bash
-GATEWAY=$(jq -r .gateway deployments/full-stack.json)
+GATEWAY=$(grep -o '"gateway":[[:space:]]*"0x[0-9a-fA-F]*"' \
+            deployments/full-stack.json | grep -o '0x[0-9a-fA-F]*')
+
 RMPC_RPC_URL=http://127.0.0.1:8545 \
 RMPC_GATEWAY_ADDRESS="$GATEWAY" \
   cargo run -p rmpc -- self-check
@@ -79,33 +79,67 @@ exits non-zero if the gateway is unreachable or misconfigured.
 
 ## Verifying explorer event coverage
 
-Once `services/explorer-indexer` lands (Phase 5):
+Once the stack is up, deposit events are indexed within one tick
+(`INDEXER_TICK_SECONDS`, default 12s):
 
 ```bash
-# AgentDeposit indexed within ~1 block of emission.
-curl -sf http://127.0.0.1:8080/v1/agents/$AGENT/deposits | jq '.[0]'
+# Health check
+curl -fsS http://127.0.0.1:8080/health
+
+# Deposits for the seeded agent address
+AGENT=0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
+curl -sf "http://127.0.0.1:8080/v1/agents/$AGENT/deposits" | jq '.'
+
+# Latest vault snapshot
+curl -sf http://127.0.0.1:8080/v1/vault/snapshot/latest | jq '.'
 ```
 
-Until then the indexer is a placeholder; this section serves as the
-acceptance contract Phase 5 must satisfy.
+After issuing a deposit through `rmpc deposit-once`, the deposit row
+appears in `/v1/agents/$AGENT/deposits` within one tick. The API never
+signs or writes — see `docs/implementation-plan.md` §11 "Boundaries".
+
+## Connecting the dapp
+
+Browse to `http://localhost:5173`. The bundle was built with:
+
+- `VITE_FORK_RPC_URL=http://localhost:8545`
+- `VITE_EXPLORER_API_URL=http://localhost:8080`
+- `VITE_USE_MOCK_WALLET=true` (the mock wallet bypasses the browser
+  extension requirement for devnet use; production builds set this to
+  `false`).
+
+For hosted deployments, override the `VITE_*` build args via `.env` or
+`docker compose build --build-arg` so the bundle points at the public
+hostnames.
+
+## CI smoke test
+
+`.github/workflows/full-stack-devnet.yml` exercises the compose graph on
+every PR that touches the file or the Phase 5/6 service Dockerfiles. The
+job runs `docker compose config` to validate the file and then builds the
+three custom images (without booting them) so dependency drift in
+`Cargo.toml` / `package.json` fails fast.
 
 ## k3d / Helm variant (stretch)
 
-Not yet implemented. The compose file is the source of truth for service
-wiring; a future `deploy/k3d/` directory will translate the same graph to
-a Kubernetes manifest set or Helm chart. The compose service names map
-1:1 to intended Deployment names.
+Not yet implemented in this issue. The compose service names map 1:1 to
+intended Deployment names. A future `deploy/k3d/` directory will translate
+the same graph to a Kubernetes manifest set or Helm chart.
 
 ## Troubleshooting
 
 - **Anvil fork crashes on boot.** Confirm `RMPC_FORK_RPC_URL` supports
   archive reads at `RMPC_FORK_BLOCK`. Public RPCs without archive will
   return errors during state preload.
-- **`gateway-deployer` cannot reach `anvil-fork`.** The deployer waits
-  for the `service_healthy` condition; if Anvil is unhealthy the deployer
+- **`gateway-deployer` cannot reach `anvil-fork`.** The deployer waits for
+  the `service_healthy` condition; if Anvil is unhealthy the deployer
   never starts. Inspect `docker logs rm-anvil-fork`.
-- **Port 8545 / 5432 already in use.** Stop other devnets first
-  (`testing/ethereum-testnet/config/docker-compose.yaml` also binds 8545).
-- **Deployment artifact missing.** The container writes
-  `deployments/full-stack.json` via the bind-mount at `.:/repo`. Check
-  host filesystem permissions on `deployments/` and the working directory.
+- **`explorer-indexer` exits with "deployment artifact missing".** The
+  indexer reads `deployments/full-stack.json`. Ensure `gateway-deployer`
+  ran to completion (exit 0). Re-run with `docker compose up gateway-deployer`.
+- **Port 8545 / 5432 / 8080 / 5173 already in use.** Stop other devnets
+  (`testing/ethereum-testnet/config/docker-compose.yaml` also binds 8545)
+  or override `EXPLORER_API_PORT` in `.env`.
+- **Dapp cannot reach RPC / API.** The dapp bundle hard-codes the
+  `VITE_*` URLs at build time. Rebuild with `docker compose build dapp`
+  after changing `.env`.

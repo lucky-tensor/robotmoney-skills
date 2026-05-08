@@ -1,47 +1,31 @@
 # Full-stack containerized devnet for hosting and demos.
 #
-# Canonical: docs/technical/full-stack-devnet.md (runbook), docs/implementation-plan.md
-# (Phase 1 gateway + vault, Phase 5 explorer, Phase 6 dapp).
+# Canonical: docs/technical/full-stack-devnet.md (runbook),
+# docs/implementation-plan.md §2 (Phase 1 gateway + vault),
+# §11 (Phase 5 explorer), §12 (Phase 6 dapp).
 # Issue: #146.
 #
-# This compose file wires the entire Robot Money stack together so a single
-# `docker compose -f docker-compose.full-stack.yaml up` boots:
+# One command boots the entire Robot Money stack against a public-chain
+# Anvil fork:
 #
-#   - anvil-fork      Foundry Anvil node forking a public chain at a pinned
-#                     block (RMPC_FORK_RPC_URL, RMPC_FORK_BLOCK).
-#   - gateway-deployer  One-shot Forge job that deploys the Phase 1 gateway
-#                       and mock USDC + vault to the fork. Writes
+#   - anvil-fork        Foundry Anvil node forking a public chain at a
+#                       pinned block (RMPC_FORK_RPC_URL, RMPC_FORK_BLOCK).
+#   - gateway-deployer  One-shot Forge job that deploys the Phase 1
+#                       gateway + mock USDC + vault. Writes
 #                       deployments/full-stack.json on the host.
-#   - postgres        Postgres 16 for the explorer indexer + API. Schema is
-#                     applied by the indexer on first run (Phase 5 work).
-#   - explorer-indexer  Background indexer (Phase 5, NOT YET IMPLEMENTED —
-#                       placeholder image documents the seam).
-#   - explorer-api      HTTP API that serves the indexer's data
-#                       (Phase 5, NOT YET IMPLEMENTED — placeholder).
-#   - dapp            Static-served dapp bundle (Phase 6 surface). Runs a
-#                     Vite preview server on :5173 once an entrypoint is
-#                     wired in clients/dapp.
-#
-# Only `anvil-fork` and `gateway-deployer` are functional today. The
-# explorer and dapp services are placeholders that print an explanatory
-# message and exit 0 — they are wired into the compose graph so depend_on
-# semantics, env-var contracts, and port mappings exist before Phase 5 / 6
-# implementations land. See docs/technical/full-stack-devnet.md §"Status".
+#   - postgres          Postgres 16 for the explorer (Phase 5).
+#   - explorer-indexer  services/explorer-indexer running the long-running
+#                       poll loop against the fork.
+#   - explorer-api      clients/explorer-api serving GET /v1/* on :8080.
+#   - dapp              clients/dapp built bundle served via vite preview
+#                       on :5173.
 #
 # Required env vars (see .env.example):
 #   RMPC_FORK_RPC_URL    Public-chain archive RPC for anvil --fork-url.
 #   RMPC_FORK_BLOCK      Pin block number (refresh per ADR §3.2).
 #   POSTGRES_PASSWORD    Postgres password (any value for local devnet).
 #
-# Optional:
-#   FORK_CHAIN_ID                Defaults to 8453 (Base mainnet). Match the
-#                                fork RPC's actual chain id.
-#   ADMIN_ADDRESS, PAUSER_ADDRESS, AGENT_ADDRESS, SHARE_RECEIVER_ADDRESS
-#                                Override deploy roles. Defaults match the
-#                                Anvil --accounts seed phrase below.
-#   ANVIL_MNEMONIC               Override Anvil mnemonic; default reuses the
-#                                Foundry "test test test ... junk" mnemonic
-#                                so the four addresses below are pre-funded.
+# Optional overrides are documented in .env.example.
 
 name: robotmoney-full-stack
 
@@ -70,8 +54,6 @@ services:
     ports:
       - "8545:8545"
     healthcheck:
-      # cast is bundled in the foundry image; chain-id always returns once
-      # the JSON-RPC server is up and the fork is responsive.
       test:
         - CMD-SHELL
         - "cast chain-id --rpc-url http://127.0.0.1:8545 >/dev/null 2>&1"
@@ -95,7 +77,7 @@ services:
         echo "[deployer] forge build"
         forge build
         echo "[deployer] forge script Deploy"
-        # Default addresses match the Foundry test mnemonic: indices 0..3.
+        # Default addresses: Foundry test mnemonic indices 0..3 (pre-funded).
         export ADMIN_ADDRESS=$${ADMIN_ADDRESS:-0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266}
         export PAUSER_ADDRESS=$${PAUSER_ADDRESS:-0x70997970C51812dc3A010C7d01b50e0d17dc79C8}
         export AGENT_ADDRESS=$${AGENT_ADDRESS:-0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC}
@@ -132,83 +114,89 @@ services:
       start_period: 5s
     restart: unless-stopped
 
-  # Phase 5 placeholder. Replace with a real image (services/explorer-indexer)
-  # once that crate is implemented. The DATABASE_URL contract is fixed here
-  # so downstream work can rely on it.
   explorer-indexer:
-    image: alpine:3.20
+    build:
+      context: .
+      dockerfile: services/explorer-indexer/Dockerfile
     container_name: rm-explorer-indexer
     depends_on:
       anvil-fork:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      gateway-deployer:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-rmoney}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-rmoney_explorer}
-      RMPC_FORK_RPC_URL: http://anvil-fork:8545
-      RMPC_FORK_BLOCK: ${RMPC_FORK_BLOCK}
+      INDEXER_RPC_URL: http://anvil-fork:8545
+      INDEXER_CHAIN_ID: ${FORK_CHAIN_ID:-8453}
+      INDEXER_CHAIN_NAME: ${INDEXER_CHAIN_NAME:-base-fork}
+      INDEXER_RPC_LABEL: anvil-fork
+      INDEXER_TICK_SECONDS: ${INDEXER_TICK_SECONDS:-12}
+      INDEXER_MAX_BLOCKS_PER_TICK: ${INDEXER_MAX_BLOCKS_PER_TICK:-1000}
+      RUST_LOG: info
+    # Reads gateway and vault addresses from the deployment artifact written
+    # by gateway-deployer (bind-mounted read-only).
+    entrypoint: ["/bin/sh", "-c"]
     command:
-      - /bin/sh
-      - -c
       - |
-        echo "[explorer-indexer] PLACEHOLDER — Phase 5 not yet implemented."
-        echo "[explorer-indexer] Wired env: DATABASE_URL=$$DATABASE_URL"
-        echo "[explorer-indexer] Wired RPC:  $$RMPC_FORK_RPC_URL @ block $$RMPC_FORK_BLOCK"
-        echo "[explorer-indexer] See docs/implementation-plan.md §11 for the target service shape."
-        exit 0
-    restart: "no"
+        set -euo pipefail
+        DEPLOY_FILE=/repo/deployments/full-stack.json
+        if [ ! -f "$$DEPLOY_FILE" ]; then
+          echo "[indexer] deployment artifact missing at $$DEPLOY_FILE" >&2
+          exit 1
+        fi
+        # Runtime image is debian-slim without jq; parse with grep.
+        export INDEXER_GATEWAY=$$(grep -o '"gateway":[[:space:]]*"0x[0-9a-fA-F]*"' "$$DEPLOY_FILE" | grep -o '0x[0-9a-fA-F]*')
+        export INDEXER_VAULT=$$(grep -o '"vault":[[:space:]]*"0x[0-9a-fA-F]*"' "$$DEPLOY_FILE" | grep -o '0x[0-9a-fA-F]*')
+        echo "[indexer] gateway=$$INDEXER_GATEWAY vault=$$INDEXER_VAULT"
+        exec /usr/local/bin/indexer
+    volumes:
+      - ./deployments:/repo/deployments:ro
+    restart: unless-stopped
 
-  # Phase 5 placeholder. Replace with a real image (clients/explorer-api)
-  # once that crate is implemented.
   explorer-api:
-    image: alpine:3.20
+    build:
+      context: .
+      dockerfile: clients/explorer-api/Dockerfile
     container_name: rm-explorer-api
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-rmoney}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-rmoney_explorer}
-      EXPLORER_API_PORT: "${EXPLORER_API_PORT:-8080}"
+      EXPLORER_API_BIND: 0.0.0.0:8080
+      RUST_LOG: info
     ports:
       - "${EXPLORER_API_PORT:-8080}:8080"
-    command:
-      - /bin/sh
-      - -c
-      - |
-        echo "[explorer-api] PLACEHOLDER — Phase 5 not yet implemented."
-        echo "[explorer-api] Will serve HTTP on :$$EXPLORER_API_PORT once clients/explorer-api lands."
-        echo "[explorer-api] See docs/implementation-plan.md §11 for the target endpoints."
-        exit 0
-    restart: "no"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
 
-  # Phase 6 placeholder. The dapp source under clients/dapp is library-style
-  # (no index.html / vite entrypoint yet); this service is wired so the
-  # port and env-var contract are stable before the full app shell lands.
   dapp:
-    image: node:20-alpine
+    build:
+      context: .
+      dockerfile: clients/dapp/Dockerfile
+      args:
+        # Vite inlines these at build time. Use host-routable URLs so the
+        # browser (running on the host) can reach the fork RPC and API.
+        VITE_FORK_RPC_URL: ${VITE_FORK_RPC_URL:-http://localhost:8545}
+        VITE_EXPLORER_API_URL: ${VITE_EXPLORER_API_URL:-http://localhost:8080}
+        VITE_ENV_CLASS: ${VITE_ENV_CLASS:-fork}
+        VITE_USE_MOCK_WALLET: ${VITE_USE_MOCK_WALLET:-true}
+        VITE_BROWSER_KEYGEN: ${VITE_BROWSER_KEYGEN:-false}
+        VITE_HISTORY_PANE: ${VITE_HISTORY_PANE:-true}
     container_name: rm-dapp
     depends_on:
       gateway-deployer:
         condition: service_completed_successfully
-    environment:
-      VITE_RMPC_FORK_RPC_URL: http://localhost:8545
-      VITE_EXPLORER_API_URL: http://localhost:${EXPLORER_API_PORT:-8080}
-      VITE_DAPP_BROWSER_KEYGEN_ENABLED: "${VITE_DAPP_BROWSER_KEYGEN_ENABLED:-false}"
     ports:
       - "5173:5173"
-    working_dir: /repo/clients/dapp
-    volumes:
-      - .:/repo
-    command:
-      - /bin/sh
-      - -c
-      - |
-        echo "[dapp] PLACEHOLDER — clients/dapp does not yet expose a Vite entrypoint."
-        echo "[dapp] Wired env: VITE_RMPC_FORK_RPC_URL=$$VITE_RMPC_FORK_RPC_URL"
-        echo "[dapp] Wired env: VITE_EXPLORER_API_URL=$$VITE_EXPLORER_API_URL"
-        echo "[dapp] Once index.html + vite.config.ts land: npm install && npm run build && npx vite preview --host 0.0.0.0 --port 5173"
-        exit 0
-    restart: "no"
+    restart: unless-stopped
 
 volumes:
   rm-pgdata:
