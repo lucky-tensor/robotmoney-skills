@@ -3,16 +3,9 @@
 # Canonical: docs/walkthroughs/opencode-readonly-fork.md
 # Implementation plan: docs/implementation-plan.md §10.
 #
-# The crate at testing/opencode-walkthrough/ owns the test pyramid for
-# the walkthrough doc:
-#
-# - Three offline tests (`walkthrough_parity`, `config_template_parses`,
-#   `refusal_walkthrough`) need only the rmpc binary; they run on every
-#   PR.
-# - One online test (`read_only_walkthrough`) boots anvil-fork against
-#   `RMPC_FORK_RPC_URL` and asserts the rmpc envelope contract. It
-#   skip-cleans when the secret is unset, so a missing-secret state is
-#   loud-but-non-blocking.
+# - `offline-checks` runs three hermetic tests (no secrets required).
+# - `check-fork-rpc` gates `fork-check` on RMPC_FORK_RPC_URL presence;
+#   when absent fork-check is marked SKIPPED (not passed).
 
 name: opencode-walkthrough
 
@@ -82,8 +75,28 @@ jobs:
           cargo test --test config_template_parses -- --nocapture
           cargo test --test refusal_walkthrough -- --nocapture
 
+  check-fork-rpc:
+    name: Check RMPC_FORK_RPC_URL
+    runs-on: ubuntu-latest
+    outputs:
+      ok: ${{ steps.check.outputs.ok }}
+    steps:
+      - name: Verify secret present
+        id: check
+        env:
+          HAS_FORK_RPC: ${{ secrets.RMPC_FORK_RPC_URL != '' }}
+        run: |
+          if [ "$HAS_FORK_RPC" = "true" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::RMPC_FORK_RPC_URL not configured — fork-check will be skipped"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
   fork-check:
     name: Walkthrough fork inspection (anvil-fork)
+    needs: check-fork-rpc
+    if: needs.check-fork-rpc.outputs.ok == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -110,12 +123,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-opencode-walkthrough-
 
-      - name: Run fork inspection (skip-cleans without RMPC_FORK_RPC_URL)
+      - name: Run fork inspection
         working-directory: testing/opencode-walkthrough
         env:
           RMPC_FORK_RPC_URL: ${{ secrets.RMPC_FORK_RPC_URL }}
-        run: |
-          if [ -z "$RMPC_FORK_RPC_URL" ]; then
-            echo "::warning::RMPC_FORK_RPC_URL secret not configured; the fork test will skip-clean. Set the secret in repo settings to actually exercise the fork."
-          fi
-          cargo test --test read_only_walkthrough -- --nocapture
+        run: cargo test --test read_only_walkthrough -- --nocapture

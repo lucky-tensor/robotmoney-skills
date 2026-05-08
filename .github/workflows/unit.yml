@@ -1,0 +1,89 @@
+name: unit
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  rmpc:
+    name: rmpc offline tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            clients/rust-payment-client/target
+          key: ${{ runner.os }}-unit-rmpc-${{ hashFiles('clients/rust-payment-client/Cargo.toml') }}
+          restore-keys: ${{ runner.os }}-unit-rmpc-
+
+      - name: skill-docs parity
+        working-directory: clients/rust-payment-client
+        run: cargo test --test skill_docs_parity -- --nocapture
+
+      - name: dapp TOML round-trip
+        working-directory: clients/rust-payment-client
+        run: cargo test --test dapp_toml_roundtrip -- --nocapture
+
+  explorer-api:
+    name: explorer-api router introspection
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            clients/explorer-api/target
+          key: ${{ runner.os }}-unit-explorer-api-${{ hashFiles('clients/explorer-api/Cargo.toml') }}
+          restore-keys: ${{ runner.os }}-unit-explorer-api-
+
+      - name: router introspection
+        working-directory: clients/explorer-api
+        run: cargo test --test router_introspection
+
+  opencode-walkthrough:
+    name: opencode-walkthrough offline tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            testing/opencode-walkthrough/target
+            clients/rust-payment-client/target
+          key: ${{ runner.os }}-unit-walkthrough-${{ hashFiles('testing/opencode-walkthrough/Cargo.toml', 'clients/rust-payment-client/Cargo.toml') }}
+          restore-keys: ${{ runner.os }}-unit-walkthrough-
+
+      - name: walkthrough parity
+        working-directory: testing/opencode-walkthrough
+        run: cargo test --test walkthrough_parity -- --nocapture
+
+      - name: config template parses
+        working-directory: testing/opencode-walkthrough
+        run: cargo test --test config_template_parses -- --nocapture
+
+      - name: refusal walkthrough
+        working-directory: testing/opencode-walkthrough
+        run: cargo test --test refusal_walkthrough -- --nocapture

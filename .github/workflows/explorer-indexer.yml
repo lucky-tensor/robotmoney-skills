@@ -6,8 +6,8 @@
 #
 # - `unit` runs the schema, idempotency, and RPC-failure integration
 #   tests against a Postgres testcontainer. No fork RPC required.
-# - `fork-smoke` runs the full fork-anvil indexer test when
-#   RMPC_FORK_RPC_URL is configured. Skips cleanly without it.
+# - `check-fork-rpc` gates `fork-smoke` on RMPC_FORK_RPC_URL presence;
+#   when absent fork-smoke is marked SKIPPED (not passed).
 
 name: explorer-indexer
 
@@ -76,8 +76,28 @@ jobs:
           cargo test --test idempotency -- --nocapture
           cargo test --test rpc_failure -- --nocapture
 
+  check-fork-rpc:
+    name: Check RMPC_FORK_RPC_URL
+    runs-on: ubuntu-latest
+    outputs:
+      ok: ${{ steps.check.outputs.ok }}
+    steps:
+      - name: Verify secret present
+        id: check
+        env:
+          HAS_FORK_RPC: ${{ secrets.RMPC_FORK_RPC_URL != '' }}
+        run: |
+          if [ "$HAS_FORK_RPC" = "true" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::RMPC_FORK_RPC_URL not configured — fork-smoke will be skipped"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
   fork-smoke:
     name: Fork indexer smoke (RMPC_FORK_RPC_URL gated)
+    needs: check-fork-rpc
+    if: needs.check-fork-rpc.outputs.ok == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -114,8 +134,4 @@ jobs:
         working-directory: services/explorer-indexer
         env:
           RMPC_FORK_RPC_URL: ${{ secrets.RMPC_FORK_RPC_URL }}
-        run: |
-          if [ -z "$RMPC_FORK_RPC_URL" ]; then
-            echo "::warning::RMPC_FORK_RPC_URL secret not configured; fork test will skip-clean."
-          fi
-          cargo test --test fork_indexer -- --nocapture
+        run: cargo test --test fork_indexer -- --nocapture

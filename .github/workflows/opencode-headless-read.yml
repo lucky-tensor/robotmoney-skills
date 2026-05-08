@@ -11,7 +11,8 @@
 #   - rmpc get-gateway with exit 0 and partial: true.
 #   - No reference to explorer APIs or the dapp (guards json_rpc-only source).
 #
-# Skip-cleans loudly when ANTHROPIC_API_KEY or RMPC_FORK_RPC_URL is absent.
+# When ANTHROPIC_API_KEY or RMPC_FORK_RPC_URL are absent the check-secrets
+# job outputs ok=false and headless-read is marked SKIPPED (not passed).
 
 name: opencode-headless-read
 
@@ -34,8 +35,29 @@ env:
   OPENCODE_VERSION: "1.14.29"
 
 jobs:
+  check-secrets:
+    name: Check required secrets
+    runs-on: ubuntu-latest
+    outputs:
+      ok: ${{ steps.check.outputs.ok }}
+    steps:
+      - name: Verify secrets present
+        id: check
+        env:
+          HAS_ANTHROPIC: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+          HAS_FORK_RPC:  ${{ secrets.RMPC_FORK_RPC_URL != '' }}
+        run: |
+          if [ "$HAS_ANTHROPIC" = "true" ] && [ "$HAS_FORK_RPC" = "true" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::opencode-headless-read: ANTHROPIC_API_KEY or RMPC_FORK_RPC_URL not configured — job will be skipped"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
   headless-read:
     name: OpenCode headless vault read
+    needs: check-secrets
+    if: needs.check-secrets.outputs.ok == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -43,34 +65,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Check required secrets
-        id: secrets_check
-        env:
-          HAVE_ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
-          HAVE_FORK_RPC: ${{ secrets.RMPC_FORK_RPC_URL != '' }}
-        run: |
-          MISSING=""
-          if [ "$HAVE_ANTHROPIC_KEY" = "false" ]; then
-            MISSING="$MISSING ANTHROPIC_API_KEY"
-          fi
-          if [ "$HAVE_FORK_RPC" = "false" ]; then
-            MISSING="$MISSING RMPC_FORK_RPC_URL"
-          fi
-          if [ -n "$MISSING" ]; then
-            echo "::warning::opencode-headless-read: skipping — missing secrets:$MISSING. Configure in repo settings to exercise this test."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Install bun
-        if: steps.secrets_check.outputs.skip != 'true'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.2.13"
 
       - name: Install OpenCode at pinned version
-        if: steps.secrets_check.outputs.skip != 'true'
         run: |
           bun install -g opencode-ai@${{ env.OPENCODE_VERSION }}
           INSTALLED=$(opencode --version 2>&1)
@@ -81,17 +81,14 @@ jobs:
           echo "opencode $INSTALLED confirmed."
 
       - name: Install Rust toolchain
-        if: steps.secrets_check.outputs.skip != 'true'
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install Foundry
-        if: steps.secrets_check.outputs.skip != 'true'
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: stable
 
       - name: Cargo cache
-        if: steps.secrets_check.outputs.skip != 'true'
         uses: actions/cache@v4
         with:
           path: |
@@ -103,18 +100,15 @@ jobs:
             ${{ runner.os }}-cargo-rmpc-headless-
 
       - name: Build rmpc
-        if: steps.secrets_check.outputs.skip != 'true'
         run: |
           cargo build --release --bin rmpc \
             --manifest-path clients/rust-payment-client/Cargo.toml
           echo "$GITHUB_WORKSPACE/clients/rust-payment-client/target/release" >> "$GITHUB_PATH"
 
       - name: Confirm rmpc is on PATH
-        if: steps.secrets_check.outputs.skip != 'true'
         run: rmpc --help > /dev/null
 
       - name: Write rmpc-fork.toml
-        if: steps.secrets_check.outputs.skip != 'true'
         run: |
           cat > rmpc-fork.toml <<'TOML'
           chain_id              = 8453
@@ -131,7 +125,6 @@ jobs:
           TOML
 
       - name: Boot anvil fork
-        if: steps.secrets_check.outputs.skip != 'true'
         env:
           RMPC_FORK_RPC_URL: ${{ secrets.RMPC_FORK_RPC_URL }}
         run: |
@@ -141,7 +134,6 @@ jobs:
             --port 8545 \
             --silent &
           echo "ANVIL_PID=$!" >> "$GITHUB_ENV"
-          # Poll until anvil accepts RPC connections (up to 30s).
           for i in $(seq 1 30); do
             if curl -sf -X POST -H "Content-Type: application/json" \
                 --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
@@ -153,7 +145,6 @@ jobs:
           done
 
       - name: Run OpenCode headless read (step-5 prompt)
-        if: steps.secrets_check.outputs.skip != 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
@@ -169,12 +160,11 @@ jobs:
           echo "transcript lines: $(wc -l < transcript.ndjson)"
 
       - name: Assert transcript
-        if: steps.secrets_check.outputs.skip != 'true'
         run: |
           python3 .github/scripts/assert_headless_read_transcript.py transcript.ndjson
 
       - name: Upload transcript on failure
-        if: failure() && steps.secrets_check.outputs.skip != 'true'
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: headless-read-transcript
@@ -183,11 +173,10 @@ jobs:
             opencode-stderr.log
 
       - name: Tear down anvil
-        if: always() && steps.secrets_check.outputs.skip != 'true' && env.ANVIL_PID != ''
+        if: always() && env.ANVIL_PID != ''
         run: kill "$ANVIL_PID" 2>/dev/null || true
 
       - name: Summary
-        if: steps.secrets_check.outputs.skip != 'true'
         run: |
           echo "### opencode-headless-read — PASSED" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"

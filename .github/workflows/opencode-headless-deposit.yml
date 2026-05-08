@@ -4,23 +4,8 @@
 # ADR:       docs/technical/opencode-headless-invocation.md
 # Implementation plan: docs/implementation-plan.md §10.
 #
-# Invokes OpenCode headlessly with the §3.2 verbatim deposit task prompt
-# against an authorized agent on an Anvil fork. Asserts the captured
-# transcript contains:
-#   - Read prefix in order: get-vault, get-agent, get-balance,
-#     get-allowance, self-check (all before deposit).
-#   - rmpc deposit with exit 0 present in transcript.
-#   - final-report.json:outcome == 'deposited', tx_hash non-null hex.
-#   - No explorer API or dapp references.
-#
-# Fixture setup (before OpenCode is launched):
-#   - Forge Deploy.s.sol deploys MockUSDC + MockVault + RobotMoneyGateway.
-#   - A fresh agent EOA is generated; its keystore is written via
-#     rmpc-keystore-import.
-#   - Agent ETH balance is set via anvil_setBalance.
-#   - Agent USDC approval is set via impersonation.
-#
-# Skip-cleans loudly when ANTHROPIC_API_KEY or RMPC_FORK_RPC_URL is absent.
+# When ANTHROPIC_API_KEY or RMPC_FORK_RPC_URL are absent the check-secrets
+# job outputs ok=false and both downstream jobs are marked SKIPPED (not passed).
 
 name: opencode-headless-deposit
 
@@ -42,18 +27,36 @@ on:
 env:
   RMPC_FORK_BLOCK: "23500000"
   OPENCODE_VERSION: "1.14.29"
-  # Anvil default account 0 (well-known; safe for CI).
-  DEPLOYER_PK: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+  DEPLOYER_PK:   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
   DEPLOYER_ADDR: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
-  # Deposit parameters (1 USDC = 1_000_000 with 6 decimals).
   DEPOSIT_AMOUNT: "1000000"
   MAX_FEE_BPS: "50"
-  # Keystore passphrase for the ephemeral CI agent (not a production secret).
   RMPC_KEYSTORE_PASSPHRASE: "ci-headless-deposit-passphrase"
 
 jobs:
+  check-secrets:
+    name: Check required secrets
+    runs-on: ubuntu-latest
+    outputs:
+      ok: ${{ steps.check.outputs.ok }}
+    steps:
+      - name: Verify secrets present
+        id: check
+        env:
+          HAS_ANTHROPIC: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+          HAS_FORK_RPC:  ${{ secrets.RMPC_FORK_RPC_URL != '' }}
+        run: |
+          if [ "$HAS_ANTHROPIC" = "true" ] && [ "$HAS_FORK_RPC" = "true" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::opencode-headless-deposit: ANTHROPIC_API_KEY or RMPC_FORK_RPC_URL not configured — jobs will be skipped"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
   headless-deposit:
     name: OpenCode headless guarded deposit
+    needs: check-secrets
+    if: needs.check-secrets.outputs.ok == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
@@ -63,34 +66,12 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Check required secrets
-        id: secrets_check
-        env:
-          HAVE_ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
-          HAVE_FORK_RPC: ${{ secrets.RMPC_FORK_RPC_URL != '' }}
-        run: |
-          MISSING=""
-          if [ "$HAVE_ANTHROPIC_KEY" = "false" ]; then
-            MISSING="$MISSING ANTHROPIC_API_KEY"
-          fi
-          if [ "$HAVE_FORK_RPC" = "false" ]; then
-            MISSING="$MISSING RMPC_FORK_RPC_URL"
-          fi
-          if [ -n "$MISSING" ]; then
-            echo "::warning::opencode-headless-deposit: skipping — missing secrets:$MISSING. Configure in repo settings to exercise this test."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Install bun
-        if: steps.secrets_check.outputs.skip != 'true'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.2.13"
 
       - name: Install OpenCode at pinned version
-        if: steps.secrets_check.outputs.skip != 'true'
         run: |
           bun install -g opencode-ai@${{ env.OPENCODE_VERSION }}
           INSTALLED=$(opencode --version 2>&1)
@@ -101,17 +82,14 @@ jobs:
           echo "opencode $INSTALLED confirmed."
 
       - name: Install Rust toolchain
-        if: steps.secrets_check.outputs.skip != 'true'
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install Foundry
-        if: steps.secrets_check.outputs.skip != 'true'
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: stable
 
       - name: Cargo cache
-        if: steps.secrets_check.outputs.skip != 'true'
         uses: actions/cache@v4
         with:
           path: |
@@ -123,18 +101,15 @@ jobs:
             ${{ runner.os }}-cargo-rmpc-headless-deposit-
 
       - name: Build rmpc and rmpc-keystore-import
-        if: steps.secrets_check.outputs.skip != 'true'
         run: |
           cargo build --release --bin rmpc --bin rmpc-keystore-import \
             --manifest-path clients/rust-payment-client/Cargo.toml
           echo "$GITHUB_WORKSPACE/clients/rust-payment-client/target/release" >> "$GITHUB_PATH"
 
       - name: Confirm rmpc is on PATH
-        if: steps.secrets_check.outputs.skip != 'true'
         run: rmpc --help > /dev/null
 
       - name: Boot anvil fork
-        if: steps.secrets_check.outputs.skip != 'true'
         env:
           RMPC_FORK_RPC_URL: ${{ secrets.RMPC_FORK_RPC_URL }}
         run: |
@@ -156,7 +131,6 @@ jobs:
           done
 
       - name: Generate ephemeral agent keypair
-        if: steps.secrets_check.outputs.skip != 'true'
         run: |
           AGENT_KEY_HEX="$(openssl rand -hex 32)"
           AGENT_ADDRESS="$(cast wallet address --private-key "0x${AGENT_KEY_HEX}")"
@@ -165,10 +139,10 @@ jobs:
           echo "Agent address: ${AGENT_ADDRESS}"
 
       - name: Deploy gateway stack via forge script
-        if: steps.secrets_check.outputs.skip != 'true'
         env:
-          ADMIN_ADDRESS: ${{ env.DEPLOYER_ADDR }}
-          PAUSER_ADDRESS: ${{ env.DEPLOYER_ADDR }}
+          ADMIN_ADDRESS:          ${{ env.DEPLOYER_ADDR }}
+          PAUSER_ADDRESS:         ${{ env.DEPLOYER_ADDR }}
+          AGENT_ADDRESS:          ${{ env.AGENT_ADDRESS }}
           SHARE_RECEIVER_ADDRESS: ${{ env.DEPLOYER_ADDR }}
           DEPLOYMENT_OUT: "./deployments/ci-deposit.json"
         run: |
@@ -181,24 +155,17 @@ jobs:
             -vv
           echo "Deployment output:"
           cat deployments/ci-deposit.json
-          GATEWAY_ADDR="$(jq -r .gateway deployments/ci-deposit.json)"
-          USDC_ADDR="$(jq -r .usdc deployments/ci-deposit.json)"
-          VAULT_ADDR="$(jq -r .vault deployments/ci-deposit.json)"
-          GATEWAY_HASH="$(jq -r .gateway_runtime_hash deployments/ci-deposit.json)"
-          echo "GATEWAY_ADDR=${GATEWAY_ADDR}" >> "$GITHUB_ENV"
-          echo "USDC_ADDR=${USDC_ADDR}" >> "$GITHUB_ENV"
-          echo "VAULT_ADDR=${VAULT_ADDR}" >> "$GITHUB_ENV"
-          echo "GATEWAY_HASH=${GATEWAY_HASH}" >> "$GITHUB_ENV"
+          echo "GATEWAY_ADDR=$(jq -r .gateway              deployments/ci-deposit.json)" >> "$GITHUB_ENV"
+          echo "USDC_ADDR=$(jq -r    .usdc                 deployments/ci-deposit.json)" >> "$GITHUB_ENV"
+          echo "VAULT_ADDR=$(jq -r   .vault                deployments/ci-deposit.json)" >> "$GITHUB_ENV"
+          echo "GATEWAY_HASH=$(jq -r .gateway_runtime_hash deployments/ci-deposit.json)" >> "$GITHUB_ENV"
 
       - name: Fund agent ETH and set USDC allowance
-        if: steps.secrets_check.outputs.skip != 'true'
         run: |
-          # Fund agent with 1 ETH for gas.
           cast rpc anvil_setBalance "$AGENT_ADDRESS" 0xDE0B6B3A7640000 \
             --rpc-url http://127.0.0.1:8545
           echo "Agent ETH funded."
 
-          # Set USDC allowance for the gateway via impersonation.
           cast rpc anvil_impersonateAccount "$AGENT_ADDRESS" \
             --rpc-url http://127.0.0.1:8545 > /dev/null
           cast send "$USDC_ADDR" \
@@ -211,7 +178,6 @@ jobs:
           echo "USDC allowance set."
 
       - name: Create agent keystore
-        if: steps.secrets_check.outputs.skip != 'true'
         env:
           RMPC_IMPORT_PRIVKEY_HEX: ${{ env.AGENT_KEY_HEX }}
         run: |
@@ -219,7 +185,6 @@ jobs:
           echo "Keystore created for agent ${AGENT_ADDRESS}."
 
       - name: Write rmpc-deposit.toml
-        if: steps.secrets_check.outputs.skip != 'true'
         run: |
           cat > rmpc-deposit.toml <<TOML
           chain_id              = 8453
@@ -236,11 +201,9 @@ jobs:
           TOML
 
       - name: Run OpenCode headless deposit (§3.2 verbatim prompt)
-        if: steps.secrets_check.outputs.skip != 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          # Substitute env vars into the verbatim §3.2 prompt.
           PROMPT="You are running on a Base-mainnet fork as an authorized Robot Money \
           agent. Your task is bounded and read-then-write:
 
@@ -285,14 +248,13 @@ jobs:
           echo "transcript lines: $(wc -l < transcript.ndjson)"
 
       - name: Assert transcript
-        if: steps.secrets_check.outputs.skip != 'true'
         run: |
           python3 .github/scripts/assert_headless_deposit_transcript.py \
             transcript.ndjson \
             --final-report final-report.json
 
       - name: Upload artifacts on failure
-        if: failure() && steps.secrets_check.outputs.skip != 'true'
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: headless-deposit-artifacts
@@ -303,11 +265,10 @@ jobs:
             deployments/ci-deposit.json
 
       - name: Tear down anvil
-        if: always() && steps.secrets_check.outputs.skip != 'true' && env.ANVIL_PID != ''
+        if: always() && env.ANVIL_PID != ''
         run: kill "$ANVIL_PID" 2>/dev/null || true
 
       - name: Summary
-        if: steps.secrets_check.outputs.skip != 'true'
         run: |
           echo "### opencode-headless-deposit — PASSED" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
@@ -315,13 +276,11 @@ jobs:
           echo "- Transcript asserted: read prefix order, deposit exit 0, outcome deposited, no explorer references" >> "$GITHUB_STEP_SUMMARY"
 
   # ── Issue #138: five failure-case refusal tests ────────────────────────────
-  #
-  # Each matrix entry applies one §3.4 toggle, then asserts:
-  #   - rmpc deposit absent from transcript.
-  #   - final-report.json:outcome starts with 'refused: <expected-reason>'.
-  # Each run gets its own runner (isolated Anvil fork per run).
+
   headless-deposit-failure-cases:
     name: "OpenCode refusal — ${{ matrix.failure_case }}"
+    needs: check-secrets
+    if: needs.check-secrets.outputs.ok == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
@@ -346,34 +305,12 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Check required secrets
-        id: secrets_check
-        env:
-          HAVE_ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
-          HAVE_FORK_RPC: ${{ secrets.RMPC_FORK_RPC_URL != '' }}
-        run: |
-          MISSING=""
-          if [ "$HAVE_ANTHROPIC_KEY" = "false" ]; then
-            MISSING="$MISSING ANTHROPIC_API_KEY"
-          fi
-          if [ "$HAVE_FORK_RPC" = "false" ]; then
-            MISSING="$MISSING RMPC_FORK_RPC_URL"
-          fi
-          if [ -n "$MISSING" ]; then
-            echo "::warning::opencode-headless-deposit (failure-case ${{ matrix.failure_case }}): skipping — missing secrets:$MISSING"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Install bun
-        if: steps.secrets_check.outputs.skip != 'true'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.2.13"
 
       - name: Install OpenCode at pinned version
-        if: steps.secrets_check.outputs.skip != 'true'
         run: |
           bun install -g opencode-ai@${{ env.OPENCODE_VERSION }}
           INSTALLED=$(opencode --version 2>&1)
@@ -384,17 +321,14 @@ jobs:
           echo "opencode $INSTALLED confirmed."
 
       - name: Install Rust toolchain
-        if: steps.secrets_check.outputs.skip != 'true'
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install Foundry
-        if: steps.secrets_check.outputs.skip != 'true'
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: stable
 
       - name: Cargo cache
-        if: steps.secrets_check.outputs.skip != 'true'
         uses: actions/cache@v4
         with:
           path: |
@@ -406,14 +340,12 @@ jobs:
             ${{ runner.os }}-cargo-rmpc-headless-refusal-
 
       - name: Build rmpc and rmpc-keystore-import
-        if: steps.secrets_check.outputs.skip != 'true'
         run: |
           cargo build --release --bin rmpc --bin rmpc-keystore-import \
             --manifest-path clients/rust-payment-client/Cargo.toml
           echo "$GITHUB_WORKSPACE/clients/rust-payment-client/target/release" >> "$GITHUB_PATH"
 
       - name: Boot anvil fork
-        if: steps.secrets_check.outputs.skip != 'true'
         env:
           RMPC_FORK_RPC_URL: ${{ secrets.RMPC_FORK_RPC_URL }}
         run: |
@@ -435,7 +367,6 @@ jobs:
           done
 
       - name: Generate ephemeral agent keypair
-        if: steps.secrets_check.outputs.skip != 'true'
         run: |
           AGENT_KEY_HEX="$(openssl rand -hex 32)"
           AGENT_ADDRESS="$(cast wallet address --private-key "0x${AGENT_KEY_HEX}")"
@@ -443,13 +374,10 @@ jobs:
           echo "AGENT_ADDRESS=${AGENT_ADDRESS}" >> "$GITHUB_ENV"
 
       - name: Deploy gateway stack via forge script
-        if: steps.secrets_check.outputs.skip != 'true'
         env:
-          # For unauthorized_agent: deploy with deployer as "agent" so the
-          # test agent EOA never receives authorization or USDC.
-          AGENT_ADDRESS: ${{ matrix.failure_case == 'unauthorized_agent' && env.DEPLOYER_ADDR || env.AGENT_ADDRESS }}
-          ADMIN_ADDRESS: ${{ env.DEPLOYER_ADDR }}
-          PAUSER_ADDRESS: ${{ env.DEPLOYER_ADDR }}
+          AGENT_ADDRESS:          ${{ matrix.failure_case == 'unauthorized_agent' && env.DEPLOYER_ADDR || env.AGENT_ADDRESS }}
+          ADMIN_ADDRESS:          ${{ env.DEPLOYER_ADDR }}
+          PAUSER_ADDRESS:         ${{ env.DEPLOYER_ADDR }}
           SHARE_RECEIVER_ADDRESS: ${{ env.DEPLOYER_ADDR }}
           DEPLOYMENT_OUT: "./deployments/ci-refusal-${{ matrix.failure_case }}.json"
         run: |
@@ -461,17 +389,12 @@ jobs:
             --slow \
             -vv
           DEPLOY_JSON="deployments/ci-refusal-${{ matrix.failure_case }}.json"
-          GATEWAY_ADDR="$(jq -r .gateway "$DEPLOY_JSON")"
-          USDC_ADDR="$(jq -r .usdc "$DEPLOY_JSON")"
-          VAULT_ADDR="$(jq -r .vault "$DEPLOY_JSON")"
-          GATEWAY_HASH="$(jq -r .gateway_runtime_hash "$DEPLOY_JSON")"
-          echo "GATEWAY_ADDR=${GATEWAY_ADDR}" >> "$GITHUB_ENV"
-          echo "USDC_ADDR=${USDC_ADDR}" >> "$GITHUB_ENV"
-          echo "VAULT_ADDR=${VAULT_ADDR}" >> "$GITHUB_ENV"
-          echo "GATEWAY_HASH=${GATEWAY_HASH}" >> "$GITHUB_ENV"
+          echo "GATEWAY_ADDR=$(jq -r .gateway              "$DEPLOY_JSON")" >> "$GITHUB_ENV"
+          echo "USDC_ADDR=$(jq -r    .usdc                 "$DEPLOY_JSON")" >> "$GITHUB_ENV"
+          echo "VAULT_ADDR=$(jq -r   .vault                "$DEPLOY_JSON")" >> "$GITHUB_ENV"
+          echo "GATEWAY_HASH=$(jq -r .gateway_runtime_hash "$DEPLOY_JSON")" >> "$GITHUB_ENV"
 
       - name: Fund agent ETH (all cases)
-        if: steps.secrets_check.outputs.skip != 'true'
         run: |
           cast rpc anvil_setBalance "$AGENT_ADDRESS" 0xDE0B6B3A7640000 \
             --rpc-url http://127.0.0.1:8545
@@ -479,7 +402,6 @@ jobs:
 
       - name: Set USDC allowance (skip for insufficient_allowance and unauthorized_agent)
         if: >-
-          steps.secrets_check.outputs.skip != 'true' &&
           matrix.failure_case != 'insufficient_allowance' &&
           matrix.failure_case != 'unauthorized_agent'
         run: |
@@ -495,16 +417,13 @@ jobs:
           echo "USDC allowance set."
 
       - name: Apply failure-case toggle
-        if: steps.secrets_check.outputs.skip != 'true'
         run: |
           FAILURE_CASE="${{ matrix.failure_case }}"
           case "$FAILURE_CASE" in
             unauthorized_agent)
-              # Agent was never authorized (Deploy used deployer as agent).
               echo "Toggle: unauthorized_agent — agent EOA has no authorization."
               ;;
             insufficient_allowance)
-              # Set allowance to 0 (never set it, or explicitly zero it).
               echo "Toggle: insufficient_allowance — USDC allowance left at 0."
               ;;
             paused_gateway)
@@ -518,7 +437,6 @@ jobs:
               echo "Toggle: paused_gateway — gateway.pause() called."
               ;;
             fee_cap)
-              # Re-authorize with cap=1 (far below DEPOSIT_AMOUNT=1000000).
               ZEROS="$(printf '00%.0s' {1..32})"
               EXPIRY=9999999999
               WINDOW=3600
@@ -541,7 +459,6 @@ jobs:
           esac
 
       - name: Create agent keystore
-        if: steps.secrets_check.outputs.skip != 'true'
         env:
           RMPC_IMPORT_PRIVKEY_HEX: ${{ env.AGENT_KEY_HEX }}
         run: |
@@ -549,7 +466,6 @@ jobs:
           echo "Keystore created."
 
       - name: Write rmpc-refusal.toml
-        if: steps.secrets_check.outputs.skip != 'true'
         run: |
           cat > rmpc-refusal.toml <<TOML
           chain_id              = 8453
@@ -566,7 +482,6 @@ jobs:
           TOML
 
       - name: Run OpenCode headless deposit (expect refusal)
-        if: steps.secrets_check.outputs.skip != 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
@@ -614,7 +529,6 @@ jobs:
           echo "transcript lines: $(wc -l < transcript.ndjson)"
 
       - name: Assert refusal transcript
-        if: steps.secrets_check.outputs.skip != 'true'
         run: |
           python3 .github/scripts/assert_headless_deposit_transcript.py \
             transcript.ndjson \
@@ -622,7 +536,7 @@ jobs:
             --expect-refusal "${{ matrix.expected_reason }}"
 
       - name: Upload artifacts on failure
-        if: failure() && steps.secrets_check.outputs.skip != 'true'
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: "headless-refusal-${{ matrix.failure_case }}-artifacts"
@@ -632,11 +546,10 @@ jobs:
             final-report.json
 
       - name: Tear down anvil
-        if: always() && steps.secrets_check.outputs.skip != 'true' && env.ANVIL_PID != ''
+        if: always() && env.ANVIL_PID != ''
         run: kill "$ANVIL_PID" 2>/dev/null || true
 
       - name: Summary
-        if: steps.secrets_check.outputs.skip != 'true'
         run: |
           echo "### opencode-headless-deposit (${{ matrix.failure_case }}) — PASSED" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"

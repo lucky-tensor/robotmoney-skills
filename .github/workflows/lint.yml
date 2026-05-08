@@ -1,0 +1,84 @@
+name: lint
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  rust:
+    name: "${{ matrix.crate }} — fmt + clippy"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - crate: rmpc
+            path: clients/rust-payment-client
+          - crate: explorer-api
+            path: clients/explorer-api
+          - crate: explorer-indexer
+            path: services/explorer-indexer
+          - crate: fork-e2e-rust
+            path: testing/fork-e2e-rust
+          - crate: opencode-walkthrough
+            path: testing/opencode-walkthrough
+          - crate: e2e-rust
+            path: testing/ethereum-testnet/e2e-rust
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ${{ matrix.path }}/target
+          key: ${{ runner.os }}-lint-${{ matrix.crate }}-${{ hashFiles(format('{0}/Cargo.toml', matrix.path)) }}
+          restore-keys: ${{ runner.os }}-lint-${{ matrix.crate }}-
+
+      - name: fmt
+        working-directory: ${{ matrix.path }}
+        run: cargo fmt --check
+
+      - name: clippy
+        working-directory: ${{ matrix.path }}
+        run: cargo clippy --all-targets -- -D warnings
+
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: shellcheck all .sh files
+        run: |
+          FILES=$(find . -name "*.sh" \
+            -not -path "*/target/*" \
+            -not -path "*/node_modules/*" \
+            | sort)
+          echo "Checking:"
+          echo "$FILES"
+          echo "$FILES" | xargs shellcheck -x
+
+  python-syntax:
+    name: Python syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: py_compile all .github/scripts/*.py
+        run: |
+          find .github/scripts -name "*.py" -print0 \
+            | xargs -0 python3 -m py_compile
+          echo "All .github/scripts Python files OK"
