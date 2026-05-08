@@ -161,7 +161,7 @@ DEPLOYER_PK="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 forge script contracts/script/Deploy.s.sol:Deploy \
   --rpc-url "$ANVIL_RPC" \
   --private-key "$DEPLOYER_PK" \
-  --broadcast --slow
+  --broadcast
 
 if [ ! -s "$DEPLOYMENT_OUT_TMP" ]; then
   echo "ERROR: forge script did not write deployment artifact" >&2
