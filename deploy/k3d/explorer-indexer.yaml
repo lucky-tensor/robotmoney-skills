@@ -51,7 +51,10 @@ spec:
             - sh
             - -c
             - |
-              set -euo pipefail
+              # The runtime image is debian:bookworm-slim, whose /bin/sh
+              # is dash — `set -o pipefail` is bash-only. Use `set -eu`;
+              # the script below has no pipes whose status we depend on.
+              set -eu
               DEPLOY_FILE=/deployments/full-stack.json
               if [ ! -f "$DEPLOY_FILE" ]; then
                 echo "[indexer] deployment artifact missing at $DEPLOY_FILE" >&2
