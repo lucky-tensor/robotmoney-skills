@@ -19,6 +19,13 @@ on:
   schedule:
     - cron: "0 3 * * *"  # nightly at 03:00 UTC
   workflow_dispatch:
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - "clients/rust-payment-client/**"
+      - "plugins/robotmoney-cli/**"
+      - ".github/workflows/opencode-headless-read.yml"
+      - ".github/scripts/assert_headless_read_transcript.py"
 
 # Pinned fork block — must match fork-e2e.yml and opencode-walkthrough.yml.
 # Refresh monthly alongside those workflows.

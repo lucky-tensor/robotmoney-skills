@@ -28,6 +28,14 @@ on:
   schedule:
     - cron: "0 4 * * *"  # nightly at 04:00 UTC
   workflow_dispatch:
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - "clients/rust-payment-client/**"
+      - "contracts/**"
+      - "plugins/robotmoney-cli/**"
+      - ".github/workflows/opencode-headless-deposit.yml"
+      - ".github/scripts/assert_headless_deposit_transcript.py"
 
 # Pinned fork block — must match fork-e2e.yml and opencode-walkthrough.yml.
 # Refresh monthly alongside those workflows.
