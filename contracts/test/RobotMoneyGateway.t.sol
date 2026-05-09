@@ -80,12 +80,7 @@ contract ReentrantVault is MockVault {
         gateway = gw;
     }
 
-    function armAttack(
-        bytes32 orderId,
-        uint256 amount,
-        uint64 deadline,
-        bytes32 idemKey
-    ) external {
+    function armAttack(bytes32 orderId, uint256 amount, uint64 deadline, bytes32 idemKey) external {
         reentrantOrderId = orderId;
         reentrantAmount = amount;
         reentrantDeadline = deadline;
@@ -700,6 +695,8 @@ contract RobotMoneyGatewayTest is Test {
         // ReentrancyGuardReentrantCall must be thrown.
         vm.prank(agent);
         vm.expectRevert(bytes4(keccak256("ReentrancyGuardReentrantCall()")));
-        gw.deposit(bytes32("outer-order"), amount, uint64(block.timestamp + 60), bytes32("outer-idem"));
+        gw.deposit(
+            bytes32("outer-order"), amount, uint64(block.timestamp + 60), bytes32("outer-idem")
+        );
     }
 }
