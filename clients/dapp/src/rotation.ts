@@ -26,7 +26,7 @@ import {
   composeRegisterPreview,
   validateEthereumAddress,
   RegisterPreview,
-} from "./credentialWorkflow.js";
+} from "./credentialWorkflow";
 
 /**
  * Preview of a single `revokeAgent` call.
