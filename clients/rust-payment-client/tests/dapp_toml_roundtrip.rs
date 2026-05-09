@@ -16,7 +16,7 @@ mod common;
 
 use crate::common::{
     enc_bool, install_happy_path_mocks, jrpc_result, match_eth_call_selector, selector_hex_of,
-    GATEWAY_CODE, GATEWAY, USDC, VAULT, SHARE_RECEIVER, SIGNER_ADDRESS, TEST_PASSPHRASE,
+    GATEWAY, GATEWAY_CODE, SHARE_RECEIVER, SIGNER_ADDRESS, TEST_PASSPHRASE, USDC, VAULT,
 };
 use alloy_primitives::{hex as ahex, keccak256};
 use assert_cmd::Command;
@@ -56,7 +56,10 @@ fn patch_fixture_for_test(
     let table = cfg.as_table_mut().expect("top-level is a table");
 
     // Override runtime-specific fields.
-    table.insert("rpc_url".to_string(), toml::Value::String(rpc_url.to_string()));
+    table.insert(
+        "rpc_url".to_string(),
+        toml::Value::String(rpc_url.to_string()),
+    );
     table.insert(
         "gateway_runtime_hash".to_string(),
         toml::Value::String(gateway_runtime_hash.to_string()),
@@ -126,14 +129,14 @@ fn fixture_has_non_zero_gateway_runtime_hash() {
         .get("gateway_runtime_hash")
         .and_then(|v| v.as_str())
         .expect("gateway_runtime_hash field present");
-    assert!(
-        !hash.is_empty(),
-        "gateway_runtime_hash must not be empty"
-    );
+    assert!(!hash.is_empty(), "gateway_runtime_hash must not be empty");
     let zero = format!("0x{}", "0".repeat(64));
     assert_ne!(hash, zero, "gateway_runtime_hash must not be the zero hash");
     let zero_bytes = format!("0x{}", "00".repeat(32));
-    assert_ne!(hash, zero_bytes, "gateway_runtime_hash must not be all-zero bytes");
+    assert_ne!(
+        hash, zero_bytes,
+        "gateway_runtime_hash must not be all-zero bytes"
+    );
 }
 
 /// The exported config must contain a usdc_address field.
@@ -167,12 +170,8 @@ async fn dapp_toml_drives_rmpc_self_check_to_success() {
         .expect("create keystore for self-check");
 
     let runtime_hash = format!("0x{}", ahex::encode(keccak256(GATEWAY_CODE)));
-    let patched = patch_fixture_for_test(
-        &fixture_toml,
-        &server.url(),
-        &keystore_path,
-        &runtime_hash,
-    );
+    let patched =
+        patch_fixture_for_test(&fixture_toml, &server.url(), &keystore_path, &runtime_hash);
 
     let config_path = tmp.path().join("rmpc.toml");
     std::fs::write(&config_path, &patched).expect("write patched config");
