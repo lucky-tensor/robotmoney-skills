@@ -1,3 +1,6 @@
+# DEPRECATED — this workflow is superseded by the rebuilt CI suite.
+# Do not modify; it will be removed when replacement workflows are in place.
+#
 # Phase 4 — OpenCode walkthrough automated checks (issue #53).
 #
 # Canonical: docs/walkthroughs/opencode-readonly-fork.md

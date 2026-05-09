@@ -1,3 +1,6 @@
+# DEPRECATED — this workflow is superseded by the rebuilt CI suite.
+# Do not modify; it will be removed when replacement workflows are in place.
+#
 # Phase 4 — Headless OpenCode deposit test (issues #137 and #138).
 #
 # Canonical: docs/technical/demo-runbook.md §3.2 (verbatim task prompt)

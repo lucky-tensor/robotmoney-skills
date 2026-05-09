@@ -1,3 +1,6 @@
+# DEPRECATED — this workflow is superseded by the rebuilt CI suite.
+# Do not modify; it will be removed when replacement workflows are in place.
+#
 name: dapp
 
 on:
