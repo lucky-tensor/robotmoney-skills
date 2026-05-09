@@ -24,6 +24,10 @@ contract MorphoAdapter is IStrategyAdapter {
 
     /// @notice Caller is not the configured `VAULT` address.
     error OnlyVault();
+    /// @notice `MORPHO_VAULT.withdraw` delivered fewer USDC to VAULT than requested.
+    /// @param requested Amount of USDC requested for withdrawal.
+    /// @param actual    Amount of USDC actually received by VAULT.
+    error WithdrawShortfall(uint256 requested, uint256 actual);
     /// @notice `rescueToken` refused — the token is USDC or the Morpho vault share (protected vault assets).
     error CannotRescueProtectedToken();
     /// @notice Constructor passed `address(0)` for one of the immutable addresses.
@@ -55,8 +59,14 @@ contract MorphoAdapter is IStrategyAdapter {
 
     /// @inheritdoc IStrategyAdapter
     function withdraw(uint256 amount) external onlyVault returns (uint256) {
+        uint256 preBalance = USDC.balanceOf(VAULT);
         MORPHO_VAULT.withdraw(amount, VAULT, address(this));
-        return amount;
+        uint256 postBalance = USDC.balanceOf(VAULT);
+        uint256 actual = postBalance - preBalance;
+        if (amount != type(uint256).max && actual < amount) {
+            revert WithdrawShortfall(amount, actual);
+        }
+        return actual;
     }
 
     /// @inheritdoc IStrategyAdapter
