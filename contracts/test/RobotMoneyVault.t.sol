@@ -467,12 +467,7 @@ contract RobotMoneyVaultTest is Test {
 
         // Use a cap-capped adapter: capBps = 5000 (50%)
         VaultHarness capVault = new VaultHarness(
-            IERC20(address(usdc)),
-            TVL_CAP,
-            PER_DEPOSIT_CAP,
-            0,
-            feeRecipient,
-            admin
+            IERC20(address(usdc)), TVL_CAP, PER_DEPOSIT_CAP, 0, feeRecipient, admin
         );
         MockAdapter capAdapter = new MockAdapter(address(usdc), address(capVault));
         vm.prank(admin);
@@ -498,10 +493,6 @@ contract RobotMoneyVaultTest is Test {
         );
 
         // totalAssets includes the idle portion.
-        assertEq(
-            capVault.totalAssets(),
-            100_000 * ONE_USDC,
-            "totalAssets must include idle USDC"
-        );
+        assertEq(capVault.totalAssets(), 100_000 * ONE_USDC, "totalAssets must include idle USDC");
     }
 }
