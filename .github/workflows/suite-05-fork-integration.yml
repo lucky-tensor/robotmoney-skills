@@ -91,7 +91,9 @@ jobs:
 
       - name: PR smoke subset
         working-directory: testing/fork-e2e-rust
-        run: cargo test --release abi_address_sanity vault_deposit_redeem_smoke -- --nocapture
+        run: |
+          cargo test --release -- abi_address_sanity --nocapture
+          cargo test --release -- vault_deposit_redeem_smoke --nocapture
 
   full-suite:
     name: fork-full-suite

@@ -11,7 +11,7 @@
 //!   cargo test -p smoke-test --release -- --test-threads=1 --nocapture
 
 use alloy_primitives::Address;
-use smoke_test::{Fixture, prerequisites_available};
+use smoke_test::{prerequisites_available, Fixture};
 
 fn skip_if_no_prereqs(name: &str) -> bool {
     if !prerequisites_available() {
@@ -35,22 +35,25 @@ fn fixture() -> &'static Fixture {
 /// RPC responds and reports the expected chain id.
 #[test]
 fn rpc_is_reachable() {
-    if skip_if_no_prereqs("rpc_is_reachable") { return; }
+    if skip_if_no_prereqs("rpc_is_reachable") {
+        return;
+    }
     let fx = fixture();
     let chain_id = rpc_call::<String>(fx.rpc_url(), "eth_chainId", serde_json::json!([]));
-    let got = u64::from_str_radix(chain_id.trim_start_matches("0x"), 16)
-        .expect("eth_chainId is hex");
+    let got =
+        u64::from_str_radix(chain_id.trim_start_matches("0x"), 16).expect("eth_chainId is hex");
     assert_eq!(got, fx.chain_id(), "chain_id mismatch");
 }
 
 /// Blocks are being produced — network is past genesis.
 #[test]
 fn blocks_are_being_produced() {
-    if skip_if_no_prereqs("blocks_are_being_produced") { return; }
+    if skip_if_no_prereqs("blocks_are_being_produced") {
+        return;
+    }
     let fx = fixture();
     let hex = rpc_call::<String>(fx.rpc_url(), "eth_blockNumber", serde_json::json!([]));
-    let n = u64::from_str_radix(hex.trim_start_matches("0x"), 16)
-        .expect("eth_blockNumber is hex");
+    let n = u64::from_str_radix(hex.trim_start_matches("0x"), 16).expect("eth_blockNumber is hex");
     assert!(n >= 1, "expected block_number >= 1, got {n}");
 }
 
@@ -59,27 +62,31 @@ fn blocks_are_being_produced() {
 /// All deployed addresses are non-zero.
 #[test]
 fn deployed_addresses_are_non_zero() {
-    if skip_if_no_prereqs("deployed_addresses_are_non_zero") { return; }
+    if skip_if_no_prereqs("deployed_addresses_are_non_zero") {
+        return;
+    }
     let fx = fixture();
     assert_ne!(fx.gateway(), Address::ZERO, "gateway is zero");
-    assert_ne!(fx.usdc(),    Address::ZERO, "usdc is zero");
-    assert_ne!(fx.vault(),   Address::ZERO, "vault is zero");
-    assert_ne!(fx.agent(),   Address::ZERO, "agent is zero");
+    assert_ne!(fx.usdc(), Address::ZERO, "usdc is zero");
+    assert_ne!(fx.vault(), Address::ZERO, "vault is zero");
+    assert_ne!(fx.agent(), Address::ZERO, "agent is zero");
 }
 
 /// Gateway, USDC, and vault contracts have bytecode deployed.
 #[test]
 fn contracts_have_code() {
-    if skip_if_no_prereqs("contracts_have_code") { return; }
+    if skip_if_no_prereqs("contracts_have_code") {
+        return;
+    }
     let fx = fixture();
     for (name, addr) in [
         ("gateway", fx.gateway()),
-        ("usdc",    fx.usdc()),
-        ("vault",   fx.vault()),
+        ("usdc", fx.usdc()),
+        ("vault", fx.vault()),
     ] {
         let code = get_code(fx.rpc_url(), addr);
         assert!(
-            code.len() > 2,  // "0x" alone means no code
+            code.len() > 2, // "0x" alone means no code
             "{name} at {addr:#x} has no bytecode (got {code:?})"
         );
     }
@@ -90,10 +97,12 @@ fn contracts_have_code() {
 /// Agent and deployer EOAs have non-zero ETH balances.
 #[test]
 fn eoas_are_funded() {
-    if skip_if_no_prereqs("eoas_are_funded") { return; }
+    if skip_if_no_prereqs("eoas_are_funded") {
+        return;
+    }
     let fx = fixture();
     for (name, addr_hex) in [
-        ("agent",    format!("{:#x}", fx.agent())),
+        ("agent", format!("{:#x}", fx.agent())),
         ("deployer", smoke_test::DEPLOYER_ADDRESS_HEX.to_string()),
     ] {
         let hex = rpc_call::<String>(
@@ -101,8 +110,8 @@ fn eoas_are_funded() {
             "eth_getBalance",
             serde_json::json!([addr_hex, "latest"]),
         );
-        let wei = u128::from_str_radix(hex.trim_start_matches("0x"), 16)
-            .expect("eth_getBalance is hex");
+        let wei =
+            u128::from_str_radix(hex.trim_start_matches("0x"), 16).expect("eth_getBalance is hex");
         assert!(wei > 0, "{name} has zero ETH balance");
     }
 }
@@ -112,23 +121,34 @@ fn eoas_are_funded() {
 /// pause → unpause round-trips correctly.
 #[test]
 fn pause_unpause_round_trips() {
-    if skip_if_no_prereqs("pause_unpause_round_trips") { return; }
+    if skip_if_no_prereqs("pause_unpause_round_trips") {
+        return;
+    }
     let fx = fixture();
     fx.pause_gateway().expect("pause()");
-    assert!(gateway_is_paused(fx), "gateway should be paused after pause()");
+    assert!(
+        gateway_is_paused(fx),
+        "gateway should be paused after pause()"
+    );
     fx.unpause_gateway().expect("unpause()");
-    assert!(!gateway_is_paused(fx), "gateway should not be paused after unpause()");
+    assert!(
+        !gateway_is_paused(fx),
+        "gateway should not be paused after unpause()"
+    );
 }
 
 /// revoke → reauthorize round-trips correctly.
 #[test]
 fn revoke_reauthorize_round_trips() {
-    if skip_if_no_prereqs("revoke_reauthorize_round_trips") { return; }
+    if skip_if_no_prereqs("revoke_reauthorize_round_trips") {
+        return;
+    }
     let fx = fixture();
     let one_usdc = 1_000_000u128;
     let cap = 10_000 * one_usdc;
     fx.revoke_agent().expect("revokeAgent()");
-    fx.reauthorize_agent(cap, 100_000 * one_usdc).expect("reauthorize_agent()");
+    fx.reauthorize_agent(cap, 100_000 * one_usdc)
+        .expect("reauthorize_agent()");
     // Sanity: agent address still matches after the role re-grant.
     assert_ne!(fx.agent(), Address::ZERO);
 }
@@ -136,9 +156,12 @@ fn revoke_reauthorize_round_trips() {
 /// approve_usdc_from_agent sends a tx that succeeds on-chain.
 #[test]
 fn approve_usdc_succeeds() {
-    if skip_if_no_prereqs("approve_usdc_succeeds") { return; }
+    if skip_if_no_prereqs("approve_usdc_succeeds") {
+        return;
+    }
     let fx = fixture();
-    let tx_hash = fx.approve_usdc_from_agent(100 * 1_000_000)
+    let tx_hash = fx
+        .approve_usdc_from_agent(100 * 1_000_000)
         .expect("approve_usdc_from_agent");
     assert!(
         tx_hash.starts_with("0x") && tx_hash.len() == 66,
@@ -183,13 +206,19 @@ fn rpc_call<T: for<'de> serde::Deserialize<'de>>(
         .json()
         .expect("RPC response is not JSON");
     serde_json::from_value(
-        resp.get("result").expect("no result field in RPC response").clone(),
+        resp.get("result")
+            .expect("no result field in RPC response")
+            .clone(),
     )
     .expect("RPC result decode failed")
 }
 
 fn get_code(url: &str, addr: Address) -> String {
-    rpc_call(url, "eth_getCode", serde_json::json!([format!("{addr:#x}"), "latest"]))
+    rpc_call(
+        url,
+        "eth_getCode",
+        serde_json::json!([format!("{addr:#x}"), "latest"]),
+    )
 }
 
 fn gateway_is_paused(fx: &Fixture) -> bool {

@@ -143,10 +143,7 @@ contract RobotMoneyGateway is AccessRoles, IGateway {
     // -------------------------------------------------------------------
 
     /// @inheritdoc IGateway
-    function authorizeAgent(address agent, AgentPolicy calldata p)
-        external
-        onlyRole(ADMIN_ROLE)
-    {
+    function authorizeAgent(address agent, AgentPolicy calldata p) external onlyRole(ADMIN_ROLE) {
         if (agent == address(0)) revert ZeroAddress();
         if (p.shareReceiver == address(0)) revert InvalidShareReceiver();
         if (!p.active) revert InvalidValidUntil();
@@ -164,9 +161,7 @@ contract RobotMoneyGateway is AccessRoles, IGateway {
         }
         _assertRoleSeparation(agent);
 
-        emit AgentAuthorized(
-            agent, p.validUntil, p.maxPerPayment, p.maxPerWindow, p.shareReceiver
-        );
+        emit AgentAuthorized(agent, p.validUntil, p.maxPerPayment, p.maxPerWindow, p.shareReceiver);
     }
 
     /// @inheritdoc IGateway
@@ -199,12 +194,11 @@ contract RobotMoneyGateway is AccessRoles, IGateway {
 
     /// @inheritdoc IGateway
     /// @dev Implements §2.2 steps 1–12 verbatim.
-    function deposit(
-        bytes32 orderId,
-        uint256 amount,
-        uint64 deadline,
-        bytes32 idempotencyKey
-    ) external onlyRole(AGENT_ROLE) returns (bytes32 paymentId, uint256 sharesMinted) {
+    function deposit(bytes32 orderId, uint256 amount, uint64 deadline, bytes32 idempotencyKey)
+        external
+        onlyRole(AGENT_ROLE)
+        returns (bytes32 paymentId, uint256 sharesMinted)
+    {
         if (_paused) revert PausedError();
 
         AgentPolicy memory p = agents[msg.sender];
@@ -238,9 +232,7 @@ contract RobotMoneyGateway is AccessRoles, IGateway {
 
         // 6. paymentId — DEADLINE INTENTIONALLY EXCLUDED.
         paymentId = keccak256(
-            abi.encode(
-                block.chainid, address(this), msg.sender, orderId, amount, idempotencyKey
-            )
+            abi.encode(block.chainid, address(this), msg.sender, orderId, amount, idempotencyKey)
         );
         if (usedPaymentIds[paymentId]) revert PaymentIdAlreadyUsed();
 

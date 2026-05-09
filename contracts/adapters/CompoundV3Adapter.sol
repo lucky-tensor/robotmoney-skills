@@ -18,8 +18,8 @@ import {IComet} from "../interfaces/IComet.sol";
 contract CompoundV3Adapter is IStrategyAdapter {
     using SafeERC20 for IERC20;
 
-    IERC20  public immutable USDC;
-    IComet  public immutable COMET;
+    IERC20 public immutable USDC;
+    IComet public immutable COMET;
     address public immutable VAULT;
 
     /// @notice Caller is not the configured `VAULT` address.
@@ -37,9 +37,11 @@ contract CompoundV3Adapter is IStrategyAdapter {
     }
 
     constructor(address comet_, address usdc_, address vault_) {
-        if (comet_ == address(0) || usdc_ == address(0) || vault_ == address(0)) revert ZeroAddress();
+        if (comet_ == address(0) || usdc_ == address(0) || vault_ == address(0)) {
+            revert ZeroAddress();
+        }
         COMET = IComet(comet_);
-        USDC  = IERC20(usdc_);
+        USDC = IERC20(usdc_);
         VAULT = vault_;
     }
 
@@ -53,10 +55,10 @@ contract CompoundV3Adapter is IStrategyAdapter {
     }
 
     function withdraw(uint256 amount) external onlyVault returns (uint256) {
-        uint256 preBalance  = USDC.balanceOf(address(this));
+        uint256 preBalance = USDC.balanceOf(address(this));
         COMET.withdraw(address(USDC), amount);
         uint256 postBalance = USDC.balanceOf(address(this));
-        uint256 actual      = postBalance - preBalance;
+        uint256 actual = postBalance - preBalance;
 
         if (actual > 0) {
             USDC.safeTransfer(VAULT, actual);

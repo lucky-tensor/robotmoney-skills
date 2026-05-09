@@ -17,12 +17,12 @@ use std::sync::Mutex;
 use alloy_primitives::Address;
 use once_cell::sync::Lazy;
 
-pub use smoke_test::{
-    agent_address, prerequisites_available, HarnessError, AGENT_PRIVATE_KEY,
-    DEPLOYER_ADDRESS_HEX, DEPLOYER_PRIVATE_KEY_HEX, PAUSER_ADDRESS_HEX,
-    PAUSER_PRIVATE_KEY_HEX, SHARE_RECEIVER_ADDRESS_HEX,
-};
 pub use rust_payment_client::signer::software::PASSPHRASE_ENV_VAR;
+pub use smoke_test::{
+    agent_address, prerequisites_available, HarnessError, AGENT_PRIVATE_KEY, DEPLOYER_ADDRESS_HEX,
+    DEPLOYER_PRIVATE_KEY_HEX, PAUSER_ADDRESS_HEX, PAUSER_PRIVATE_KEY_HEX,
+    SHARE_RECEIVER_ADDRESS_HEX,
+};
 
 const TEST_PASSPHRASE: &str = "rmpc-e2e-passphrase";
 
@@ -105,8 +105,7 @@ impl Fixture {
         // Build rmpc first so we fail fast before the 60-90s devnet boot.
         let rmpc_bin = ensure_rmpc_built()?;
         let devnet = smoke_test::Fixture::with_deploy_env(extra_deploy_env)?;
-        let (keystore_path, config_path, state_dir) =
-            write_keystore_and_config(&devnet)?;
+        let (keystore_path, config_path, state_dir) = write_keystore_and_config(&devnet)?;
         Ok(Fixture {
             devnet,
             rmpc_bin,
@@ -118,22 +117,46 @@ impl Fixture {
 
     // ---- forwarded chain-level accessors ----------------------------
 
-    pub fn rpc_url(&self) -> &str { self.devnet.rpc_url() }
-    pub fn chain_id(&self) -> u64 { self.devnet.chain_id() }
-    pub fn gateway(&self) -> Address { self.devnet.gateway() }
-    pub fn usdc(&self) -> Address { self.devnet.usdc() }
-    pub fn vault(&self) -> Address { self.devnet.vault() }
-    pub fn agent(&self) -> Address { self.devnet.agent() }
-    pub fn share_receiver(&self) -> Address { self.devnet.share_receiver() }
-    pub fn gateway_runtime_hash(&self) -> &str { self.devnet.gateway_runtime_hash() }
-    pub fn tempdir(&self) -> &Path { self.devnet.tempdir() }
-    pub fn repo_root(&self) -> &Path { self.devnet.repo_root() }
+    pub fn rpc_url(&self) -> &str {
+        self.devnet.rpc_url()
+    }
+    pub fn chain_id(&self) -> u64 {
+        self.devnet.chain_id()
+    }
+    pub fn gateway(&self) -> Address {
+        self.devnet.gateway()
+    }
+    pub fn usdc(&self) -> Address {
+        self.devnet.usdc()
+    }
+    pub fn vault(&self) -> Address {
+        self.devnet.vault()
+    }
+    pub fn agent(&self) -> Address {
+        self.devnet.agent()
+    }
+    pub fn share_receiver(&self) -> Address {
+        self.devnet.share_receiver()
+    }
+    pub fn gateway_runtime_hash(&self) -> &str {
+        self.devnet.gateway_runtime_hash()
+    }
+    pub fn tempdir(&self) -> &Path {
+        self.devnet.tempdir()
+    }
+    pub fn repo_root(&self) -> &Path {
+        self.devnet.repo_root()
+    }
 
     // ---- forwarded on-chain poke helpers ----------------------------
 
-    pub fn cast_send(&self, pk: &str, to: Address, sig: &str, args: &[&str])
-        -> Result<String, HarnessError>
-    {
+    pub fn cast_send(
+        &self,
+        pk: &str,
+        to: Address,
+        sig: &str,
+        args: &[&str],
+    ) -> Result<String, HarnessError> {
         self.devnet.cast_send(pk, to, sig, args)
     }
 
@@ -153,10 +176,13 @@ impl Fixture {
         self.devnet.revoke_agent()
     }
 
-    pub fn reauthorize_agent(&self, max_per_payment: u128, max_per_window: u128)
-        -> Result<String, HarnessError>
-    {
-        self.devnet.reauthorize_agent(max_per_payment, max_per_window)
+    pub fn reauthorize_agent(
+        &self,
+        max_per_payment: u128,
+        max_per_window: u128,
+    ) -> Result<String, HarnessError> {
+        self.devnet
+            .reauthorize_agent(max_per_payment, max_per_window)
     }
 
     pub fn fund_usdc(&self, recipient: Address, amount: u128) -> Result<String, HarnessError> {
@@ -165,11 +191,21 @@ impl Fixture {
 
     // ---- rmpc accessors ---------------------------------------------
 
-    pub fn config_path(&self) -> &Path { &self.config_path }
-    pub fn keystore_path(&self) -> &Path { &self.keystore_path }
-    pub fn state_dir(&self) -> &Path { &self.state_dir }
-    pub fn rmpc_binary(&self) -> &Path { &self.rmpc_bin }
-    pub fn passphrase(&self) -> &str { TEST_PASSPHRASE }
+    pub fn config_path(&self) -> &Path {
+        &self.config_path
+    }
+    pub fn keystore_path(&self) -> &Path {
+        &self.keystore_path
+    }
+    pub fn state_dir(&self) -> &Path {
+        &self.state_dir
+    }
+    pub fn rmpc_binary(&self) -> &Path {
+        &self.rmpc_bin
+    }
+    pub fn passphrase(&self) -> &str {
+        TEST_PASSPHRASE
+    }
 
     // ---- rmpc subprocess helpers ------------------------------------
 
@@ -181,7 +217,8 @@ impl Fixture {
     }
 
     pub fn run_rmpc_self_check(&self) -> Result<RmpcRun, HarnessError> {
-        let out = self.rmpc_command()
+        let out = self
+            .rmpc_command()
             .args(["self-check", "--config"])
             .arg(&self.config_path)
             .output()?;
@@ -189,7 +226,8 @@ impl Fixture {
     }
 
     pub fn run_rmpc_status(&self, payment_id: &str) -> Result<RmpcRun, HarnessError> {
-        let out = self.rmpc_command()
+        let out = self
+            .rmpc_command()
             .args(["status", "--config"])
             .arg(&self.config_path)
             .args(["--payment-id", payment_id])
@@ -204,7 +242,9 @@ impl Fixture {
     {
         let mut cmd = self.rmpc_command();
         cmd.args(["deposit", "--config"]).arg(&self.config_path);
-        for a in extra { cmd.arg(a); }
+        for a in extra {
+            cmd.arg(a);
+        }
         Ok(cmd.output()?.into())
     }
 
@@ -218,8 +258,12 @@ impl Fixture {
         S: AsRef<std::ffi::OsStr>,
     {
         let mut cmd = self.rmpc_command();
-        for (k, v) in extra_env { cmd.env(k, v); }
-        for a in args { cmd.arg(a); }
+        for (k, v) in extra_env {
+            cmd.env(k, v);
+        }
+        for a in args {
+            cmd.arg(a);
+        }
         Ok(cmd.output()?.into())
     }
 }
