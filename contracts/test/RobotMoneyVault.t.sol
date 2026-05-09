@@ -266,7 +266,9 @@ contract RobotMoneyVaultTest is Test {
         uint256 victimShares = vault.deposit(victimDeposit, bob);
 
         // Victim must receive non-zero shares.
-        assertGt(victimShares, 0, "victim must receive non-zero shares (offset protects against zero)");
+        assertGt(
+            victimShares, 0, "victim must receive non-zero shares (offset protects against zero)"
+        );
 
         // Victim shares must be economically fair: victim should receive shares worth
         // at least 99% of their deposit value (attacker gains < 1% of victim's capital).
