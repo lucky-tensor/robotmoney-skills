@@ -98,7 +98,7 @@ rmpc status --config <CONFIG> --payment-id <0x...> [--pretty]
 Looks up a previously submitted payment by its on-chain `paymentId`. Output
 follows the Phase 3 shared envelope (`chain_id`, `block_number`,
 `source: "json_rpc"`, `partial`, `errors`, `data`) — the same envelope used by
-`get-deposit` and every other `rmpc get-*` command. No explorer API is involved.
+`get-deposit` and all other read commands. No explorer API is involved.
 
 On success, `data` contains:
 

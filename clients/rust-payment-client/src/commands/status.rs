@@ -31,7 +31,7 @@ use serde_json::json;
 
 use crate::config::Config;
 use crate::gateway::RobotMoneyGateway;
-use crate::read_output::{DecimalU256, Envelope, PartialBuilder};
+use crate::read_output::{DecimalU256, PartialBuilder};
 use crate::rpc::{RawLog, RpcClient};
 
 const EXIT_OK: i32 = 0;
@@ -204,6 +204,7 @@ fn emit<T: Serialize>(out: &T, pretty: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::read_output::Envelope;
     use alloy_primitives::U256;
 
     #[test]
@@ -271,8 +272,7 @@ mod tests {
             block_number: 42,
             tx_hash: "0x05".into(),
         };
-        let env: Envelope<StatusFound> =
-            PartialBuilder::new(8453, 12_000_000, found).finish();
+        let env: Envelope<StatusFound> = PartialBuilder::new(8453, 12_000_000, found).finish();
         let v = serde_json::to_value(&env).unwrap();
         // All Phase 3 envelope top-level fields must be present.
         assert_eq!(v["chain_id"], 8453u64);
@@ -291,8 +291,7 @@ mod tests {
             payment_id: "0xdeadbeef".into(),
             status: "not_found",
         };
-        let env: Envelope<StatusNotFound> =
-            PartialBuilder::new(8453, 99_999, not_found).finish();
+        let env: Envelope<StatusNotFound> = PartialBuilder::new(8453, 99_999, not_found).finish();
         let v = serde_json::to_value(&env).unwrap();
         assert_eq!(v["chain_id"], 8453u64);
         assert_eq!(v["block_number"], 99_999u64);

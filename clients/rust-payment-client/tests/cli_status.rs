@@ -13,7 +13,9 @@
 
 mod common;
 
-use crate::common::{jrpc_result, jrpc_result_raw, Fixture, GATEWAY, SHARE_RECEIVER, SIGNER_ADDRESS};
+use crate::common::{
+    jrpc_result, jrpc_result_raw, Fixture, GATEWAY, SHARE_RECEIVER, SIGNER_ADDRESS,
+};
 use alloy_primitives::{address, b256, hex as ahex, Address, Bytes, LogData, B256, U256};
 use alloy_sol_types::SolEvent;
 use assert_cmd::Command;
@@ -158,7 +160,10 @@ async fn status_found_emits_envelope_with_decoded_payment_record() {
     assert_eq!(data["shares_minted"], "987654");
     assert_eq!(data["block_number"], 16u64); // 0x10
     assert_eq!(data["tx_hash"], format!("{TX_HASH:#x}"));
-    assert!(data.get("status").is_none(), "found record must not have a 'status' field");
+    assert!(
+        data.get("status").is_none(),
+        "found record must not have a 'status' field"
+    );
 }
 
 #[tokio::test]
@@ -197,7 +202,10 @@ async fn status_not_found_emits_envelope_with_not_found_data() {
     let data = &v["data"];
     assert_eq!(data["payment_id"], pid_hex);
     assert_eq!(data["status"], "not_found");
-    assert!(data.get("amount").is_none(), "not-found must not have 'amount'");
+    assert!(
+        data.get("amount").is_none(),
+        "not-found must not have 'amount'"
+    );
 }
 
 #[tokio::test]
