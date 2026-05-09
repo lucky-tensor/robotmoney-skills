@@ -630,7 +630,7 @@ export function AdminFlow(props: AdminFlowProps) {
           gateway={props.gatewayAddress}
           vault={props.vaultAddress}
           usdcAddress={usdcAddress}
-          gatewayRuntimeHash={props.gatewayRuntimeHash}
+          gatewayRuntimeHash={props.gatewayVerificationState.status === "verified" ? props.gatewayVerificationState.computedHash : ""}
           chainId={chainId}
           rpcUrl={props.flagEnv.VITE_FORK_RPC_URL ?? "http://127.0.0.1:8545"}
           agent={agent as Address}
