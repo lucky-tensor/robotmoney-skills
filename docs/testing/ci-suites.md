@@ -356,6 +356,32 @@ Split into two files because the structural/offline checks are cheap, keyless, a
 
 ---
 
+### 14. smoke-test library
+**Suggested file:** `.github/workflows/smoke-test.yml`
+**Environment:** `devnet` (Geth + Lighthouse)
+**Trigger paths:** `testing/smoke-test/**`, `testing/ethereum-testnet/**`, `contracts/**`
+
+Validates the `smoke-test` crate — the canonical devnet fixture library — in
+isolation, independent of any client (rmpc, dapp, explorer).
+
+**Steps:**
+1. Checkout repository
+2. Verify Docker is available
+3. Install Rust toolchain + clippy
+4. Install Foundry toolchain
+5. Cargo cache
+6. `cargo fmt --check -p smoke-test`
+7. `cargo clippy -p smoke-test --all-targets -- -D warnings`
+8. `cargo build -p smoke-test` — includes the `smoke-test` CLI binary
+9. `cargo test -p smoke-test --release -- --test-threads=1` — boots devnet, deploys contracts, asserts healthy RPC + block production, then tears down; verifies `Drop` runs compose-down cleanly
+10. `docker compose down -v --remove-orphans || true` — safety net teardown (always)
+
+> **Note:** Step 9 exercises `Fixture::new()` end-to-end — the same code
+> path that all devnet-backed suites (7, 8, 10, 11, 12) depend on. A
+> failure here blocks those suites before they pay their own boot costs.
+
+---
+
 ### 13. Cross-cutting doc checks
 **Suggested file:** `.github/workflows/doc-checks.yml`
 **Environment:** `none`
@@ -398,3 +424,4 @@ Split into two files because the structural/offline checks are cheap, keyless, a
 | 11 | `opencode-smoke.yml` + `opencode-headless.yml` | smoke: `plugin-validate` \| `walkthrough-offline` → `walkthrough-fork`; headless: `refusal` → `deposit` \| `read` | `none` / `devnet` |
 | 12 | `openclaw.yml` | `safety` → `walkthrough` | `devnet` |
 | 13 | `doc-checks.yml` | `doc-validators` \| `schema-validators` | `none` |
+| 14 | `smoke-test.yml` | planned | `devnet` |
