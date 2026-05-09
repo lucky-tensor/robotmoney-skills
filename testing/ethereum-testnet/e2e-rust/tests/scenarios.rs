@@ -20,7 +20,8 @@
 //! 3. `deposit_happy_path` — full deposit pipeline, asserts on JSON +
 //!    on-chain side effects via `rmpc status`.
 //! 4. `idempotent_replay_rejected` — replaying `(orderId,
-//!    idempotencyKey)` reverts on chain, surfaced as `ErrTxReverted`.
+//!    idempotencyKey)` caught by local replay cache, surfaced as
+//!    `ErrOrderIdAlreadySubmitted`.
 //! 5. `over_per_payment_cap_rejected` — `amount > maxPerPayment`
 //!    refused by preflight (`ErrConfig`).
 //! 6. `paused_blocks_deposit` — `paused() == true` refused by
@@ -423,8 +424,7 @@ fn idempotent_replay_rejected() {
         let v2 = parse_json(&second.stdout, "idempotent_replay_rejected#2");
         assert_eq!(v2["status"], "refused");
         assert_eq!(
-            v2["error"],
-            "ErrOrderIdAlreadySubmitted",
+            v2["error"], "ErrOrderIdAlreadySubmitted",
             "stdout={}",
             second.stdout
         );
