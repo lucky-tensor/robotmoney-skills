@@ -36,7 +36,25 @@ and tears down the Docker Compose stack whenever it needs a clean slate.
 
 ---
 
-### 3. Smart contract static analysis
+### 3. Solidity quality gate
+**File:** `.github/workflows/solidity-quality.yml` — _planned_
+**Environment:** `none`
+**Trigger paths:** `contracts/**`, `foundry.toml`
+
+**Steps:**
+1. Checkout repository
+2. Install Foundry toolchain
+3. Cache Foundry build artifacts (`cache/`, `out/`)
+4. `forge fmt --check` — formatting
+5. `forge build --force` — clean build; zero warnings enforced via `--deny warnings` in `foundry.toml`
+6. `forge doc --check` — NatSpec coverage threshold: every `external` and `public` function on `RobotMoneyGateway` must carry `@notice`, `@param`, and `@return` tags; script fails if any are missing
+7. Install Python + Slither
+8. `slither .` — standard detector set (reentrancy, uninitialized storage, dangerous delegatecall, tx.origin, unchecked low-level calls)
+9. Dependency audit — check imported OpenZeppelin and Aave interface versions against known-vulnerable releases
+
+---
+
+### 4. Smart contract static analysis
 **File:** `.github/workflows/solidity-static.yml` — _planned_
 **Environment:** `none`
 **Trigger paths:** `contracts/**`
@@ -51,7 +69,7 @@ and tears down the Docker Compose stack whenever it needs a clean slate.
 
 ---
 
-### 4. Fork integration tests (protocol adapters)
+### 6. Fork integration tests (protocol adapters)
 **File:** `.github/workflows/fork-e2e.yml` — _exists_
 **Environment:** `fork`
 **Trigger paths:** `testing/fork-e2e-rust/**`
@@ -70,7 +88,23 @@ Two jobs: `pr-smoke` runs the fast subset on every PR; `full-suite` runs all sce
 
 ---
 
-### 5. Rust client unit tests
+### 5. Rust quality gate
+**File:** `.github/workflows/rust-quality.yml` — _planned_
+**Environment:** `none`
+**Trigger paths:** `clients/rust-payment-client/**`, `testing/ethereum-testnet/e2e-rust/**`, `services/explorer-indexer/**`
+
+**Steps:**
+1. Checkout repository
+2. Install Rust toolchain + clippy + rustdoc
+3. Cargo cache
+4. `cargo fmt --check` — formatting across all crates
+5. `cargo clippy --all-targets --all-features -- -D warnings` — zero warnings enforced
+6. `cargo build --all-targets` — clean build; surfaces compile errors not caught by clippy
+7. `cargo doc --no-deps --all-features 2>&1 | tee rustdoc.log` + `check_rustdoc_coverage.py` — enforces doc coverage threshold: every `pub` function, struct, and enum in `rmpc` and `explorer-indexer` crates must carry a doc comment; script exits non-zero if coverage falls below threshold
+
+---
+
+### 7. Rust client unit tests
 **File:** `.github/workflows/rmpc-unit.yml` — _planned_
 **Environment:** `none`
 **Trigger paths:** `clients/rust-payment-client/**`
@@ -85,7 +119,7 @@ Two jobs: `pr-smoke` runs the fast subset on every PR; `full-suite` runs all sce
 
 ---
 
-### 6. Rust client integration tests
+### 8. Rust client integration tests
 **File:** `.github/workflows/e2e-rust-ci.yml` — _exists_
 **Environment:** `devnet` (Geth + Lighthouse)
 **Trigger paths:** `clients/rust-payment-client/**`, `testing/ethereum-testnet/e2e-rust/**`, `contracts/**`
@@ -118,7 +152,7 @@ Two jobs: `geth-tests` (devnet-backed) and `nonce-race-stress` (no chain).
 
 ---
 
-### 7. Explorer indexer tests
+### 9. Explorer indexer tests
 **File:** `.github/workflows/explorer-indexer.yml` — _exists_ (devnet migration planned)
 **Environment:** `devnet`
 **Trigger paths:** `services/explorer-indexer/**`, `testing/explorer-indexer/**`
@@ -140,7 +174,7 @@ Two jobs: `geth-tests` (devnet-backed) and `nonce-race-stress` (no chain).
 
 ---
 
-### 8. dApp unit tests
+### 10. dApp unit tests
 **File:** `.github/workflows/dapp.yml` — _exists_ (`lint-unit` job)
 **Environment:** `none`
 **Trigger paths:** `clients/dapp/**`
@@ -157,11 +191,11 @@ Two jobs: `geth-tests` (devnet-backed) and `nonce-race-stress` (no chain).
 
 ---
 
-### 9. dApp E2E tests
+### 11. dApp E2E tests
 **File:** `.github/workflows/dapp.yml` — _exists_ (e2e jobs); devnet migration planned
 **Environment:** `devnet`
 **Trigger paths:** `clients/dapp/**`, `contracts/**`
-**Depends on:** suite 8 (`lint-unit` job must pass first)
+**Depends on:** suite 10 (`lint-unit` job must pass first)
 
 Three parallel jobs after `lint-unit`: `e2e`, `e2e-history-pane`, `fork-roundtrip`.
 
@@ -194,7 +228,7 @@ Three parallel jobs after `lint-unit`: `e2e`, `e2e-history-pane`, `fork-roundtri
 
 ---
 
-### 10. OpenCode integration tests
+### 12. OpenCode integration tests
 **File:** `.github/workflows/opencode-plugin-smoke.yml` — _exists_; `.github/workflows/opencode-walkthrough.yml` — _exists_; `.github/workflows/opencode-headless-deposit.yml` — _exists_; `.github/workflows/opencode-headless-read.yml` — _exists_
 **Environment:** `devnet` (plugin smoke: `none`)
 **Trigger:** Plugin smoke on every PR; walkthrough on every PR; headless tests nightly + `workflow_dispatch` (require `ANTHROPIC_API_KEY`)
@@ -245,7 +279,7 @@ Three parallel jobs after `lint-unit`: `e2e`, `e2e-history-pane`, `fork-roundtri
 
 ---
 
-### 11. OpenClaw integration tests
+### 13. OpenClaw integration tests
 **File:** `.github/workflows/openclaw-config.yml` — _exists_
 **Environment:** `devnet`
 **Trigger paths:** `testing/openclaw-config/**`, `plugins/robotmoney-cli/**`, `docs/walkthroughs/openclaw-config.md`
@@ -264,7 +298,7 @@ Three parallel jobs after `lint-unit`: `e2e`, `e2e-history-pane`, `fork-roundtri
 
 ---
 
-### 12. Cross-cutting checks
+### 14. Cross-cutting checks
 **File:** `.github/workflows/docs-validators.yml` — _exists_; `.github/workflows/explorer-schema.yml` — _exists_
 **Environment:** `none`
 **Trigger:** All PRs (no `paths:` filter — these catch drift introduced anywhere)
@@ -291,13 +325,15 @@ Three parallel jobs after `lint-unit`: `e2e`, `e2e-history-pane`, `fork-roundtri
 | # | Workflow file | Status | Environment |
 |---|---------------|--------|-------------|
 | 1–2 | `forge-coverage.yml` | exists | `anvil` |
-| 3 | `solidity-static.yml` | planned | `none` |
-| 4 | `fork-e2e.yml` | exists | `fork` |
-| 5 | `rmpc-unit.yml` | planned | `none` |
-| 6 | `e2e-rust-ci.yml` | exists | `devnet` |
-| 7 | `explorer-indexer.yml` | exists → devnet migration | `devnet` |
-| 8 | `dapp.yml` (`lint-unit` job) | exists | `none` |
-| 9 | `dapp.yml` (e2e jobs) | exists → devnet migration | `devnet` |
-| 10 | `opencode-plugin-smoke.yml`, `opencode-walkthrough.yml`, `opencode-headless-deposit.yml`, `opencode-headless-read.yml` | exists → devnet migration | `devnet` |
-| 11 | `openclaw-config.yml` | exists → devnet migration | `devnet` |
-| 12 | `docs-validators.yml`, `explorer-schema.yml` | exists | `none` |
+| 3 | `solidity-quality.yml` | planned | `none` |
+| 4 | `solidity-static.yml` | planned | `none` |
+| 5 | `rust-quality.yml` | planned | `none` |
+| 6 | `fork-e2e.yml` | exists | `fork` |
+| 7 | `rmpc-unit.yml` | planned | `none` |
+| 8 | `e2e-rust-ci.yml` | exists | `devnet` |
+| 9 | `explorer-indexer.yml` | exists → devnet migration | `devnet` |
+| 10 | `dapp.yml` (`lint-unit` job) | exists | `none` |
+| 11 | `dapp.yml` (e2e jobs) | exists → devnet migration | `devnet` |
+| 12 | `opencode-plugin-smoke.yml`, `opencode-walkthrough.yml`, `opencode-headless-deposit.yml`, `opencode-headless-read.yml` | exists → devnet migration | `devnet` |
+| 13 | `openclaw-config.yml` | exists → devnet migration | `devnet` |
+| 14 | `docs-validators.yml`, `explorer-schema.yml` | exists | `none` |

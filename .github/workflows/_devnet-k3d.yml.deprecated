@@ -1,3 +1,6 @@
+# DEPRECATED — this workflow is superseded by the rebuilt CI suite.
+# Do not modify; it will be removed when replacement workflows are in place.
+#
 # Reusable workflow — boot the full-stack k3d devnet on a GitHub-hosted
 # runner. Owns image build + cluster lifecycle for every multi-service
 # E2E job that needs the live stack.

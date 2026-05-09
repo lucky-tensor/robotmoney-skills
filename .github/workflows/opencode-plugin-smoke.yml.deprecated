@@ -1,3 +1,6 @@
+# DEPRECATED — this workflow is superseded by the rebuilt CI suite.
+# Do not modify; it will be removed when replacement workflows are in place.
+#
 # Smoke test: verify OpenCode is installable at the pinned version and that
 # the robotmoney-cli plugin directory is structurally valid (plugin.json
 # parses, required files exist). No ANTHROPIC_API_KEY is required or used.
