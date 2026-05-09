@@ -98,10 +98,7 @@ export function validateEthereumAddress(addr: string): void {
  * @returns A `RegisterPreview` ready for display in the transaction-preview step.
  * @throws {Error} if either address is malformed.
  */
-export function composeRegisterPreview(
-  agentAddress: string,
-  policy: AgentPolicy,
-): RegisterPreview {
+export function composeRegisterPreview(agentAddress: string, policy: AgentPolicy): RegisterPreview {
   validateEthereumAddress(agentAddress);
   validateEthereumAddress(policy.shareReceiver);
 

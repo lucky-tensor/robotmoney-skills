@@ -231,7 +231,11 @@ describe("composeRotationPreview — validation failures", () => {
 
   it("throws when old and new agent addresses differ only in case", () => {
     expect(() =>
-      composeRotationPreview(AGENT.toLowerCase(), AGENT.toUpperCase().replace("X", "x"), BASE_POLICY),
+      composeRotationPreview(
+        AGENT.toLowerCase(),
+        AGENT.toUpperCase().replace("X", "x"),
+        BASE_POLICY,
+      ),
     ).toThrow(/Rotation requires distinct addresses/);
   });
 

@@ -32,9 +32,10 @@ test.describe("register-existing-address flow — UI invariants", () => {
     // The element is in the DOM (hidden attribute) but must not be visible.
     const keygenBanner = page.getByTestId("browser-keygen");
     await expect(keygenBanner).not.toBeVisible();
-    // The disabled marker element should exist.
+    // The disabled marker element should exist in the DOM but be hidden.
     const disabledMarker = page.getByTestId("browser-keygen-disabled");
-    await expect(disabledMarker).toBeInViewport({ ratio: 0 });
+    await expect(disabledMarker).toBeAttached();
+    await expect(disabledMarker).toBeHidden();
   });
 
   test("structured authorizeAgent preview renders for a valid externally-supplied address", async ({

@@ -462,9 +462,7 @@ export function AdminFlow(props: AdminFlowProps) {
           {rotationRevokePrev && <TxPreview preview={rotationRevokePrev} />}
           <button
             data-testid="rotation-revoke-submit"
-            disabled={
-              !isConnected || !rotationPreviewsOk || rotationStep !== "idle" || isPending
-            }
+            disabled={!isConnected || !rotationPreviewsOk || rotationStep !== "idle" || isPending}
             onClick={onRotationRevoke}
           >
             Step 1 — Sign revokeAgent(old) with wallet
