@@ -89,8 +89,10 @@ jobs:
           # The canonical config is scripts/natspec/check.sh.
           # No other file should encode NATSPEC_SCOPE or the 100% threshold.
           CANONICAL="scripts/natspec/check.sh"
+          THIS_WORKFLOW=".github/workflows/natspec-coverage.yml"
           HITS=$(grep -rn "NATSPEC_SCOPE\b" --include="*.sh" --include="*.yml" --include="*.yaml" . \
-                 | grep -v "^${CANONICAL}:" || true)
+                 | grep -v "${CANONICAL}:" \
+                 | grep -v "${THIS_WORKFLOW}:" || true)
           if [[ -n "$HITS" ]]; then
             echo "::error::NATSPEC_SCOPE defined outside canonical config:"
             echo "$HITS"
