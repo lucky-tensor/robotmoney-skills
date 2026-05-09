@@ -10,24 +10,49 @@ together as a single orchestrated stack.
 
 ---
 
+## The `smoke-test` crate
+
+The harness lives in a dedicated Rust library crate (`testing/smoke-test/`)
+that any integration test can pull in as a dev-dependency:
+
+```toml
+[dev-dependencies]
+smoke-test = { path = "../../testing/smoke-test" }
+```
+
+A test starts the full stack by constructing `FullStackFixture` and drops
+it when done — `Drop` handles teardown unconditionally:
+
+```rust
+#[test]
+fn gateway_accepts_deposit() {
+    let fixture = FullStackFixture::new().expect("full-stack setup failed");
+    // fixture.rpc_url, fixture.gateway_addr, fixture.explorer_api_url, ...
+    // ... test body ...
+    // fixture drops here → docker compose down
+}
+```
+
+This is the same pattern used by `rmpc-fork-e2e` (`ForkFixture::new` +
+`Drop`). Each test owns its entire stack; there is no global state.
+
+---
+
 ## Guiding principle: the test runner owns the stack
 
 The devnet lifecycle — boot, contract deployment, health-wait, teardown —
 is controlled entirely by Rust test code. The CI workflow calls `cargo test`;
-it has no knowledge of Docker or service orchestration. This is the same
-principle used by the existing Geth e2e harness in
-`testing/ethereum-testnet/e2e-rust/`, extended to the full service graph.
+it has no knowledge of Docker or service orchestration.
 
 **Why this matters.** If the workflow controls the devnet, ordering is
 enforced by YAML job/step sequencing, which is fragile and opaque. When
 the test code controls the devnet, ordering is enforced by ordinary Rust
-async logic — explicit, reviewable, and testable in isolation. Failures
-surface as test failures with stack traces, not as mysterious CI timing
-problems.
+logic — explicit, reviewable, and testable in isolation. Failures surface
+as test failures with stack traces, not as mysterious CI timing problems.
 
 ---
 
-## Devnet: real Geth+Lighthouse, not Anvil
+## Devnet: real Geth+Lighthouse, forked from mainnet
 
 The full-stack fixture uses the existing Geth+Lighthouse compose stack
 (`testing/ethereum-testnet/config/docker-compose.yaml`), not Anvil.
@@ -35,63 +60,54 @@ The full-stack fixture uses the existing Geth+Lighthouse compose stack
 Anvil is a simulated EVM suitable for fast unit-level fixture work. The
 full-stack smoke tests exercise the complete service graph — real mempool
 behaviour, real consensus, real block production — so they require a real
-execution client. The Geth devnet is already proven in CI and starts from
-a fully deterministic genesis, making it the right substrate.
+execution client.
 
-The genesis configuration is fixed, so block 0 is always the same seed
-state. Every devnet instance is therefore a reproducible digital twin: the
-same accounts, the same balances, the same chain parameters, every run.
+The devnet forks from a pinned mainnet block. This means the chain starts
+with real mainnet state (deployed contracts, account balances, chain
+parameters) at the fork point, giving tests realistic on-chain conditions.
+The fork block number is pinned in the compose configuration so every
+devnet instance is reproducible.
 
 ---
 
 ## Port allocation
 
 Every port used by the stack is chosen by binding to `0` (OS-assigned)
-at fixture spawn time and recorded in `FullStackFixture`. No port number
-is hardcoded anywhere in the harness — not in the compose file, not in
-the test code, not in the CI workflow.
+at fixture construction time and recorded in `FullStackFixture`. No port
+number is hardcoded anywhere in the harness — not in the compose file, not
+in the test code, not in the CI workflow.
 
 ```rust
-struct FullStackFixture {
-    geth_rpc_port: u16,
-    geth_authrpc_port: u16,
-    beacon_port: u16,
-    postgres_port: u16,
-    explorer_api_port: u16,
-    dapp_port: u16,
-    // derived URLs for convenience
-    rpc_url: String,
-    explorer_api_url: String,
-    dapp_url: String,
-    ...
+pub struct FullStackFixture {
+    pub rpc_url: String,
+    pub explorer_api_url: String,
+    pub dapp_url: String,
+    pub gateway_addr: Address,
+    // internal compose child handle
 }
 ```
 
-`spawn()` picks each port by opening a `TcpListener` on `127.0.0.1:0`,
-reading the OS-assigned port, closing the listener, then passing that
-port to the compose service via `--env` or `--env-file`. The compose
-file exposes each service port via the env var (e.g.
-`GETH_RPC_PORT`, `EXPLORER_API_PORT`) rather than a fixed `ports:`
-mapping.
+`FullStackFixture::new()` picks each port by opening a `TcpListener` on
+`127.0.0.1:0`, reading the OS-assigned port, closing the listener, then
+passing that port to the compose service via env vars. The compose file
+exposes each service port via the env var (e.g. `GETH_RPC_PORT`,
+`EXPLORER_API_PORT`) rather than a fixed `ports:` mapping.
 
 This makes parallel runs safe by construction: two fixture instances
-running simultaneously will never collide on a port. Parallel execution
-is not the recommended default (see BeforeAll vs BeforeEach below), but
-the harness must not make it impossible or silently broken.
+running simultaneously will never collide on a port.
 
 ---
 
 ## Fixture lifecycle
 
-The `FullStackFixture` struct in the test binary manages the full
-lifecycle. Its `spawn()` method runs in `BeforeAll` (via `OnceLock`);
-its `Drop` impl runs teardown unconditionally when the binary exits.
+`FullStackFixture::new()` runs the full boot sequence synchronously and
+returns only when the stack is healthy. `Drop` tears it down.
 
 ```
-spawn():
+new():
   1. allocate randomized ports for all services
   2. docker compose up -d geth beacon validator-{1..4}
-     (ports injected via env vars)
+     (ports injected via env vars, fork block injected via FORK_BLOCK env var)
   3. poll geth RPC on allocated port until healthy (eth_blockNumber succeeds)
   4. forge script Deploy.s.sol  →  parse addresses from output
   5. docker compose up -d postgres explorer-indexer explorer-api dapp
@@ -104,25 +120,9 @@ Drop:
 ```
 
 Contract deployment (step 4) is a `std::process::Command` call to
-`forge script`, the same mechanism the harness already uses for `cast`
-and `docker compose`. The addresses are parsed from the JSON deployment
-output and passed to the remaining services as environment variables —
-no deployer container, no chicken-and-egg problem in the compose file.
-
----
-
-## BeforeAll vs BeforeEach
-
-The Geth+Lighthouse stack takes 60-120 seconds to reach a fully indexed
-state. A fresh devnet per test (`BeforeEach`) is therefore only viable for
-a very small number of high-value isolation tests.
-
-The default is **BeforeAll**: one devnet per test binary, shared across
-all tests in that binary. Tests must not leave persistent mutations that
-affect other tests. The standard mitigation is per-test isolation at the
-application layer: each test generates a fresh ephemeral agent EOA and
-keystore, so contract state (agent authorization, deposits) is scoped to
-that test's addresses and does not bleed across.
+`forge script`. The addresses are parsed from the JSON deployment output
+and passed to the remaining services as environment variables — no
+deployer container, no chicken-and-egg problem in the compose file.
 
 ---
 
