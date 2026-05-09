@@ -193,6 +193,9 @@ contract RobotMoneyVault is ERC4626, AccessControl, Pausable, ReentrancyGuard {
     }
 
     function _routeDeposit(uint256 amount) internal {
+        // slither-disable-next-line incorrect-equality
+        // Justification: `amount == 0` is a safe early-return guard, not a
+        // balance-sensitive strict equality that reentrancy could manipulate.
         if (amount == 0) return;
 
         uint256 totalAfter = totalAssets() + amount;
@@ -272,6 +275,9 @@ contract RobotMoneyVault is ERC4626, AccessControl, Pausable, ReentrancyGuard {
 
         _pullProportional(grossAssets);
 
+        // slither-disable-next-line reentrancy-no-eth
+        // Justification: `_withdraw` is `nonReentrant`; the `_burn` after
+        // external adapter calls is safe because reentry is blocked by the OZ guard.
         _burn(owner, shares);
 
         if (fee > 0) {
@@ -375,6 +381,9 @@ contract RobotMoneyVault is ERC4626, AccessControl, Pausable, ReentrancyGuard {
         uint256 idle = IERC20(asset()).balanceOf(address(this));
         if (idle > 0) _routeDeposit(idle);
 
+        // slither-disable-next-line reentrancy-eth
+        // Justification: `rebalance` is `nonReentrant`; the state write after
+        // external calls is safe because reentry is blocked by the OZ guard.
         lastRebalanceAt = block.timestamp;
         emit Rebalanced(totalMoved);
     }

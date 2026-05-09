@@ -241,6 +241,16 @@ contract RobotMoneyGateway is AccessRoles, IGateway {
             revert ShareCustodyInvariantViolated();
         }
 
+        // slither-disable-start reentrancy-balance
+        // Justification: The `balBefore` pattern below is intentional fee-on-transfer
+        // detection (§2.2 step 7) and a post-call invariant check (§2.2 step 12).
+        // Only `AGENT_ROLE` holders can reach this code, and the `usedPaymentIds`
+        // replay guard (step 6) prevents double-spend.  USDC does not implement
+        // transfer-hook callbacks, so reentrancy via `safeTransferFrom` is not
+        // possible in practice.  The `reentrancy-balance` detector fires on the
+        // structural pattern (balance-before / external-call / balance-comparison)
+        // regardless of real reachability.
+
         // 7. safeTransferFrom with balance-delta verification.
         uint256 balBefore = usdcToken.balanceOf(address(this));
         usdcToken.safeTransferFrom(msg.sender, address(this), amount);
@@ -265,6 +275,7 @@ contract RobotMoneyGateway is AccessRoles, IGateway {
         if (usdcToken.balanceOf(address(this)) != balBefore) {
             revert ShareCustodyInvariantViolated();
         }
+        // slither-disable-end reentrancy-balance
 
         // 11. update window gross + mark paymentId used.
         agentWindowGross[msg.sender][windowId] = windowSoFar + amount;

@@ -55,6 +55,11 @@ contract CompoundV3Adapter is IStrategyAdapter {
     }
 
     function withdraw(uint256 amount) external onlyVault returns (uint256) {
+        // slither-disable-start reentrancy-balance
+        // Justification: `preBalance`/`postBalance` is the standard balance-delta
+        // pattern for Compound V3, which does not support transfer callbacks.
+        // Only the `VAULT` (which is `nonReentrant` at the call site) can call
+        // this function, so reentrancy via `COMET.withdraw` is not reachable.
         uint256 preBalance = USDC.balanceOf(address(this));
         COMET.withdraw(address(USDC), amount);
         uint256 postBalance = USDC.balanceOf(address(this));
@@ -63,6 +68,7 @@ contract CompoundV3Adapter is IStrategyAdapter {
         if (actual > 0) {
             USDC.safeTransfer(VAULT, actual);
         }
+        // slither-disable-end reentrancy-balance
 
         if (amount != type(uint256).max && actual < amount) {
             revert WithdrawShortfall(amount, actual);
