@@ -97,3 +97,29 @@ jobs:
             exit 1
           fi
           echo "Single-source guard passed."
+
+  # ---------------------------------------------------------------------------
+  # Job 4 — Doc-presence check: natspec-coverage.md exists with required anchors
+  # ---------------------------------------------------------------------------
+  natspec-doc-check:
+    name: natspec-doc-presence-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assert docs/technical/natspec-coverage.md exists and contains required anchors
+        run: |
+          set -euo pipefail
+          DOC="docs/technical/natspec-coverage.md"
+          if [[ ! -f "$DOC" ]]; then
+            echo "::error::$DOC is missing"
+            exit 1
+          fi
+          for anchor in "tool" "threshold" "in-scope-set" "local-command"; do
+            if ! grep -q "<!-- anchor: ${anchor} -->" "$DOC"; then
+              echo "::error::$DOC is missing anchor: <!-- anchor: ${anchor} -->"
+              exit 1
+            fi
+          done
+          echo "Doc presence check passed: $DOC contains all required anchors."
