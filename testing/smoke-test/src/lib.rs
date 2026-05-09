@@ -409,8 +409,10 @@ fn parse_addr(s: &str) -> Address {
 }
 
 fn wait_for_rpc(url: &str, timeout: Duration) -> Result<(), HarnessError> {
-    test_utils::wait_for_rpc(url, timeout)
-        .map_err(|_| HarnessError::RpcTimeout { url: url.to_string(), timeout })
+    test_utils::wait_for_rpc(url, timeout).map_err(|_| HarnessError::RpcTimeout {
+        url: url.to_string(),
+        timeout,
+    })
 }
 
 fn wait_for_block_height(url: &str, target: u64, timeout: Duration) -> Result<(), HarnessError> {

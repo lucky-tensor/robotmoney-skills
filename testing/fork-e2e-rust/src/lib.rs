@@ -122,7 +122,9 @@ fn workspace_root() -> Option<std::path::PathBuf> {
 
 /// Returns the path to `CURRENT.anvil-state` if it exists on disk.
 pub fn fixture_state_path() -> Option<std::path::PathBuf> {
-    workspace_root().map(|r| r.join(FIXTURE_STATE_REL)).filter(|p| p.exists())
+    workspace_root()
+        .map(|r| r.join(FIXTURE_STATE_REL))
+        .filter(|p| p.exists())
 }
 
 /// Returns true iff the harness can boot an Anvil backend — either via
@@ -223,12 +225,13 @@ impl ForkFixture {
                 .filter(|p| p.exists());
             let block = meta_path
                 .and_then(|p| std::fs::read_to_string(p).ok())
-                .and_then(|s| {
-                    serde_json::from_str::<serde_json::Value>(&s).ok()
-                })
+                .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
                 .and_then(|v| v["fork_block"].as_u64())
                 .unwrap_or(0);
-            let pin = ForkPin { block, source: PinSource::Pinned };
+            let pin = ForkPin {
+                block,
+                source: PinSource::Pinned,
+            };
             let mut c = Command::new("anvil");
             c.arg("--port")
                 .arg(port.to_string())
@@ -680,8 +683,7 @@ fn pick_free_port() -> Result<u16, HarnessError> {
 }
 
 fn wait_for_rpc_url(url: &str, timeout: Duration) -> Result<(), HarnessError> {
-    test_utils::wait_for_rpc(url, timeout)
-        .map_err(|e| HarnessError::AnvilChild(e))
+    test_utils::wait_for_rpc(url, timeout).map_err(HarnessError::AnvilChild)
 }
 
 /// Strip credentials and path so an API key never lands in test

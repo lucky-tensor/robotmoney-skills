@@ -1,5 +1,5 @@
 use std::net::TcpListener;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
@@ -51,7 +51,9 @@ pub fn wait_for_rpc(url: &str, timeout: Duration) -> Result<(), String> {
         }
         std::thread::sleep(Duration::from_millis(200));
     }
-    Err(format!("RPC at {url} not reachable after {timeout:?}: {last}"))
+    Err(format!(
+        "RPC at {url} not reachable after {timeout:?}: {last}"
+    ))
 }
 
 /// Poll `eth_blockNumber` until `>= target` or `timeout` elapses.
@@ -78,7 +80,9 @@ pub fn wait_for_block_height(url: &str, target: u64, timeout: Duration) -> Resul
         }
         std::thread::sleep(Duration::from_millis(1000));
     }
-    Err(format!("block height {target} not reached at {url} after {timeout:?}"))
+    Err(format!(
+        "block height {target} not reached at {url} after {timeout:?}"
+    ))
 }
 
 /// Build the `rmpc` binary once per process and cache the path.
