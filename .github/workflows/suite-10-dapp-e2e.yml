@@ -89,6 +89,8 @@ jobs:
         run: pnpm test:e2e:install
 
       - name: Run Playwright E2E
+        env:
+          VITE_USE_MOCK_WALLET: "true"
         run: pnpm test:e2e
 
       - name: Upload Playwright report
@@ -133,6 +135,7 @@ jobs:
 
       - name: Run history-pane E2E
         env:
+          VITE_USE_MOCK_WALLET: "true"
           VITE_HISTORY_PANE: "true"
         run: pnpm test:e2e tests/e2e/history-pane.spec.ts
 

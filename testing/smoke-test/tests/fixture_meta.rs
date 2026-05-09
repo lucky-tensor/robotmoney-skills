@@ -181,7 +181,8 @@ fn fixture_teardown_documented() {
     // Drop is called when the OnceLock static is cleaned up at process
     // exit. The CI workflow's `docker compose down` safety step catches
     // any leak if the process exits uncleanly.
-    assert!(true, "teardown is handled by Drop + CI safety-net step");
+    // Drop is called at process exit; the CI safety-net step catches any leak.
+    // No assertion needed — test existence is the marker.
 }
 
 // -- RPC helpers ------------------------------------------------------

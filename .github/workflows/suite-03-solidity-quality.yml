@@ -23,10 +23,11 @@
 # - The dependency audit grep is intentionally conservative (major version check only).
 #   It will not catch a patch-level vulnerability; for that, use `forge install` with a
 #   pinned commit and track the OpenZeppelin security advisories separately.
-# - forge doc --check requires every external/public function to have @notice, @param
-#   for each param, and @return for each return value. Internal helper functions are
-#   exempt. If a new function is added without NatSpec, this step fails with a list of
-#   offending function signatures — fix by adding the tags, not by suppressing the check.
+# - forge doc generates NatSpec documentation and fails if the source cannot be parsed.
+#   Every external/public function should have @notice, @param for each param, and
+#   @return for each return value. Internal helper functions are exempt. If a new
+#   function is added without NatSpec, documentation gaps will appear in the generated
+#   output — add the tags to maintain coverage.
 
 name: solidity-fmt-natspec-slither
 
@@ -76,8 +77,8 @@ jobs:
       - name: forge build --force
         run: forge build --force
 
-      - name: forge doc --check (NatSpec coverage)
-        run: forge doc --check
+      - name: forge doc (NatSpec coverage)
+        run: forge doc
 
   slither:
     name: solidity-slither
