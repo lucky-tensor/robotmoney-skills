@@ -19,6 +19,7 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
+test-utils = { path = "../test-utils" }
 rust-payment-client = { path = "../../clients/rust-payment-client" }
 
 [dev-dependencies]

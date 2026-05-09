@@ -116,17 +116,8 @@ macro_rules! skip_if_no_fork {
 const FIXTURE_STATE_REL: &str = "testing/fixtures/fork-state/CURRENT.anvil-state";
 const FIXTURE_META_REL: &str = "testing/fixtures/fork-state/CURRENT.json";
 
-/// Resolve the workspace root by walking up from this crate's manifest dir.
 fn workspace_root() -> Option<std::path::PathBuf> {
-    let mut dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    loop {
-        if dir.join("Cargo.toml").exists() && dir.join("testing").is_dir() {
-            return Some(dir);
-        }
-        if !dir.pop() {
-            return None;
-        }
-    }
+    test_utils::find_workspace_root()
 }
 
 /// Returns the path to `CURRENT.anvil-state` if it exists on disk.
@@ -255,7 +246,7 @@ impl ForkFixture {
         let rpc = Rpc::new(&rpc_url);
         let mut backend = Some(child);
 
-        if let Err(e) = wait_for_rpc(&rpc, Duration::from_secs(20)) {
+        if let Err(e) = wait_for_rpc_url(&rpc_url, Duration::from_secs(20)) {
             if let Some(mut c) = backend.take() {
                 let _ = c.kill();
             }
@@ -685,23 +676,12 @@ fn resolve_fork_pin(upstream: &str) -> Result<ForkPin, HarnessError> {
 }
 
 fn pick_free_port() -> Result<u16, HarnessError> {
-    let l = std::net::TcpListener::bind("127.0.0.1:0")?;
-    Ok(l.local_addr()?.port())
+    test_utils::pick_free_port().map_err(|e| HarnessError::AnvilChild(format!("pick port: {e}")))
 }
 
-fn wait_for_rpc(rpc: &Rpc, timeout: Duration) -> Result<(), HarnessError> {
-    let start = Instant::now();
-    let mut last = String::new();
-    while start.elapsed() < timeout {
-        match rpc.chain_id() {
-            Ok(_) => return Ok(()),
-            Err(e) => last = format!("{e}"),
-        }
-        std::thread::sleep(Duration::from_millis(100));
-    }
-    Err(HarnessError::AnvilChild(format!(
-        "anvil RPC not reachable after {timeout:?}: {last}"
-    )))
+fn wait_for_rpc_url(url: &str, timeout: Duration) -> Result<(), HarnessError> {
+    test_utils::wait_for_rpc(url, timeout)
+        .map_err(|e| HarnessError::AnvilChild(e))
 }
 
 /// Strip credentials and path so an API key never lands in test
