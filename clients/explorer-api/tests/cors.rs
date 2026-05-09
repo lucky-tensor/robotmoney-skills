@@ -36,7 +36,10 @@ async fn preflight_returns_correct_cors_headers() {
     let client = reqwest::Client::builder().build().unwrap();
 
     let resp = client
-        .request(reqwest::Method::OPTIONS, format!("http://{}/v1/vault/snapshot/latest", s.addr))
+        .request(
+            reqwest::Method::OPTIONS,
+            format!("http://{}/v1/vault/snapshot/latest", s.addr),
+        )
         .header("Origin", ALLOWED_ORIGIN)
         .header("Access-Control-Request-Method", "GET")
         .header("Access-Control-Request-Headers", "content-type")
@@ -149,10 +152,6 @@ async fn v1_endpoints_carry_acao_header() {
             acao.is_some(),
             "Access-Control-Allow-Origin must be present on {url}"
         );
-        assert_eq!(
-            acao.unwrap(),
-            ALLOWED_ORIGIN,
-            "wrong origin on {url}"
-        );
+        assert_eq!(acao.unwrap(), ALLOWED_ORIGIN, "wrong origin on {url}");
     }
 }

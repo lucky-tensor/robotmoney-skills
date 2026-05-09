@@ -60,9 +60,7 @@ pub async fn start_with_seed() -> TestServer {
 /// Boot a test server with an optional `CorsLayer` attached.
 ///
 /// Pass `Some(layer)` from CORS-specific tests; `None` for all other tests.
-pub async fn start_with_seed_and_cors(
-    cors: Option<tower_http::cors::CorsLayer>,
-) -> TestServer {
+pub async fn start_with_seed_and_cors(cors: Option<tower_http::cors::CorsLayer>) -> TestServer {
     let container = Postgres::default()
         .start()
         .await
