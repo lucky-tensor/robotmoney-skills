@@ -298,6 +298,32 @@ Three parallel jobs after `lint-unit`: `e2e`, `e2e-history-pane`, `fork-roundtri
 
 ---
 
+### 15. smoke-test library
+**File:** `.github/workflows/smoke-test.yml` — _planned_
+**Environment:** `devnet` (Geth + Lighthouse)
+**Trigger paths:** `testing/smoke-test/**`, `testing/ethereum-testnet/**`, `contracts/**`
+
+Validates the `smoke-test` crate — the canonical devnet fixture library — in
+isolation, independent of any client (rmpc, dapp, explorer).
+
+**Steps:**
+1. Checkout repository
+2. Verify Docker is available
+3. Install Rust toolchain + clippy
+4. Install Foundry toolchain
+5. Cargo cache
+6. `cargo fmt --check -p smoke-test`
+7. `cargo clippy -p smoke-test --all-targets -- -D warnings`
+8. `cargo build -p smoke-test` — includes the `smoke-test` CLI binary
+9. `cargo test -p smoke-test --release -- --test-threads=1` — boots devnet, deploys contracts, asserts healthy RPC + block production, then tears down; verifies `Drop` runs compose-down cleanly
+10. `docker compose down -v --remove-orphans || true` — safety net teardown (always)
+
+> **Note:** Step 9 exercises `Fixture::new()` end-to-end — the same code
+> path that all devnet-backed suites (8, 9, 11, 12, 13) depend on. A
+> failure here blocks those suites before they pay their own boot costs.
+
+---
+
 ### 14. Cross-cutting checks
 **File:** `.github/workflows/docs-validators.yml` — _exists_; `.github/workflows/explorer-schema.yml` — _exists_
 **Environment:** `none`
@@ -337,3 +363,4 @@ Three parallel jobs after `lint-unit`: `e2e`, `e2e-history-pane`, `fork-roundtri
 | 12 | `opencode-plugin-smoke.yml`, `opencode-walkthrough.yml`, `opencode-headless-deposit.yml`, `opencode-headless-read.yml` | exists → devnet migration | `devnet` |
 | 13 | `openclaw-config.yml` | exists → devnet migration | `devnet` |
 | 14 | `docs-validators.yml`, `explorer-schema.yml` | exists | `none` |
+| 15 | `smoke-test.yml` | planned | `devnet` |
