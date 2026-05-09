@@ -104,25 +104,47 @@ macro_rules! skip_if_no_fork {
     () => {
         if !$crate::can_run() {
             eprintln!(
-                "[fork-e2e] skipping: RMPC_FORK_RPC_URL not set or anvil missing. \
-                 Set RMPC_FORK_RPC_URL to a Base archive endpoint and install Foundry to run."
+                "[fork-e2e] skipping: anvil not on PATH and no checked-in fixture found. \
+                 Install Foundry (https://getfoundry.sh) to run fork tests."
             );
             return;
         }
     };
 }
 
-/// Returns true iff `RMPC_FORK_RPC_URL` is set to a non-empty
-/// value and `anvil` is on PATH. Used by the [`skip_if_no_fork!`]
-/// macro. The non-empty check matters for CI: GitHub Actions
-/// passes a missing-secret value through as the literal empty
-/// string, not as an unset env var, so a plain `env::var().is_ok()`
-/// check would happily try to fork against an empty URL.
+/// Path to the checked-in Anvil state snapshot relative to the workspace root.
+const FIXTURE_STATE_REL: &str = "testing/fixtures/fork-state/CURRENT.anvil-state";
+const FIXTURE_META_REL: &str = "testing/fixtures/fork-state/CURRENT.json";
+
+/// Resolve the workspace root by walking up from this crate's manifest dir.
+fn workspace_root() -> Option<std::path::PathBuf> {
+    let mut dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    loop {
+        if dir.join("Cargo.toml").exists() && dir.join("testing").is_dir() {
+            return Some(dir);
+        }
+        if !dir.pop() {
+            return None;
+        }
+    }
+}
+
+/// Returns the path to `CURRENT.anvil-state` if it exists on disk.
+pub fn fixture_state_path() -> Option<std::path::PathBuf> {
+    workspace_root().map(|r| r.join(FIXTURE_STATE_REL)).filter(|p| p.exists())
+}
+
+/// Returns true iff the harness can boot an Anvil backend — either via
+/// `RMPC_FORK_RPC_URL` (live upstream) or via the checked-in fork-state
+/// fixture (`testing/fixtures/fork-state/CURRENT.anvil-state`).
 pub fn can_run() -> bool {
-    std::env::var("RMPC_FORK_RPC_URL")
+    if which::which("anvil").is_err() {
+        return false;
+    }
+    let has_rpc = std::env::var("RMPC_FORK_RPC_URL")
         .map(|v| !v.is_empty())
-        .unwrap_or(false)
-        && which::which("anvil").is_ok()
+        .unwrap_or(false);
+    has_rpc || fixture_state_path().is_some()
 }
 
 // -- Configuration -------------------------------------------------
@@ -168,38 +190,63 @@ pub struct ForkFixture {
 }
 
 impl ForkFixture {
-    /// Boot a fresh anvil fork backend. Skips with [`HarnessError::SkipNoRpc`]
-    /// if `RMPC_FORK_RPC_URL` is unset.
+    /// Boot a fresh Anvil backend.
+    ///
+    /// Prefers `RMPC_FORK_RPC_URL` (live upstream fork) when set. Falls back to
+    /// `testing/fixtures/fork-state/CURRENT.anvil-state` (checked-in snapshot) so
+    /// CI never needs the secret. Returns [`HarnessError::SkipNoRpc`] only when
+    /// neither is available.
     pub fn new() -> Result<Self, HarnessError> {
-        let upstream = std::env::var("RMPC_FORK_RPC_URL").map_err(|_| HarnessError::SkipNoRpc)?;
-        if upstream.is_empty() {
-            // CI passes a missing secret through as the empty
-            // string; treat it as "no RPC configured" so the test
-            // skips cleanly rather than hanging on `anvil --fork-url ""`.
-            return Err(HarnessError::SkipNoRpc);
-        }
         if which::which("anvil").is_err() {
             return Err(HarnessError::AnvilMissing);
         }
 
-        // Resolve fork block.
-        let pin = resolve_fork_pin(&upstream)?;
+        let upstream = std::env::var("RMPC_FORK_RPC_URL")
+            .ok()
+            .filter(|v| !v.is_empty());
 
-        // Pick an ephemeral port and boot anvil.
         let port = pick_free_port()?;
         let rpc_url = format!("http://127.0.0.1:{port}");
 
-        let mut cmd = Command::new("anvil");
-        cmd.arg("--port")
-            .arg(port.to_string())
-            .arg("--fork-url")
-            .arg(&upstream)
-            .arg("--fork-block-number")
-            .arg(pin.block.to_string())
-            .arg("--chain-id")
-            .arg(BASE_CHAIN_ID.to_string())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
+        let (mut cmd, pin, rpc_label) = if let Some(ref url) = upstream {
+            // Live fork path: --fork-url + --fork-block-number
+            let pin = resolve_fork_pin(url)?;
+            let mut c = Command::new("anvil");
+            c.arg("--port")
+                .arg(port.to_string())
+                .arg("--fork-url")
+                .arg(url)
+                .arg("--fork-block-number")
+                .arg(pin.block.to_string())
+                .arg("--chain-id")
+                .arg(BASE_CHAIN_ID.to_string())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            let label = sanitize_rpc_label(url);
+            (c, pin, label)
+        } else {
+            // Fixture path: --load-state from checked-in snapshot
+            let state = fixture_state_path().ok_or(HarnessError::SkipNoRpc)?;
+            let meta_path = workspace_root()
+                .map(|r| r.join(FIXTURE_META_REL))
+                .filter(|p| p.exists());
+            let block = meta_path
+                .and_then(|p| std::fs::read_to_string(p).ok())
+                .and_then(|s| {
+                    serde_json::from_str::<serde_json::Value>(&s).ok()
+                })
+                .and_then(|v| v["fork_block"].as_u64())
+                .unwrap_or(0);
+            let pin = ForkPin { block, source: PinSource::Pinned };
+            let mut c = Command::new("anvil");
+            c.arg("--port")
+                .arg(port.to_string())
+                .arg("--load-state")
+                .arg(&state)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            (c, pin, "fixture".to_string())
+        };
 
         let child = cmd
             .spawn()
@@ -208,7 +255,6 @@ impl ForkFixture {
         let rpc = Rpc::new(&rpc_url);
         let mut backend = Some(child);
 
-        // If anvil never comes up, kill the child before propagating.
         if let Err(e) = wait_for_rpc(&rpc, Duration::from_secs(20)) {
             if let Some(mut c) = backend.take() {
                 let _ = c.kill();
@@ -216,7 +262,6 @@ impl ForkFixture {
             return Err(e);
         }
 
-        // Sanity-check chain id matches what we asked anvil to claim.
         let cid: u64 = rpc.chain_id()?;
         if cid != BASE_CHAIN_ID {
             if let Some(mut c) = backend.take() {
@@ -227,7 +272,6 @@ impl ForkFixture {
             )));
         }
 
-        let rpc_label = sanitize_rpc_label(&upstream);
         Ok(ForkFixture {
             backend,
             rpc_url,
