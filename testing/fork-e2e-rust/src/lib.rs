@@ -223,11 +223,17 @@ impl ForkFixture {
             let meta_path = workspace_root()
                 .map(|r| r.join(FIXTURE_META_REL))
                 .filter(|p| p.exists());
-            let block = meta_path
+            let meta_json = meta_path
                 .and_then(|p| std::fs::read_to_string(p).ok())
-                .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+                .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
+            let block = meta_json
+                .as_ref()
                 .and_then(|v| v["fork_block"].as_u64())
                 .unwrap_or(0);
+            let chain_id = meta_json
+                .as_ref()
+                .and_then(|v| v["chain_id"].as_u64())
+                .unwrap_or(BASE_CHAIN_ID);
             let pin = ForkPin {
                 block,
                 source: PinSource::Pinned,
@@ -237,6 +243,8 @@ impl ForkFixture {
                 .arg(port.to_string())
                 .arg("--load-state")
                 .arg(&state)
+                .arg("--chain-id")
+                .arg(chain_id.to_string())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null());
             (c, pin, "fixture".to_string())
