@@ -112,6 +112,28 @@ macro_rules! skip_if_no_fork {
     };
 }
 
+/// Skip the test unless a live mainnet fork RPC is available via
+/// `RMPC_FORK_RPC_URL`. Use this for tests that read storage from
+/// production Base mainnet contracts (e.g. `abi_address_sanity`),
+/// which require a real fork rather than the checked-in fixture
+/// (the fixture has bytecode but not full storage for mainnet contracts).
+#[macro_export]
+macro_rules! skip_if_no_mainnet_fork {
+    () => {
+        if which::which("anvil").is_err()
+            || !std::env::var("RMPC_FORK_RPC_URL")
+                .map(|v| !v.is_empty())
+                .unwrap_or(false)
+        {
+            eprintln!(
+                "[fork-e2e] skipping: RMPC_FORK_RPC_URL not set. \
+                 This test requires a live Base mainnet archive RPC."
+            );
+            return;
+        }
+    };
+}
+
 /// Path to the checked-in Anvil state snapshot relative to the workspace root.
 const FIXTURE_STATE_REL: &str = "testing/fixtures/fork-state/CURRENT.anvil-state";
 const FIXTURE_META_REL: &str = "testing/fixtures/fork-state/CURRENT.json";
