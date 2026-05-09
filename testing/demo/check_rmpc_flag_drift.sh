@@ -22,7 +22,14 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RMPC_BIN="${REPO_ROOT}/clients/rust-payment-client/target/debug/rmpc"
+# Prefer the workspace-root target (produced by cargo build in the workspace
+# root or via --manifest-path on a member crate).  Fall back to the
+# package-local target for standalone (non-workspace) builds.
+if [[ -x "${REPO_ROOT}/target/debug/rmpc" ]]; then
+    RMPC_BIN="${REPO_ROOT}/target/debug/rmpc"
+else
+    RMPC_BIN="${REPO_ROOT}/clients/rust-payment-client/target/debug/rmpc"
+fi
 
 # Allow caller to override the rmpc binary path.
 while [[ $# -gt 0 ]]; do
@@ -112,7 +119,7 @@ for label in "${!SCAN_TARGETS[@]}"; do
                 fail_count=$(( fail_count + 1 ))
             fi
         done < <(echo "$line" | grep -oE '\-\-[a-z][a-z0-9-]+' | sed 's/^--//' || true)
-    done < <(grep -E '\brmpc\b' "$file" 2>/dev/null || true)
+    done < <(grep -E '\brmpc\b' "$file" 2>/dev/null | grep -vE '(^\s*#|--bin\s+rmpc|\bcargo\b)' || true)
 done
 
 echo >&2

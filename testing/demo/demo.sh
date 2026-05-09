@@ -42,7 +42,14 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RUNBOOK="${REPO_ROOT}/docs/technical/demo-runbook.md"
 HARNESS="${REPO_ROOT}/testing/openclaw-config/openclaw_harness.sh"
-RMPC_BIN="${REPO_ROOT}/clients/rust-payment-client/target/debug/rmpc"
+# Prefer the workspace-root target dir (produced when the repo is a Cargo
+# workspace, which places all binaries under <repo-root>/target/).  Fall back
+# to the package-local target for standalone builds.
+if [[ -x "${REPO_ROOT}/target/debug/rmpc" ]]; then
+    RMPC_BIN="${REPO_ROOT}/target/debug/rmpc"
+else
+    RMPC_BIN="${REPO_ROOT}/clients/rust-payment-client/target/debug/rmpc"
+fi
 
 FAILURE_CASE="${RMPC_DEMO_FAILURE_CASE:-}"
 
