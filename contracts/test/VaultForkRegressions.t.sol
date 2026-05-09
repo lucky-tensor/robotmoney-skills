@@ -117,10 +117,7 @@ contract VaultForkRegressions is Test {
 
     /// @dev Deploy a fresh RobotMoneyVault with a single adapter.
     ///      Approves the vault from alice and attacker.
-    function _deployVaultWithAdapter(address adapter_)
-        internal
-        returns (RobotMoneyVault vault_)
-    {
+    function _deployVaultWithAdapter(address adapter_) internal returns (RobotMoneyVault vault_) {
         vault_ = new RobotMoneyVault(
             IERC20(BASE_USDC),
             TVL_CAP,
@@ -234,8 +231,7 @@ contract VaultForkRegressions is Test {
         RobotMoneyVault vault_ = new RobotMoneyVault(
             IERC20(BASE_USDC), TVL_CAP, PER_DEPOSIT_CAP, 0, feeRecipient, admin
         );
-        MorphoAdapter morphoAdapter =
-            new MorphoAdapter(MORPHO_VAULT, BASE_USDC, address(vault_));
+        MorphoAdapter morphoAdapter = new MorphoAdapter(MORPHO_VAULT, BASE_USDC, address(vault_));
 
         vm.prank(admin);
         vault_.addAdapter(address(morphoAdapter), 10_000);
@@ -425,8 +421,7 @@ contract VaultForkRegressions is Test {
         RobotMoneyVault vault_ = new RobotMoneyVault(
             IERC20(BASE_USDC), TVL_CAP, PER_DEPOSIT_CAP, 0, feeRecipient, admin
         );
-        MorphoAdapter morphoAdapter =
-            new MorphoAdapter(MORPHO_VAULT, BASE_USDC, address(vault_));
+        MorphoAdapter morphoAdapter = new MorphoAdapter(MORPHO_VAULT, BASE_USDC, address(vault_));
         vm.prank(admin);
         vault_.addAdapter(address(morphoAdapter), 10_000);
 
@@ -457,9 +452,7 @@ contract VaultForkRegressions is Test {
 
         // No unexpected USDC left stranded in the adapter.
         assertEq(
-            morphoAdapter.totalAssets(),
-            0,
-            "morpho adapter must be empty after full redemption"
+            morphoAdapter.totalAssets(), 0, "morpho adapter must be empty after full redemption"
         );
 
         // The USDC that Alice received must be approx equal to what she deposited
@@ -489,7 +482,9 @@ contract VaultForkRegressions is Test {
 
         // Fresh-vault: previewDeposit(1 USDC) = 1e24 raw shares (offset=18).
         uint256 expectedRaw = ONE_USDC * (10 ** 18);
-        assertEq(vault_.previewDeposit(ONE_USDC), expectedRaw, "decimals offset 18 must hold on fork");
+        assertEq(
+            vault_.previewDeposit(ONE_USDC), expectedRaw, "decimals offset 18 must hold on fork"
+        );
 
         // Deposit and verify non-zero shares minted.
         vm.prank(alice);
