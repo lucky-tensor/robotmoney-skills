@@ -105,7 +105,11 @@ async fn cursor_header_persisted_for_no_event_target() {
     };
 
     let outcome = run_once(&fx.db, &rpc, &cfg).await.unwrap();
-    assert!(outcome.error.is_none(), "run must succeed: {:?}", outcome.error);
+    assert!(
+        outcome.error.is_none(),
+        "run must succeed: {:?}",
+        outcome.error
+    );
     assert_eq!(
         outcome.last_indexed_block,
         Some(105),
@@ -184,13 +188,20 @@ async fn reorg_below_no_event_cursor_deletes_stale_rows() {
     };
 
     let o1 = run_once(&fx.db, &rpc1, &cfg).await.unwrap();
-    assert!(o1.error.is_none(), "pre-reorg run must succeed: {:?}", o1.error);
+    assert!(
+        o1.error.is_none(),
+        "pre-reorg run must succeed: {:?}",
+        o1.error
+    );
     assert_eq!(o1.last_indexed_block, Some(105));
 
     // Manually seed an agent_deposit at block 100 so we can verify deletion.
     fx.db.upsert_chain(8453, "base", "stub").await.unwrap();
     let gw = [0xaau8; 20];
-    fx.db.upsert_contract(8453, gw, "gateway", None).await.unwrap();
+    fx.db
+        .upsert_contract(8453, gw, "gateway", None)
+        .await
+        .unwrap();
     fx.db
         .insert_block(8453, 100, [0xaau8; 32], [0x99u8; 32], 1_699_000_000)
         .await
@@ -256,7 +267,11 @@ async fn reorg_below_no_event_cursor_deletes_stale_rows() {
     };
 
     let o2 = run_once(&fx.db, &rpc2, &cfg2).await.unwrap();
-    assert!(o2.error.is_none(), "post-reorg run must succeed: {:?}", o2.error);
+    assert!(
+        o2.error.is_none(),
+        "post-reorg run must succeed: {:?}",
+        o2.error
+    );
     assert!(o2.reorg_detected, "reorg must be detected on tick 2");
 
     // All stale rows above the root (-1 → root at -1 means wipe all) must
@@ -333,7 +348,10 @@ async fn walk_back_does_not_accept_missing_hash_as_root() {
 
     // Manually insert an agent_deposit at block 8 (below cursor, no stored header).
     let gw = [0xaau8; 20];
-    fx.db.upsert_contract(8453, gw, "gateway", None).await.unwrap();
+    fx.db
+        .upsert_contract(8453, gw, "gateway", None)
+        .await
+        .unwrap();
     fx.db
         .insert_block(8453, 8, [0x08u8; 32], [0x07u8; 32], 1_699_000_000)
         .await
