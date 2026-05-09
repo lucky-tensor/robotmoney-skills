@@ -36,6 +36,24 @@ fn gateway_accepts_deposit() {
 This is the same pattern used by `rmpc-fork-e2e` (`ForkFixture::new` +
 `Drop`). Each test owns its entire stack; there is no global state.
 
+The crate also exposes a binary target. Running `cargo r smoke-test` from
+the workspace root starts the full stack and keeps it alive, printing the
+allocated URLs and addresses to stdout. This lets a developer point other
+tests or tools at the running network without waiting for the boot sequence
+on every test run.
+
+```
+$ cargo r smoke-test
+rpc_url=http://127.0.0.1:54321
+explorer_api_url=http://127.0.0.1:54322
+dapp_url=http://127.0.0.1:54323
+gateway_addr=0xabc...
+^C  ← stack torn down on SIGINT
+```
+
+The binary blocks until interrupted; `Drop` (or a SIGINT handler) runs
+`docker compose down` on exit.
+
 ---
 
 ## Guiding principle: the test runner owns the stack
