@@ -230,7 +230,7 @@ and tears down the Docker Compose stack whenever it needs a clean slate.
 **Suggested file:** `.github/workflows/dapp-e2e.yml`
 **Environment:** `devnet`
 **Trigger paths:** `clients/dapp/**`, `contracts/**`
-**Depends on:** suite 8 (`lint-unit` job must pass first)
+**Depends on:** suite 10 (`lint-unit` job must pass first)
 
 **Jobs:**
 - `e2e` — **needs suite 9 (`dapp-quality`) to pass** (enforce via `workflow_run` or branch protection); runs first
