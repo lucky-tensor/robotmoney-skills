@@ -26,13 +26,18 @@ export { type VerificationState };
  *                         empty string / undefined when the env var is
  *                         absent — the hook will immediately return a
  *                         refused state without making an RPC call.
+ * @param bypassForTest    When true, skip all verification and return
+ *                         `verified` immediately. Set only via
+ *                         `VITE_GATEWAY_VERIFY_BYPASS_FOR_TEST=true`
+ *                         in E2E test builds; never in production.
  */
 export function useGatewayVerifier(
   gatewayAddress: string,
   expectedCodeHash: string | undefined,
+  bypassForTest = false,
 ): VerificationState {
   const [state, setState] = useState<VerificationState>(() =>
-    computeVerificationState(gatewayAddress, expectedCodeHash, undefined),
+    computeVerificationState(gatewayAddress, expectedCodeHash, undefined, bypassForTest),
   );
 
   // Obtain the viem PublicClient from the wagmi context so we can call
@@ -40,6 +45,11 @@ export function useGatewayVerifier(
   const client = usePublicClient();
 
   useEffect(() => {
+    // Test-only bypass: initial state is already verified; no RPC call needed.
+    if (bypassForTest) {
+      return;
+    }
+
     // If the initial state is already refused (missing expected hash or
     // zero address) there is nothing to fetch.
     const initial = computeVerificationState(gatewayAddress, expectedCodeHash, undefined);
@@ -79,7 +89,7 @@ export function useGatewayVerifier(
     return () => {
       cancelled = true;
     };
-  }, [gatewayAddress, expectedCodeHash, client]);
+  }, [gatewayAddress, expectedCodeHash, client, bypassForTest]);
 
   return state;
 }
