@@ -195,7 +195,9 @@ contract MorphoAdapterTest is Test {
 
         vm.prank(vault);
         vm.expectRevert(
-            abi.encodeWithSelector(MorphoAdapter.WithdrawShortfall.selector, amount, amount - shortfall)
+            abi.encodeWithSelector(
+                MorphoAdapter.WithdrawShortfall.selector, amount, amount - shortfall
+            )
         );
         shortfallAdapter.withdraw(amount);
     }
