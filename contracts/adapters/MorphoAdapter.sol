@@ -59,10 +59,17 @@ contract MorphoAdapter is IStrategyAdapter {
 
     /// @inheritdoc IStrategyAdapter
     function withdraw(uint256 amount) external onlyVault returns (uint256) {
+        // slither-disable-start reentrancy-balance
+        // Justification: `preBalance`/`postBalance` is the standard balance-delta
+        // pattern to measure what Morpho actually delivered. MORPHO_VAULT is an
+        // ERC-4626 vault that does not issue transfer callbacks, and only the
+        // `VAULT` (which is `nonReentrant` at the call site) can invoke this
+        // function, so reentrancy via `MORPHO_VAULT.withdraw` is not reachable.
         uint256 preBalance = USDC.balanceOf(VAULT);
         MORPHO_VAULT.withdraw(amount, VAULT, address(this));
         uint256 postBalance = USDC.balanceOf(VAULT);
         uint256 actual = postBalance - preBalance;
+        // slither-disable-end reentrancy-balance
         if (amount != type(uint256).max && actual < amount) {
             revert WithdrawShortfall(amount, actual);
         }
