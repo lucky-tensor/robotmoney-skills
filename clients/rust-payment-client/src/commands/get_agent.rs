@@ -31,8 +31,8 @@ use serde::Serialize;
 
 use crate::config::Config;
 use crate::gateway::RobotMoneyGateway;
-use crate::policy::WINDOW_SECONDS;
 use crate::network_env::NetworkEnv;
+use crate::policy::WINDOW_SECONDS;
 use crate::read_output::{DecimalU256, Envelope, PartialBuilder};
 use crate::rpc::{CallRequest, RpcClient};
 
