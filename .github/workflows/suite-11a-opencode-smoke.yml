@@ -157,17 +157,17 @@ jobs:
 
       - name: fmt + clippy
         run: |
-          cargo fmt --check -p opencode-walkthrough-tests
-          cargo clippy -p opencode-walkthrough-tests --all-targets -- -D warnings
+          cargo fmt --check -p doctests
+          cargo clippy -p doctests --all-targets -- -D warnings
 
       - name: Walkthrough parity
-        run: cargo test -p opencode-walkthrough-tests --test walkthrough_parity -- --nocapture
+        run: cargo test -p doctests --test opencode_parity -- --nocapture
 
       - name: Config template parses
-        run: cargo test -p opencode-walkthrough-tests --test config_template_parses -- --nocapture
+        run: cargo test -p doctests --test opencode_config -- --nocapture
 
       - name: Refusal walkthrough (offline safety)
-        run: cargo test -p opencode-walkthrough-tests --test refusal_walkthrough -- --nocapture
+        run: cargo test -p doctests --test opencode_refusal -- --nocapture
 
   walkthrough-fork:
     name: opencode-walkthrough-fork
@@ -199,4 +199,4 @@ jobs:
             ${{ runner.os }}-cargo-rmpc-unit-
 
       - name: Read-only walkthrough
-        run: cargo test -p opencode-walkthrough-tests --test read_only_walkthrough -- --nocapture
+        run: cargo test -p doctests --test opencode_read_only -- --nocapture
