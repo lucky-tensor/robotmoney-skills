@@ -316,7 +316,14 @@ pub fn run(args: Args) -> i32 {
         }
     };
     let order_id_hex = format!("{order_id:#x}");
-    match replay.lookup(cfg.chain_id, gateway_addr, agent_address, order_id, amount, idempotency_key) {
+    match replay.lookup(
+        cfg.chain_id,
+        gateway_addr,
+        agent_address,
+        order_id,
+        amount,
+        idempotency_key,
+    ) {
         Ok(Some(prior_tx)) => {
             let err = RmpcError::ErrOrderIdAlreadySubmitted {
                 tx_hash: prior_tx.clone(),
@@ -509,7 +516,16 @@ pub fn run(args: Args) -> i32 {
     // Record the paymentId → tx_hash entry in the replay cache so a
     // future retry hits the local check before paying gas.  deadline is
     // stored as audit metadata only.
-    if let Err(e) = replay.insert(cfg.chain_id, gateway_addr, agent_address, order_id, amount, idempotency_key, deadline, &tx_hash_hex) {
+    if let Err(e) = replay.insert(
+        cfg.chain_id,
+        gateway_addr,
+        agent_address,
+        order_id,
+        amount,
+        idempotency_key,
+        deadline,
+        &tx_hash_hex,
+    ) {
         log::warn!("rmpc deposit: replay cache insert failed (non-fatal): {e}");
     }
 

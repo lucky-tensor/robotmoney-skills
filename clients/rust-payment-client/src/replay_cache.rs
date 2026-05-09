@@ -144,7 +144,8 @@ impl ReplayCache {
         amount: U256,
         idempotency_key: B256,
     ) -> Result<Option<String>> {
-        let payment_id = compute_payment_id(chain_id, gateway, agent, order_id, amount, idempotency_key);
+        let payment_id =
+            compute_payment_id(chain_id, gateway, agent, order_id, amount, idempotency_key);
         let key = format!("{payment_id:#x}");
         let map = self.read_locked()?;
         Ok(map.get(&key).map(|e| e.tx_hash.clone()))
@@ -167,7 +168,8 @@ impl ReplayCache {
         deadline: u64,
         tx_hash: &str,
     ) -> Result<()> {
-        let payment_id = compute_payment_id(chain_id, gateway, agent, order_id, amount, idempotency_key);
+        let payment_id =
+            compute_payment_id(chain_id, gateway, agent, order_id, amount, idempotency_key);
         let key = format!("{payment_id:#x}");
         self.with_locked_file(|file, mut map| {
             map.insert(
@@ -272,8 +274,10 @@ mod tests {
     const CHAIN_ID: u64 = 1;
     const GATEWAY: Address = address!("0000000000000000000000000000000000000001");
     const AGENT: Address = address!("0000000000000000000000000000000000000002");
-    const ORDER_ID: B256 = b256!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-    const IDEM_KEY: B256 = b256!("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+    const ORDER_ID: B256 =
+        b256!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    const IDEM_KEY: B256 =
+        b256!("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
     const AMOUNT: U256 = U256::from_limbs([1_000_000, 0, 0, 0]);
     const TX_HASH: &str = "0xtxhash";
 
@@ -294,7 +298,16 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let cache = ReplayCache::open(dir.path()).unwrap();
         cache
-            .insert(CHAIN_ID, GATEWAY, AGENT, ORDER_ID, AMOUNT, IDEM_KEY, 1_700_000_000, TX_HASH)
+            .insert(
+                CHAIN_ID,
+                GATEWAY,
+                AGENT,
+                ORDER_ID,
+                AMOUNT,
+                IDEM_KEY,
+                1_700_000_000,
+                TX_HASH,
+            )
             .unwrap();
         let got = cache
             .lookup(CHAIN_ID, GATEWAY, AGENT, ORDER_ID, AMOUNT, IDEM_KEY)
@@ -310,7 +323,9 @@ mod tests {
         let cache = ReplayCache::open(dir.path()).unwrap();
         // Insert with deadline = 1.
         cache
-            .insert(CHAIN_ID, GATEWAY, AGENT, ORDER_ID, AMOUNT, IDEM_KEY, 1, TX_HASH)
+            .insert(
+                CHAIN_ID, GATEWAY, AGENT, ORDER_ID, AMOUNT, IDEM_KEY, 1, TX_HASH,
+            )
             .unwrap();
         // Lookup with deadline = 2 — must still hit because paymentId is the key.
         let got = cache
@@ -325,7 +340,9 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let cache = ReplayCache::open(dir.path()).unwrap();
         cache
-            .insert(CHAIN_ID, GATEWAY, AGENT, ORDER_ID, AMOUNT, IDEM_KEY, 1, TX_HASH)
+            .insert(
+                CHAIN_ID, GATEWAY, AGENT, ORDER_ID, AMOUNT, IDEM_KEY, 1, TX_HASH,
+            )
             .unwrap();
         let other_amount = U256::from(999_999u64);
         assert_eq!(
@@ -342,7 +359,9 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let cache = ReplayCache::open(dir.path()).unwrap();
         cache
-            .insert(CHAIN_ID, GATEWAY, AGENT, ORDER_ID, AMOUNT, IDEM_KEY, 1, TX_HASH)
+            .insert(
+                CHAIN_ID, GATEWAY, AGENT, ORDER_ID, AMOUNT, IDEM_KEY, 1, TX_HASH,
+            )
             .unwrap();
         assert_eq!(
             cache
@@ -358,7 +377,9 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let cache = ReplayCache::open(dir.path()).unwrap();
         cache
-            .insert(CHAIN_ID, GATEWAY, AGENT, ORDER_ID, AMOUNT, IDEM_KEY, 1, TX_HASH)
+            .insert(
+                CHAIN_ID, GATEWAY, AGENT, ORDER_ID, AMOUNT, IDEM_KEY, 1, TX_HASH,
+            )
             .unwrap();
         let other_gateway = address!("0000000000000000000000000000000000000009");
         assert_eq!(
@@ -375,7 +396,9 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let cache = ReplayCache::open(dir.path()).unwrap();
         cache
-            .insert(CHAIN_ID, GATEWAY, AGENT, ORDER_ID, AMOUNT, IDEM_KEY, 1, TX_HASH)
+            .insert(
+                CHAIN_ID, GATEWAY, AGENT, ORDER_ID, AMOUNT, IDEM_KEY, 1, TX_HASH,
+            )
             .unwrap();
         let other_agent = address!("0000000000000000000000000000000000000007");
         assert_eq!(
@@ -392,7 +415,9 @@ mod tests {
         {
             let cache = ReplayCache::open(dir.path()).unwrap();
             cache
-                .insert(CHAIN_ID, GATEWAY, AGENT, ORDER_ID, AMOUNT, IDEM_KEY, 1, "0xhash1")
+                .insert(
+                    CHAIN_ID, GATEWAY, AGENT, ORDER_ID, AMOUNT, IDEM_KEY, 1, "0xhash1",
+                )
                 .unwrap();
         }
         {
@@ -411,10 +436,14 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let cache = ReplayCache::open(dir.path()).unwrap();
         cache
-            .insert(CHAIN_ID, GATEWAY, AGENT, ORDER_ID, AMOUNT, IDEM_KEY, 1, "0xfirst")
+            .insert(
+                CHAIN_ID, GATEWAY, AGENT, ORDER_ID, AMOUNT, IDEM_KEY, 1, "0xfirst",
+            )
             .unwrap();
         cache
-            .insert(CHAIN_ID, GATEWAY, AGENT, ORDER_ID, AMOUNT, IDEM_KEY, 1, "0xsecond")
+            .insert(
+                CHAIN_ID, GATEWAY, AGENT, ORDER_ID, AMOUNT, IDEM_KEY, 1, "0xsecond",
+            )
             .unwrap();
         assert_eq!(
             cache
@@ -442,7 +471,9 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let cache = ReplayCache::open(dir.path()).unwrap();
         cache
-            .insert(CHAIN_ID, GATEWAY, AGENT, ORDER_ID, AMOUNT, IDEM_KEY, 1, TX_HASH)
+            .insert(
+                CHAIN_ID, GATEWAY, AGENT, ORDER_ID, AMOUNT, IDEM_KEY, 1, TX_HASH,
+            )
             .unwrap();
         let other_key = b256!("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc");
         assert_eq!(

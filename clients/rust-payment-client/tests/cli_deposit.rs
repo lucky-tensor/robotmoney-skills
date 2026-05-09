@@ -612,7 +612,10 @@ async fn deposit_non_duplicate_still_writes_replay_entry() {
 
     // Verify the replay cache file was written.
     let cache_file = state_dir.join("submitted_order_ids.json");
-    assert!(cache_file.exists(), "replay cache file should exist after a successful deposit");
+    assert!(
+        cache_file.exists(),
+        "replay cache file should exist after a successful deposit"
+    );
     let raw = std::fs::read_to_string(&cache_file).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&raw).unwrap();
     assert_eq!(parsed["entries"].as_array().unwrap().len(), 1);
