@@ -103,11 +103,23 @@ async fn populates_nine_tables_and_reindex_is_idempotent() {
     let o2 = run_once(&fx.db, &rpc, &cfg).await.expect("run_once 2");
     assert!(o2.error.is_none());
 
-    assert_eq!(fx.db.count(CountTable::VaultSnapshots).await.unwrap(), snap_before);
-    assert_eq!(fx.db.count(CountTable::AgentDeposits).await.unwrap(), dep_before);
-    assert_eq!(fx.db.count(CountTable::AgentPolicies).await.unwrap(), pol_before);
+    assert_eq!(
+        fx.db.count(CountTable::VaultSnapshots).await.unwrap(),
+        snap_before
+    );
+    assert_eq!(
+        fx.db.count(CountTable::AgentDeposits).await.unwrap(),
+        dep_before
+    );
+    assert_eq!(
+        fx.db.count(CountTable::AgentPolicies).await.unwrap(),
+        pol_before
+    );
     assert_eq!(fx.db.count(CountTable::Blocks).await.unwrap(), blk_before);
-    assert_eq!(fx.db.count(CountTable::Transactions).await.unwrap(), tx_before);
+    assert_eq!(
+        fx.db.count(CountTable::Transactions).await.unwrap(),
+        tx_before
+    );
 
     // Tear down the anvil child.
     drop(fork);
