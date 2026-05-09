@@ -17,6 +17,11 @@ use std::sync::Mutex;
 use alloy_primitives::Address;
 use once_cell::sync::Lazy;
 
+pub use smoke_test::{
+    agent_address, prerequisites_available, HarnessError, AGENT_PRIVATE_KEY,
+    DEPLOYER_ADDRESS_HEX, DEPLOYER_PRIVATE_KEY_HEX, PAUSER_ADDRESS_HEX,
+    PAUSER_PRIVATE_KEY_HEX, SHARE_RECEIVER_ADDRESS_HEX,
+};
 pub use rust_payment_client::signer::software::PASSPHRASE_ENV_VAR;
 pub use smoke_test::{
     agent_address, prerequisites_available, HarnessError, AGENT_PRIVATE_KEY, DEPLOYER_ADDRESS_HEX,
@@ -217,8 +222,7 @@ impl Fixture {
     }
 
     pub fn run_rmpc_self_check(&self) -> Result<RmpcRun, HarnessError> {
-        let out = self
-            .rmpc_command()
+        let out = self.rmpc_command()
             .args(["self-check", "--config"])
             .arg(&self.config_path)
             .output()?;
@@ -226,8 +230,7 @@ impl Fixture {
     }
 
     pub fn run_rmpc_status(&self, payment_id: &str) -> Result<RmpcRun, HarnessError> {
-        let out = self
-            .rmpc_command()
+        let out = self.rmpc_command()
             .args(["status", "--config"])
             .arg(&self.config_path)
             .args(["--payment-id", payment_id])
