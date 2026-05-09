@@ -49,7 +49,7 @@ export function computeVerificationState(
   // This is gated by VITE_GATEWAY_VERIFY_BYPASS_FOR_TEST and must never be
   // set in production builds.
   if (bypassForTest) {
-    return { status: "verified", computedHash: "0x" + "00".repeat(32) as Hex };
+    return { status: "verified", computedHash: ("0x" + "00".repeat(32)) as Hex };
   }
 
   // Fail closed: missing expected hash → refuse.
