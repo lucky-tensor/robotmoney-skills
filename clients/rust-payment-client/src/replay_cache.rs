@@ -157,6 +157,7 @@ impl ReplayCache {
     /// Overwrites any existing entry with the same paymentId (which
     /// would only happen if the prior insert lost a race before the
     /// broadcast returned a hash — we prefer the most recent tx_hash).
+    #[allow(clippy::too_many_arguments)]
     pub fn insert(
         &self,
         chain_id: u64,
