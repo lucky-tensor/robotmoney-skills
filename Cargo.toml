@@ -8,5 +8,5 @@ members = [
     "testing/smoke-test",
     "testing/ethereum-testnet/e2e-rust",
     "testing/fork-e2e-rust",
-    "testing/opencode-walkthrough",
+    "testing/doctests",
 ]

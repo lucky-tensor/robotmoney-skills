@@ -1,24 +1,22 @@
-//! Canonical: docs/walkthroughs/opencode-readonly-fork.md
-//!
-//! Shared helpers for the OpenCode walkthrough test suite.
+//! Helpers for the OpenCode walkthrough doc-parity tests.
+//! Canonical doc: `docs/walkthroughs/opencode-readonly-fork.md`
 
 use std::path::PathBuf;
 use std::process::Command;
 
-pub fn repo_root() -> PathBuf {
+fn repo_root() -> PathBuf {
     test_utils::find_workspace_root()
         .expect("could not locate workspace root from CARGO_MANIFEST_DIR")
 }
 
-/// Path to the walkthrough doc this crate validates.
+/// Path to the walkthrough doc this module validates.
 pub fn walkthrough_md() -> PathBuf {
     repo_root().join("docs/walkthroughs/opencode-readonly-fork.md")
 }
 
-/// Path to the shipped TOML config template the walkthrough's step 3
-/// instructs operators to copy.
+/// Path to the TOML config template shipped with the walkthrough.
 pub fn config_template_path() -> PathBuf {
-    repo_root().join("testing/opencode-walkthrough/fixtures/rmpc-fork.toml.template")
+    repo_root().join("testing/doctests/fixtures/opencode/rmpc-fork.toml.template")
 }
 
 pub fn rmpc_bin() -> &'static PathBuf {
