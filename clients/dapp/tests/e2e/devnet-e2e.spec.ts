@@ -34,8 +34,7 @@ const ENABLED = process.env.DEVNET_E2E_ENABLED === "1";
 // keccak256("AGENT_ROLE") — matches contracts/gateway/AccessRoles.sol.
 // Hard-coded constant to avoid a round-trip; the fork-roundtrip spec
 // validates this at runtime against the deployed contract.
-const AGENT_ROLE =
-  "0xcab5a0bfe0b79d2c4b1c2e02599fa044d115b7511f9659307cb4276950967709";
+const AGENT_ROLE = "0xcab5a0bfe0b79d2c4b1c2e02599fa044d115b7511f9659307cb4276950967709";
 
 // Polling params tuned for real Geth block times (~12s per block).
 const POLL_INTERVAL_MS = 3_000;
@@ -57,9 +56,7 @@ function loadEndpoints(): DevnetEndpoints {
     const raw = fs.readFileSync(file, "utf8");
     return JSON.parse(raw) as DevnetEndpoints;
   } catch (err) {
-    throw new Error(
-      `devnet-e2e: failed to read endpoints file ${file}: ${(err as Error).message}`,
-    );
+    throw new Error(`devnet-e2e: failed to read endpoints file ${file}: ${(err as Error).message}`);
   }
 }
 
@@ -150,9 +147,7 @@ test.describe("devnet E2E — full-stack Geth+Lighthouse", () => {
     // Normalize to lowercase for comparison because the dapp may render
     // checksummed (EIP-55) form.
     const gatewayLower = gatewayAddr.toLowerCase();
-    const locator = page
-      .locator(`text=${gatewayAddr}`)
-      .or(page.locator(`text=${gatewayLower}`));
+    const locator = page.locator(`text=${gatewayAddr}`).or(page.locator(`text=${gatewayLower}`));
     await expect(locator.first()).toBeVisible({ timeout: 30_000 });
   });
 
@@ -170,8 +165,7 @@ test.describe("devnet E2E — full-stack Geth+Lighthouse", () => {
     // Derive agent address from the endpoint summary (smoke-test prints `agent_addr=`
     // as a plain kv line before the endpoint summary block).
     // If not present in the endpoints file, fall back to the known fixture constant.
-    const agentAddr =
-      endpoints.agent_addr ?? "0xf93Ee4Cf8c6c40b329b0c0626F28333c132CF241";
+    const agentAddr = endpoints.agent_addr ?? "0xf93Ee4Cf8c6c40b329b0c0626F28333c132CF241";
 
     await page.goto("/");
 
@@ -196,13 +190,7 @@ test.describe("devnet E2E — full-stack Geth+Lighthouse", () => {
       `devnet-e2e: polling for AGENT_ROLE on ${endpoints.rpc_url}, ` +
         `gateway=${endpoints.gateway_addr}, agent=${agentAddr}`,
     );
-    await waitForRole(
-      endpoints.rpc_url,
-      endpoints.gateway_addr,
-      AGENT_ROLE,
-      agentAddr,
-      true,
-    );
+    await waitForRole(endpoints.rpc_url, endpoints.gateway_addr, AGENT_ROLE, agentAddr, true);
 
     console.log("devnet-e2e: AGENT_ROLE confirmed on-chain.");
   });

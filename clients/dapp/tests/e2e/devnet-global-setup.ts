@@ -88,10 +88,7 @@ function parseLine(line: string, acc: Partial<DevnetEndpoints>): void {
  *   vault_addr=0x...
  *   usdc_addr=0x...
  */
-function waitForEndpoints(
-  proc: ChildProcess,
-  timeoutMs: number,
-): Promise<DevnetEndpoints> {
+function waitForEndpoints(proc: ChildProcess, timeoutMs: number): Promise<DevnetEndpoints> {
   return new Promise((resolve, reject) => {
     const acc: Partial<DevnetEndpoints> = {};
     let inSummary = false;
@@ -111,13 +108,7 @@ function waitForEndpoints(
 
     function trySettle() {
       if (settled) return;
-      if (
-        acc.rpc_url &&
-        acc.dapp_url &&
-        acc.gateway_addr &&
-        acc.vault_addr &&
-        acc.usdc_addr
-      ) {
+      if (acc.rpc_url && acc.dapp_url && acc.gateway_addr && acc.vault_addr && acc.usdc_addr) {
         settled = true;
         clearTimeout(timer);
         resolve(acc as DevnetEndpoints);
@@ -188,16 +179,12 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
   console.log(`devnet-global-setup: cargo workspace root = ${cargoRoot}`);
   console.log("devnet-global-setup: spawning smoke-test --full-stack …");
 
-  smokeTestProc = spawn(
-    "cargo",
-    ["run", "--bin", "smoke-test", "--", "--full-stack"],
-    {
-      cwd: cargoRoot,
-      stdio: ["ignore", "pipe", "pipe"],
-      // Detach so the child's process group can be killed on teardown.
-      detached: false,
-    },
-  );
+  smokeTestProc = spawn("cargo", ["run", "--bin", "smoke-test", "--", "--full-stack"], {
+    cwd: cargoRoot,
+    stdio: ["ignore", "pipe", "pipe"],
+    // Detach so the child's process group can be killed on teardown.
+    detached: false,
+  });
 
   // Boot timeout: building + devnet start + health checks can take up to
   // 10 minutes on a cold machine. Warm builds are typically 120-180s.
