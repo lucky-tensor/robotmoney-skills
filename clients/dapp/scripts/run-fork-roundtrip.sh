@@ -36,6 +36,7 @@ SHARE_RECEIVER="0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"  # account[2] (reuse
 ANVIL_PORT="${ROUNDTRIP_ANVIL_PORT:-8545}"
 RPC_URL="http://127.0.0.1:${ANVIL_PORT}"
 WORK_DIR="${ROUNDTRIP_WORK_DIR:-$(mktemp -d -t rmpc-fork-roundtrip.XXXXXX)}"
+mkdir -p "$WORK_DIR"
 DEPLOYMENT_JSON="$WORK_DIR/deployment.json"
 RMPC_CONFIG="$WORK_DIR/rmpc.toml"
 KEYSTORE_PATH="$WORK_DIR/keystore.json"
