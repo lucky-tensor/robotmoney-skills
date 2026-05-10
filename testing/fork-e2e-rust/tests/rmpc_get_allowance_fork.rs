@@ -48,6 +48,7 @@ fn rmpc_get_allowance_against_fork() {
         Address::ZERO,
     );
 
+    let log_dir = tmp.path().join("rmpc-logs");
     let out = Command::new(rmpc_bin::rmpc_path())
         .args([
             "get-allowance",
@@ -58,14 +59,23 @@ fn rmpc_get_allowance_against_fork() {
             "--spender",
             &format!("{spender:#x}"),
         ])
+        .env("RMPC_LOG_DIR", &log_dir)
+        .env("RMPC_LOG_LEVEL", "error")
         .output()
         .expect("spawn rmpc");
+    let log_content = std::fs::read_dir(&log_dir)
+        .ok()
+        .and_then(|mut d| d.next())
+        .and_then(|e| e.ok())
+        .and_then(|e| std::fs::read_to_string(e.path()).ok())
+        .unwrap_or_default();
     assert!(
         out.status.success(),
-        "rmpc get-allowance failed: status={:?}\nstdout={}\nstderr={}",
+        "rmpc get-allowance failed: status={:?}\nstdout={}\nstderr={}\nrmpc_log={}",
         out.status,
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr),
+        log_content,
     );
 
     let v: Value = serde_json::from_slice(&out.stdout).expect("rmpc stdout is JSON");
