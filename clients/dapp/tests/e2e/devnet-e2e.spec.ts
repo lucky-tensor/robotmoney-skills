@@ -85,7 +85,12 @@ async function ethCall(rpc: string, to: string, data: string): Promise<string> {
   return j.result ?? "0x";
 }
 
-async function hasRole(rpc: string, gateway: string, role: string, account: string): Promise<boolean> {
+async function hasRole(
+  rpc: string,
+  gateway: string,
+  role: string,
+  account: string,
+): Promise<boolean> {
   // hasRole(bytes32,address) selector = 0x91d14854
   const accountPadded = account.toLowerCase().replace(/^0x/, "").padStart(64, "0");
   const rolePadded = role.toLowerCase().replace(/^0x/, "");
@@ -144,12 +149,11 @@ test.describe("devnet E2E — full-stack Geth+Lighthouse", () => {
     const gatewayAddr = endpoints.gateway_addr;
     // Normalize to lowercase for comparison because the dapp may render
     // checksummed (EIP-55) form.
-    const locator = page.locator(`text=${gatewayAddr}`).or(
-      page.locator(`text=${gatewayAddr.toLowerCase()}`),
-    );
-    await expect(locator.first()).toBeVisible({
-      timeout: 30_000,
-    });
+    const gatewayLower = gatewayAddr.toLowerCase();
+    const locator = page
+      .locator(`text=${gatewayAddr}`)
+      .or(page.locator(`text=${gatewayLower}`));
+    await expect(locator.first()).toBeVisible({ timeout: 30_000 });
   });
 
   test("(B) authorizeAgent mines on Geth and AGENT_ROLE is confirmed on-chain", async ({
