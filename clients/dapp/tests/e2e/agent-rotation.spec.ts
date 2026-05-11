@@ -20,7 +20,7 @@
  */
 import { test, expect } from "@playwright/test";
 import { loadEndpoints, type DevnetEndpoints } from "./helpers/devnet";
-import { openDapp } from "./helpers/wallet";
+import { openDapp, openTab } from "./helpers/wallet";
 
 let endpoints: DevnetEndpoints;
 let OLD_AGENT: string;
@@ -52,6 +52,7 @@ async function fillRotationForm(
 test.describe("agent rotation flow — UI invariants", () => {
   test.beforeEach(async ({ page }) => {
     await openDapp(page, endpoints);
+    await openTab(page, "rotation");
   });
 
   test("rotation section renders step-1 and step-2 sub-sections", async ({ page }) => {

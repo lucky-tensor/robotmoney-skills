@@ -16,7 +16,7 @@
  */
 import { test, expect } from "@playwright/test";
 import { loadEndpoints, type DevnetEndpoints } from "./helpers/devnet";
-import { openDapp } from "./helpers/wallet";
+import { openDapp, openTab } from "./helpers/wallet";
 
 let endpoints: DevnetEndpoints;
 let AGENT_ADDRESS: string;
@@ -76,6 +76,7 @@ test.describe("register-existing-address flow — UI invariants", () => {
 
     await page.getByTestId("agent-input").fill(AGENT_ADDRESS);
     await page.getByTestId("shareReceiver-input").fill(SHARE_RECEIVER);
+    await openTab(page, "export");
 
     const exportPanel = page.getByTestId("config-export");
     await expect(exportPanel).toBeVisible();

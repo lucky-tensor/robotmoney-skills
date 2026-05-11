@@ -23,6 +23,7 @@ import { TxPreview } from "./TxPreview";
 import { PauseFlow } from "./PauseFlow";
 import { ConfigExportPanel } from "./ConfigExportPanel";
 import { HistoryPane } from "./HistoryPane";
+import { Tabs } from "./Tabs";
 import { resolveFlags } from "../lib/featureFlags";
 import { resolveExplorerApiUrl } from "../lib/explorerApi";
 import { composeRotationPreview } from "../rotation";
@@ -341,6 +342,12 @@ export function AdminFlow(props: AdminFlowProps) {
         </p>
       )}
 
+      <Tabs
+        tabs={[
+          {
+            id: "authorize",
+            label: "Authorize",
+            content: (
       <section data-testid="authorize-form">
         <h2>Authorize agent</h2>
         <label>
@@ -397,11 +404,23 @@ export function AdminFlow(props: AdminFlowProps) {
         </button>
       </section>
 
-      <PauseFlow
-        gatewayAddress={props.gatewayAddress}
-        gatewayCodeHashVerified={props.gatewayCodeHashVerified}
-        envClass={props.envClass}
-      />
+            ),
+          },
+          {
+            id: "pause",
+            label: "Pause",
+            content: (
+              <PauseFlow
+                gatewayAddress={props.gatewayAddress}
+                gatewayCodeHashVerified={props.gatewayCodeHashVerified}
+                envClass={props.envClass}
+              />
+            ),
+          },
+          {
+            id: "revoke",
+            label: "Revoke",
+            content: (
 
       <section data-testid="revoke-form">
         <h2>Revoke agent</h2>
@@ -415,6 +434,12 @@ export function AdminFlow(props: AdminFlowProps) {
         </button>
       </section>
 
+            ),
+          },
+          {
+            id: "rotation",
+            label: "Rotation",
+            content: (
       <section data-testid="rotation-form">
         <h2>Agent rotation (revoke old → authorize new)</h2>
         <p>
@@ -522,6 +547,12 @@ export function AdminFlow(props: AdminFlowProps) {
         )}
       </section>
 
+            ),
+          },
+          {
+            id: "admin-role",
+            label: "Admin Role",
+            content: (
       <section data-testid="admin-role-form">
         <h2>ADMIN_ROLE grant / revoke</h2>
         <p>
@@ -571,6 +602,12 @@ export function AdminFlow(props: AdminFlowProps) {
         </button>
       </section>
 
+            ),
+          },
+          {
+            id: "pauser-role",
+            label: "Pauser Role",
+            content: (
       <section data-testid="pauser-role-form">
         <h2>PAUSER_ROLE grant / revoke</h2>
         <p>
@@ -620,25 +657,39 @@ export function AdminFlow(props: AdminFlowProps) {
         </button>
       </section>
 
-      {flags.historyPane && validAgent && (
-        <HistoryPane agent={agent as Address} apiUrl={resolveExplorerApiUrl(props.flagEnv)} />
-      )}
-
-      {validAgent && validReceiver && (
-        <ConfigExportPanel
-          gateway={props.gatewayAddress}
-          vault={props.vaultAddress}
-          usdcAddress={usdcAddress}
-          gatewayRuntimeHash={
-            props.gatewayVerificationState.status === "verified"
-              ? props.gatewayVerificationState.computedHash
-              : ""
-          }
-          chainId={chainId}
-          rpcUrl={props.flagEnv.VITE_FORK_RPC_URL ?? "http://127.0.0.1:8545"}
-          agent={agent as Address}
-        />
-      )}
+            ),
+          },
+          {
+            id: "history",
+            label: "History",
+            hidden: !(flags.historyPane && validAgent),
+            content: validAgent ? (
+              <HistoryPane agent={agent as Address} apiUrl={resolveExplorerApiUrl(props.flagEnv)} />
+            ) : null,
+          },
+          {
+            id: "export",
+            label: "Export Config",
+            hidden: !(validAgent && validReceiver),
+            content:
+              validAgent && validReceiver ? (
+                <ConfigExportPanel
+                  gateway={props.gatewayAddress}
+                  vault={props.vaultAddress}
+                  usdcAddress={usdcAddress}
+                  gatewayRuntimeHash={
+                    props.gatewayVerificationState.status === "verified"
+                      ? props.gatewayVerificationState.computedHash
+                      : ""
+                  }
+                  chainId={chainId}
+                  rpcUrl={props.flagEnv.VITE_FORK_RPC_URL ?? "http://127.0.0.1:8545"}
+                  agent={agent as Address}
+                />
+              ) : null,
+          },
+        ]}
+      />
     </main>
   );
 }

@@ -220,3 +220,23 @@ export async function openDapp(
     await connectInjectedWallet(page);
   }
 }
+
+/**
+ * Activate a named tab in the AdminFlow. Tabs render only the active
+ * panel into the DOM, so specs must call this before interacting with
+ * any form testid that lives inside a tab.
+ */
+export type AdminTabId =
+  | "authorize"
+  | "pause"
+  | "revoke"
+  | "rotation"
+  | "admin-role"
+  | "pauser-role"
+  | "history"
+  | "export";
+
+export async function openTab(page: Page, tabId: AdminTabId): Promise<void> {
+  await page.getByTestId(`tab-${tabId}`).click();
+  await page.getByTestId(`tabpanel-${tabId}`).waitFor({ state: "visible" });
+}
