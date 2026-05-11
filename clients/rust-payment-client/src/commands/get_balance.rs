@@ -141,7 +141,10 @@ async fn call_balance_of(
         .eth_call(
             &CallRequest {
                 to: token,
-                from: None,
+                // Use holder as from so the transparent proxy does not reject
+                // the call via its admin-only guard (address(0) default in
+                // anvil coincides with the USDC proxy admin in the fixture).
+                from: Some(holder),
                 data: data.into(),
             },
             None,

@@ -59,7 +59,7 @@ fn rmpc_bin() -> &'static PathBuf {
             .expect("spawn cargo build rmpc");
         assert!(status.success(), "cargo build --bin rmpc failed");
 
-        let bin = workspace_root().join("clients/rust-payment-client/target/debug/rmpc");
+        let bin = workspace_root().join("target/debug/rmpc");
         assert!(bin.exists(), "rmpc binary not at {bin:?} after build");
         bin
     })
