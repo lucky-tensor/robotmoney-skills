@@ -4,7 +4,7 @@
  * the gateway: paused state + USDC token address. Other addresses
  * come from build-time env (VITE_GATEWAY_ADDRESS, VITE_VAULT_ADDRESS).
  */
-import { useAccount, useChainId, useReadContract } from "wagmi";
+import { useAccount, useChainId, useConnect, useDisconnect, useReadContract } from "wagmi";
 import type { Address } from "viem";
 import { gatewayAbi } from "../lib/abi";
 
@@ -15,7 +15,9 @@ interface StatusHeaderProps {
 }
 
 export function StatusHeader(props: StatusHeaderProps) {
-  const { isConnected } = useAccount();
+  const { address, isConnected } = useAccount();
+  const { connect, connectors } = useConnect();
+  const { disconnect } = useDisconnect();
   const chainId = useChainId();
 
   const { data: pausedData } = useReadContract({
@@ -36,7 +38,42 @@ export function StatusHeader(props: StatusHeaderProps) {
 
   return (
     <section className="status-header" data-testid="status-header">
-      <p className="hero-eyebrow">{props.envClass.toUpperCase()}</p>
+      <div className="hero">
+        <p className="hero-eyebrow">{props.envClass.toUpperCase()}</p>
+        <h1>One USDC transfer. Diversified exposure.</h1>
+        <p className="hero-sub">
+          Authorize an agent to allocate USDC across the bucket portfolio on your behalf. One
+          integration, not twenty.
+        </p>
+        <div className="wallet-row" data-testid="wallet-row">
+          {!isConnected ? (
+            <>
+              {connectors[0] && (
+                <button
+                  data-testid="connect-wallet"
+                  onClick={() => connect({ connector: connectors[0] })}
+                >
+                  Connect wallet
+                </button>
+              )}
+              {connectors.length === 0 && (
+                <p data-testid="no-connectors" className="hint">
+                  No browser wallet detected. Install a wallet extension to continue.
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              <code data-testid="connected-address" className="wallet-address">
+                {address}
+              </code>
+              <button data-testid="disconnect" onClick={() => disconnect()}>
+                Disconnect
+              </button>
+            </>
+          )}
+        </div>
+      </div>
       <div className="stat-grid">
         <div className="stat-card">
           <p className="stat-label">Chain</p>

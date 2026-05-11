@@ -317,21 +317,21 @@ export function AdminFlow(props: AdminFlowProps) {
         )}
       </section>
 
-      <section data-testid="connect-section">
+      <section data-testid="connect-section" hidden>
         {!isConnected ? (
           <>
             <p>Connect a wallet to begin.</p>
             {connectors.map((c) => (
               <button
                 key={c.uid}
-                data-testid={`connect-${c.id}`}
+                data-testid={`connect-${c.id}-legacy`}
                 onClick={() => connect({ connector: c })}
               >
                 Connect {c.name}
               </button>
             ))}
             {connectors.length === 0 && (
-              <p data-testid="no-connectors">
+              <p data-testid="no-connectors-legacy">
                 No browser wallet detected. Install a wallet extension (e.g. MetaMask) to continue.
               </p>
             )}
@@ -339,11 +339,11 @@ export function AdminFlow(props: AdminFlowProps) {
         ) : (
           <>
             <p>
-              Connected: <code data-testid="connected-address">{address}</code> · chain{" "}
+              Connected: <code data-testid="connected-address-legacy">{address}</code> · chain{" "}
               <code data-testid="connected-chain">{chainId}</code> · paused{" "}
               <code data-testid="gateway-paused">{String(paused)}</code>
             </p>
-            <button data-testid="disconnect" onClick={() => disconnect()}>
+            <button data-testid="disconnect-legacy" onClick={() => disconnect()}>
               Disconnect
             </button>
           </>

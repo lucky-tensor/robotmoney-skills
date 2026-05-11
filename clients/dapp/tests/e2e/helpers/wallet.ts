@@ -179,14 +179,13 @@ export async function injectWallet(page: Page, opts: InjectWalletOptions): Promi
 }
 
 /**
- * Click the wagmi `injected` connector button. Use after `injectWallet`
- * and `page.goto()`. The injected connector exposes connector.id =
- * "injected", so AdminFlow renders a button with data-testid =
- * "connect-injected".
+ * Click the unified "Connect wallet" button. Use after `injectWallet`
+ * and `page.goto()`. The button is rendered by StatusHeader (and as a
+ * fallback by AgentsPanel when the gate is active).
  */
 export async function connectInjectedWallet(page: Page): Promise<void> {
   const { expect } = await import("@playwright/test");
-  const button = page.getByTestId("connect-injected");
+  const button = page.getByTestId("connect-wallet").first();
   await expect(button).toBeVisible();
   await button.click();
   await expect(page.getByTestId("connected-address")).toBeVisible({ timeout: 10_000 });
