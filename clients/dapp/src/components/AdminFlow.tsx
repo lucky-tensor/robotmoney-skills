@@ -35,9 +35,12 @@ interface Eip1193Provider {
  * prompt; if it differs, the user sees a single confirmation and the
  * wallet adopts the new URL. Then we switch into the chain.
  */
-async function syncDevnetChain(provider: Eip1193Provider) {
-  if (targetChainId === undefined || !targetRpcUrl) return;
+async function syncDevnetChain(provider: Eip1193Provider): Promise<string | undefined> {
+  if (targetChainId === undefined || !targetRpcUrl) {
+    return "VITE_DEVNET_RPC_URL is not set in this build — auto network add is disabled.";
+  }
   const chainIdHex = `0x${targetChainId.toString(16)}`;
+  let addError: unknown;
   try {
     await provider.request({
       method: "wallet_addEthereumChain",
@@ -47,16 +50,31 @@ async function syncDevnetChain(provider: Eip1193Provider) {
           chainName: "Robot Money devnet",
           rpcUrls: [targetRpcUrl],
           nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+          // MetaMask v11+ sometimes refuses the add without a block
+          // explorer entry; the explorer-api URL serves as a sensible
+          // stand-in even though it isn't a block-explorer UI.
+          blockExplorerUrls: [String(import.meta.env.VITE_EXPLORER_API_URL ?? targetRpcUrl)],
         },
       ],
     });
-  } catch {
-    // User may dismiss the prompt; fall through to a plain switch.
+  } catch (err) {
+    addError = err;
+    // eslint-disable-next-line no-console
+    console.error("wallet_addEthereumChain failed:", err);
   }
-  await provider.request({
-    method: "wallet_switchEthereumChain",
-    params: [{ chainId: chainIdHex }],
-  });
+  try {
+    await provider.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: chainIdHex }],
+    });
+    return undefined;
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("wallet_switchEthereumChain failed:", err);
+    const addMsg = addError ? `add: ${(addError as { message?: string }).message ?? addError}` : "";
+    const switchMsg = `switch: ${(err as { message?: string }).message ?? err}`;
+    return [addMsg, switchMsg].filter(Boolean).join(" — ");
+  }
 }
 
 function getInjectedProvider(): Eip1193Provider | undefined {
@@ -95,25 +113,35 @@ export function AdminFlow(props: AdminFlowProps) {
   const { disconnect } = useDisconnect();
   const chainId = useChainId();
 
+  const [networkSyncError, setNetworkSyncError] = useState<string | undefined>(undefined);
+
+  const runSync = async () => {
+    const provider = getInjectedProvider();
+    if (!provider) {
+      setNetworkSyncError("No injected wallet provider (window.ethereum is undefined).");
+      return;
+    }
+    const err = await syncDevnetChain(provider);
+    setNetworkSyncError(err);
+  };
+
   // Connect Wallet handles the full devnet network bookkeeping: connect
   // accounts → push the current RPC URL into the wallet via
-  // `wallet_addEthereumChain` (overwrites any stale URL from a previous
-  // smoke-test session) → switch into the chain. See `syncDevnetChain`.
+  // `wallet_addEthereumChain` → switch into the chain. See
+  // `syncDevnetChain`.
   const handleConnect = (connector: (typeof connectors)[number]) => {
     connect(
       { connector },
       {
         onSuccess: () => {
-          const provider = getInjectedProvider();
-          if (provider) void syncDevnetChain(provider);
+          void runSync();
         },
       },
     );
   };
 
   const handleSwitchChain = () => {
-    const provider = getInjectedProvider();
-    if (provider) void syncDevnetChain(provider);
+    void runSync();
   };
 
   const { data: pausedData } = useReadContract({
@@ -403,6 +431,11 @@ export function AdminFlow(props: AdminFlowProps) {
               <button data-testid="switch-chain" onClick={handleSwitchChain}>
                 Switch to Robot Money devnet
               </button>
+            )}
+            {networkSyncError && (
+              <p data-testid="network-sync-error" className="unsafe-banner">
+                <strong>Network setup error:</strong> {networkSyncError}
+              </p>
             )}
             <button data-testid="disconnect" onClick={() => disconnect()}>
               Disconnect
