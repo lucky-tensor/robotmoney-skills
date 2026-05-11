@@ -29,7 +29,6 @@ const envClass = (env.VITE_ENV_CLASS as "fork" | "devnet" | "testnet" | "mainnet
 
 function App() {
   const verificationState = useGatewayVerifier(gateway, expectedCodeHash);
-  const gatewayCodeHashVerified = verificationState.status === "verified";
 
   return (
     <>
@@ -44,7 +43,6 @@ function App() {
       <AgentsPanel
         gatewayAddress={gateway}
         vaultAddress={vault}
-        gatewayCodeHashVerified={gatewayCodeHashVerified}
         gatewayVerificationState={verificationState}
         envClass={envClass}
         flagEnv={env}

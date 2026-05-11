@@ -19,7 +19,7 @@ export type RegistrationStatus = "disconnected" | "unregistered" | "registered";
 
 const STORAGE_PREFIX = "rm:agent-registered:";
 
-export function storageKey(addr: string): string {
+function storageKey(addr: string): string {
   return `${STORAGE_PREFIX}${addr.toLowerCase()}`;
 }
 

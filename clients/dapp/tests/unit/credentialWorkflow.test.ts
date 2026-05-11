@@ -21,8 +21,8 @@ import {
   validateEthereumAddress,
   formatUsdc,
   type AgentPolicy,
-} from "../../src/credentialWorkflow";
-import { composeRotationPreview } from "../../src/rotation";
+} from "../../src/lib/credentialWorkflow";
+import { composeRotationPreview } from "../../src/lib/rotation";
 import { resolveFlags, DEFAULT_FLAGS } from "../../src/lib/featureFlags";
 
 // ---------------------------------------------------------------------------

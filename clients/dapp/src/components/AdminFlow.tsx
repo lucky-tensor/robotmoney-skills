@@ -1,41 +1,34 @@
 /**
- * AdminFlow — minimal connect/authorize/revoke surface backed by
- * wagmi. Reads RPC for paused() state, builds previews for each action,
- * and only enables the "Sign with wallet" button when the preview is OK.
+ * AdminFlow — orchestrates the agent-management tabs. Each tab owns
+ * its wallet hooks and preview pipeline; this component only routes
+ * shared state (agent address, share receiver) between tabs that
+ * reference them and assembles the visible tab list.
  *
  * The admin is the connected wallet (human admin role). The agent
  * address is supplied by the operator (register-only flow per ADR §3.1).
  * Browser-generated keypair flow is gated by featureFlags.
  */
 import { useState } from "react";
-import {
-  useAccount,
-  useConnect,
-  useDisconnect,
-  useWriteContract,
-  useChainId,
-  useReadContract,
-} from "wagmi";
+import { useAccount, useChainId, useReadContract } from "wagmi";
 import { isAddress, type Address } from "viem";
-import { gatewayAbi, ROLE_HASH, type RoleName } from "../lib/abi";
-import { buildPreview, type AdminAction, type PreviewContext } from "../lib/preview";
-import { TxPreview } from "./TxPreview";
-import { PauseFlow } from "./PauseFlow";
+import { gatewayAbi } from "../lib/abi";
+import type { PreviewContext } from "../lib/preview";
 import { ConfigExportPanel } from "./ConfigExportPanel";
 import { HistoryPane } from "./HistoryPane";
-import { Tabs } from "./Tabs";
+import { PauseFlow } from "./PauseFlow";
+import { Tabs, type TabDef } from "./Tabs";
 import { resolveFlags } from "../lib/featureFlags";
 import { resolveExplorerApiUrl } from "../lib/explorerApi";
-import { composeRotationPreview } from "../rotation";
 import type { VerificationState } from "../lib/useGatewayVerifier";
-import { markRegistered } from "../lib/useVaultRegistration";
+import { AuthorizeTab } from "./admin/AuthorizeTab";
+import { RevokeTab } from "./admin/RevokeTab";
+import { RotationTab } from "./admin/RotationTab";
+import { RoleTab } from "./admin/RoleTab";
+import { DepositWithdrawTab } from "./admin/DepositWithdrawTab";
 
 interface AdminFlowProps {
   gatewayAddress: Address;
   vaultAddress: Address;
-  /** Derived boolean — true only when verification succeeded. */
-  gatewayCodeHashVerified: boolean;
-  /** Full verification state for rendering the status banner. */
   gatewayVerificationState: VerificationState;
   envClass: PreviewContext["envClass"];
   flagEnv: Record<string, string | undefined>;
@@ -49,21 +42,9 @@ interface AdminFlowProps {
 
 export function AdminFlow(props: AdminFlowProps) {
   const flags = resolveFlags(props.flagEnv);
-  const { address, isConnected } = useAccount();
-  const { connect, connectors } = useConnect();
-  const { disconnect } = useDisconnect();
+  const { isConnected } = useAccount();
   const chainId = useChainId();
 
-  const { data: pausedData } = useReadContract({
-    address: props.gatewayAddress,
-    abi: gatewayAbi,
-    functionName: "paused",
-    query: { enabled: isConnected },
-  });
-  const paused = Boolean(pausedData);
-
-  // Read the USDC token address from the gateway contract. Used by
-  // ConfigExportPanel so the exported config includes the real usdc_address.
   const { data: usdcAddressData } = useReadContract({
     address: props.gatewayAddress,
     abi: gatewayAbi,
@@ -72,228 +53,141 @@ export function AdminFlow(props: AdminFlowProps) {
   });
   const usdcAddress = (usdcAddressData as Address | undefined) ?? ("" as Address);
 
+  // Shared between AuthorizeTab (input), RevokeTab (read-only), History,
+  // and Export tabs — RevokeTab intentionally has no input of its own.
   const [agent, setAgent] = useState("");
-  const [validUntil, setValidUntil] = useState(() =>
-    // eslint-disable-next-line no-restricted-syntax -- TODO(react-guide §Prime directives): inject clock; lazy init runs once at mount.
-    Math.floor(Date.now() / 1000 + 86400).toString(),
-  );
-  const [maxPerPayment, setMaxPerPayment] = useState("100000000"); // 100 USDC
-  const [maxPerWindow, setMaxPerWindow] = useState("1000000000"); // 1000 USDC
   const [shareReceiver, setShareReceiver] = useState("");
-
-  // Deposit + withdraw inputs. Vault ABI for these actions is not yet
-  // wired in src/lib/abi.ts — the buttons stay disabled until it lands.
-  const [depositAmount, setDepositAmount] = useState("");
-  const [withdrawAmount, setWithdrawAmount] = useState("");
-
-  // Rotation flow state: old agent address + new agent address + new policy.
-  // The rotation section is independent from the single-action authorize/revoke
-  // forms above. Both revoke (old) and authorize (new) previews must be OK
-  // before either wallet button is enabled.
-  const [rotationOldAgent, setRotationOldAgent] = useState("");
-  const [rotationNewAgent, setRotationNewAgent] = useState("");
-  const [rotationValidUntil, setRotationValidUntil] = useState(() =>
-    // eslint-disable-next-line no-restricted-syntax -- TODO(react-guide §Prime directives): inject clock; lazy init runs once at mount.
-    Math.floor(Date.now() / 1000 + 86400).toString(),
-  );
-  const [rotationMaxPerPayment, setRotationMaxPerPayment] = useState("100000000"); // 100 USDC
-  const [rotationMaxPerWindow, setRotationMaxPerWindow] = useState("1000000000"); // 1000 USDC
-  const [rotationShareReceiver, setRotationShareReceiver] = useState("");
-  const [rotationStep, setRotationStep] = useState<"idle" | "revoke-sent" | "done">("idle");
-
-  const validRotationOld = isAddress(rotationOldAgent);
-  const validRotationNew = isAddress(rotationNewAgent);
-  const validRotationReceiver = isAddress(rotationShareReceiver);
-
-  // Compose the rotation preview (pure, no wallet). May throw on invalid
-  // address combinations — caught below so the section degrades gracefully.
-  let rotationPreview: ReturnType<typeof composeRotationPreview> | null = null;
-  let rotationPreviewError: string | null = null;
-  if (validRotationOld && validRotationNew && validRotationReceiver) {
-    try {
-      rotationPreview = composeRotationPreview(rotationOldAgent, rotationNewAgent, {
-        shareReceiver: rotationShareReceiver,
-        validUntil: Number(rotationValidUntil),
-        maxPerDeposit: BigInt(rotationMaxPerPayment),
-        maxPerWindow: BigInt(rotationMaxPerWindow),
-      });
-    } catch (err) {
-      rotationPreviewError = (err as Error).message;
-    }
-  }
-
-  // ADMIN_ROLE / PAUSER_ROLE grant + revoke. Each role keeps its own
-  // address input so the operator can grant ADMIN to one signer and
-  // PAUSER to another without retyping. See issue #83 + ADR §3.3.
-  const [adminAccount, setAdminAccount] = useState("");
-  const [pauserAccount, setPauserAccount] = useState("");
-
-  const { writeContract, isPending } = useWriteContract();
-
-  const ctx: PreviewContext = {
-    gateway: props.gatewayAddress,
-    gatewayCodeHashVerified: props.gatewayCodeHashVerified,
-    envClass: props.envClass,
-  };
-
-  // Build the on-chain previews via the existing preview pipeline so the
-  // TxPreview component renders structured fields for both rotation steps.
-  const rotationRevokeAction: AdminAction | null = validRotationOld
-    ? { kind: "revokeAgent", agent: rotationOldAgent as Address }
-    : null;
-  const rotationAuthorizeAction: AdminAction | null =
-    validRotationNew && validRotationReceiver
-      ? {
-          kind: "authorizeAgent",
-          agent: rotationNewAgent as Address,
-          policy: {
-            active: true,
-            validUntil: BigInt(rotationValidUntil),
-            maxPerPayment: BigInt(rotationMaxPerPayment),
-            maxPerWindow: BigInt(rotationMaxPerWindow),
-            shareReceiver: rotationShareReceiver as Address,
-          },
-        }
-      : null;
-
-  const rotationRevokePrev = rotationRevokeAction ? buildPreview(rotationRevokeAction, ctx) : null;
-  const rotationAuthorizePrev = rotationAuthorizeAction
-    ? buildPreview(rotationAuthorizeAction, ctx)
-    : null;
-
-  // Both previews must be structurally OK before either wallet button is enabled.
-  const rotationPreviewsOk =
-    rotationPreview !== null &&
-    rotationRevokePrev?.ok === true &&
-    rotationAuthorizePrev?.ok === true;
-
-  const onRotationRevoke = () => {
-    if (!rotationRevokeAction || !rotationRevokePrev?.ok) return;
-    writeContract({
-      address: props.gatewayAddress,
-      abi: gatewayAbi,
-      functionName: "revokeAgent",
-      args: [rotationRevokeAction.agent],
-    });
-    setRotationStep("revoke-sent");
-  };
-
-  const onRotationAuthorize = () => {
-    if (!rotationAuthorizeAction || !rotationAuthorizePrev?.ok) return;
-    writeContract({
-      address: props.gatewayAddress,
-      abi: gatewayAbi,
-      functionName: "authorizeAgent",
-      args: [
-        rotationAuthorizeAction.agent,
-        {
-          active: rotationAuthorizeAction.policy.active,
-          validUntil: rotationAuthorizeAction.policy.validUntil,
-          maxPerPayment: rotationAuthorizeAction.policy.maxPerPayment,
-          maxPerWindow: rotationAuthorizeAction.policy.maxPerWindow,
-          shareReceiver: rotationAuthorizeAction.policy.shareReceiver,
-        },
-      ],
-    });
-    setRotationStep("done");
-  };
 
   const validAgent = isAddress(agent);
   const validReceiver = isAddress(shareReceiver);
 
-  const authorizeAction: AdminAction | null =
-    validAgent && validReceiver
-      ? {
-          kind: "authorizeAgent",
-          agent: agent as Address,
-          policy: {
-            active: true,
-            validUntil: BigInt(validUntil),
-            maxPerPayment: BigInt(maxPerPayment),
-            maxPerWindow: BigInt(maxPerWindow),
-            shareReceiver: shareReceiver as Address,
-          },
-        }
-      : null;
+  const { gatewayVerificationState, registrationMode } = props;
+  const gatewayCodeHashVerified = gatewayVerificationState.status === "verified";
 
-  const revokeAction: AdminAction | null = validAgent
-    ? { kind: "revokeAgent", agent: agent as Address }
-    : null;
-
-  const authorizePreview = authorizeAction ? buildPreview(authorizeAction, ctx) : null;
-  const revokePreview = revokeAction ? buildPreview(revokeAction, ctx) : null;
-
-  const onAuthorize = () => {
-    if (!authorizeAction || !authorizePreview?.ok) return;
-    writeContract({
-      address: props.gatewayAddress,
-      abi: gatewayAbi,
-      functionName: "authorizeAgent",
-      args: [
-        authorizeAction.agent,
-        {
-          active: authorizeAction.policy.active,
-          validUntil: authorizeAction.policy.validUntil,
-          maxPerPayment: authorizeAction.policy.maxPerPayment,
-          maxPerWindow: authorizeAction.policy.maxPerWindow,
-          shareReceiver: authorizeAction.policy.shareReceiver,
-        },
-      ],
-    });
-    if (address) markRegistered(address);
+  const ctx: PreviewContext = {
+    gateway: props.gatewayAddress,
+    gatewayCodeHashVerified,
+    envClass: props.envClass,
   };
 
-  const onRevoke = () => {
-    if (!revokeAction || !revokePreview?.ok) return;
-    writeContract({
-      address: props.gatewayAddress,
-      abi: gatewayAbi,
-      functionName: "revokeAgent",
-      args: [revokeAction.agent],
-    });
-  };
+  const tabs: TabDef[] = [
+    {
+      id: "authorize",
+      label: "Authorize",
+      content: (
+        <AuthorizeTab
+          gatewayAddress={props.gatewayAddress}
+          ctx={ctx}
+          agent={agent}
+          setAgent={setAgent}
+          shareReceiver={shareReceiver}
+          setShareReceiver={setShareReceiver}
+        />
+      ),
+    },
+  ];
 
-  // Builds a grant or revoke action for the given role iff the address
-  // input parses. Returns null otherwise so the preview block stays hidden
-  // and the wallet button stays disabled — same UX shape as the agent flow.
-  const validAdminAccount = isAddress(adminAccount);
-  const validPauserAccount = isAddress(pauserAccount);
+  if (!registrationMode) {
+    tabs.push(
+      {
+        id: "deposit-withdraw",
+        label: "Deposit & Withdraw",
+        content: <DepositWithdrawTab />,
+      },
+      {
+        id: "pause",
+        label: "Pause",
+        content: (
+          <PauseFlow
+            gatewayAddress={props.gatewayAddress}
+            gatewayCodeHashVerified={gatewayCodeHashVerified}
+            envClass={props.envClass}
+          />
+        ),
+      },
+      {
+        id: "revoke",
+        label: "Revoke",
+        content: <RevokeTab gatewayAddress={props.gatewayAddress} ctx={ctx} agent={agent} />,
+      },
+      {
+        id: "rotation",
+        label: "Rotation",
+        content: <RotationTab gatewayAddress={props.gatewayAddress} ctx={ctx} />,
+      },
+      {
+        id: "admin-role",
+        label: "Admin Role",
+        content: (
+          <RoleTab
+            role="ADMIN_ROLE"
+            gatewayAddress={props.gatewayAddress}
+            ctx={ctx}
+            description={
+              <p>
+                Mutually exclusive with AGENT_ROLE and PAUSER_ROLE per
+                <code> AccessRoles._grantRole</code>. Only DEFAULT_ADMIN_ROLE holders may grant.
+              </p>
+            }
+          />
+        ),
+      },
+      {
+        id: "pauser-role",
+        label: "Pauser Role",
+        content: (
+          <RoleTab
+            role="PAUSER_ROLE"
+            gatewayAddress={props.gatewayAddress}
+            ctx={ctx}
+            description={
+              <p>
+                PAUSER may call <code>pause()</code> only; <code>unpause()</code> requires
+                ADMIN_ROLE. Mutually exclusive with AGENT_ROLE and ADMIN_ROLE on the same account.
+              </p>
+            }
+          />
+        ),
+      },
+    );
 
-  const grantAdminAction: AdminAction | null = validAdminAccount
-    ? { kind: "grantRole", role: "ADMIN_ROLE", account: adminAccount as Address }
-    : null;
-  const revokeAdminAction: AdminAction | null = validAdminAccount
-    ? { kind: "revokeRole", role: "ADMIN_ROLE", account: adminAccount as Address }
-    : null;
-  const grantPauserAction: AdminAction | null = validPauserAccount
-    ? { kind: "grantRole", role: "PAUSER_ROLE", account: pauserAccount as Address }
-    : null;
-  const revokePauserAction: AdminAction | null = validPauserAccount
-    ? { kind: "revokeRole", role: "PAUSER_ROLE", account: pauserAccount as Address }
-    : null;
+    if (flags.historyPane && validAgent) {
+      tabs.push({
+        id: "history",
+        label: "History",
+        content: (
+          <HistoryPane agent={agent as Address} apiUrl={resolveExplorerApiUrl(props.flagEnv)} />
+        ),
+      });
+    }
 
-  const grantAdminPreview = grantAdminAction ? buildPreview(grantAdminAction, ctx) : null;
-  const revokeAdminPreview = revokeAdminAction ? buildPreview(revokeAdminAction, ctx) : null;
-  const grantPauserPreview = grantPauserAction ? buildPreview(grantPauserAction, ctx) : null;
-  const revokePauserPreview = revokePauserAction ? buildPreview(revokePauserAction, ctx) : null;
-
-  // Shared writeContract dispatcher for grantRole/revokeRole. The
-  // function name maps to the AccessControl entry point on the gateway.
-  const submitRoleCall = (fn: "grantRole" | "revokeRole", role: RoleName, account: Address) => {
-    writeContract({
-      address: props.gatewayAddress,
-      abi: gatewayAbi,
-      functionName: fn,
-      args: [ROLE_HASH[role], account],
-    });
-  };
-
-  const { gatewayVerificationState } = props;
+    if (validAgent && validReceiver) {
+      tabs.push({
+        id: "export",
+        label: "Export Config",
+        content: (
+          <ConfigExportPanel
+            gateway={props.gatewayAddress}
+            vault={props.vaultAddress}
+            usdcAddress={usdcAddress}
+            gatewayRuntimeHash={
+              gatewayVerificationState.status === "verified"
+                ? gatewayVerificationState.computedHash
+                : ""
+            }
+            chainId={chainId}
+            rpcUrl={props.flagEnv.VITE_FORK_RPC_URL ?? "http://127.0.0.1:8545"}
+            agent={agent as Address}
+          />
+        ),
+      });
+    }
+  }
 
   return (
     <main className="admin-flow">
-      <h1>{props.registrationMode ? "Authorize your first agent" : "Agents"}</h1>
-      {props.registrationMode && (
+      <h1>{registrationMode ? "Authorize your first agent" : "Agents"}</h1>
+      {registrationMode && (
         <p className="hint" data-testid="registration-hint">
           Authorize an agent to unlock the full agents panel (revoke, rotation, roles, history,
           export).
@@ -306,40 +200,6 @@ export function AdminFlow(props: AdminFlowProps) {
         </p>
       )}
 
-      <section data-testid="connect-section" hidden>
-        {!isConnected ? (
-          <>
-            <p>Connect a wallet to begin.</p>
-            {connectors.map((c) => (
-              <button
-                type="button"
-                key={c.uid}
-                data-testid={`connect-${c.id}-legacy`}
-                onClick={() => connect({ connector: c })}
-              >
-                Connect {c.name}
-              </button>
-            ))}
-            {connectors.length === 0 && (
-              <p data-testid="no-connectors-legacy">
-                No browser wallet detected. Install a wallet extension (e.g. MetaMask) to continue.
-              </p>
-            )}
-          </>
-        ) : (
-          <>
-            <p>
-              Connected: <code data-testid="connected-address-legacy">{address}</code> · chain{" "}
-              <code data-testid="connected-chain">{chainId}</code> · paused{" "}
-              <code data-testid="gateway-paused">{String(paused)}</code>
-            </p>
-            <button type="button" data-testid="disconnect-legacy" onClick={() => disconnect()}>
-              Disconnect
-            </button>
-          </>
-        )}
-      </section>
-
       {flags.browserGeneratedCredential ? (
         <section data-testid="browser-keygen" className="unsafe-banner">
           <strong>UNSAFE: software-backed credential</strong>
@@ -351,410 +211,7 @@ export function AdminFlow(props: AdminFlowProps) {
         </p>
       )}
 
-      <Tabs
-        tabs={[
-          {
-            id: "authorize",
-            label: "Authorize",
-            content: (
-              <section data-testid="authorize-form">
-                <h2>Authorize agent</h2>
-                <label>
-                  Agent address
-                  <input
-                    data-testid="agent-input"
-                    value={agent}
-                    onChange={(e) => setAgent(e.target.value)}
-                    placeholder="0x..."
-                  />
-                </label>
-                <label>
-                  Valid-until (unix seconds)
-                  <input
-                    data-testid="validUntil-input"
-                    value={validUntil}
-                    onChange={(e) => setValidUntil(e.target.value)}
-                  />
-                </label>
-                <label>
-                  Max per payment (USDC base units)
-                  <input
-                    data-testid="maxPerPayment-input"
-                    value={maxPerPayment}
-                    onChange={(e) => setMaxPerPayment(e.target.value)}
-                  />
-                </label>
-                <label>
-                  Max per window (USDC base units)
-                  <input
-                    data-testid="maxPerWindow-input"
-                    value={maxPerWindow}
-                    onChange={(e) => setMaxPerWindow(e.target.value)}
-                  />
-                </label>
-                <label>
-                  Share receiver
-                  <input
-                    data-testid="shareReceiver-input"
-                    value={shareReceiver}
-                    onChange={(e) => setShareReceiver(e.target.value)}
-                    placeholder="0x..."
-                  />
-                </label>
-
-                {authorizePreview && <TxPreview preview={authorizePreview} />}
-
-                <button
-                  type="button"
-                  data-testid="authorize-submit"
-                  disabled={!isConnected || !authorizePreview?.ok || isPending}
-                  onClick={onAuthorize}
-                >
-                  Sign authorizeAgent with wallet
-                </button>
-              </section>
-            ),
-          },
-          {
-            id: "deposit-withdraw",
-            label: "Deposit & Withdraw",
-            hidden: props.registrationMode,
-            content: (
-              <div className="form-grid">
-                <section data-testid="deposit-form">
-                  <h2>Deposit USDC</h2>
-                  <p>Send USDC to the gateway. Receive vault shares.</p>
-                  <label>
-                    Amount (USDC)
-                    <input
-                      data-testid="deposit-amount"
-                      value={depositAmount}
-                      onChange={(e) => setDepositAmount(e.target.value)}
-                      placeholder="0.00"
-                    />
-                  </label>
-                  {/* TODO: vault ABI not yet wired — see src/lib/abi.ts */}
-                  <button type="button" data-testid="deposit-submit" disabled>
-                    Sign deposit with wallet
-                  </button>
-                  <p className="hint">Vault integration pending.</p>
-                </section>
-                <section data-testid="withdraw-form">
-                  <h2>Withdraw</h2>
-                  <p>Burn vault shares. Receive USDC.</p>
-                  <label>
-                    Shares
-                    <input
-                      data-testid="withdraw-amount"
-                      value={withdrawAmount}
-                      onChange={(e) => setWithdrawAmount(e.target.value)}
-                      placeholder="0.00"
-                    />
-                  </label>
-                  <button type="button" data-testid="withdraw-submit" disabled>
-                    Sign withdraw with wallet
-                  </button>
-                  <p className="hint">Vault integration pending.</p>
-                </section>
-              </div>
-            ),
-          },
-          {
-            id: "pause",
-            label: "Pause",
-            hidden: props.registrationMode,
-            content: (
-              <PauseFlow
-                gatewayAddress={props.gatewayAddress}
-                gatewayCodeHashVerified={props.gatewayCodeHashVerified}
-                envClass={props.envClass}
-              />
-            ),
-          },
-          {
-            id: "revoke",
-            label: "Revoke",
-            hidden: props.registrationMode,
-            content: (
-              <section data-testid="revoke-form">
-                <h2>Revoke agent</h2>
-                {revokePreview && <TxPreview preview={revokePreview} />}
-                <button
-                  type="button"
-                  data-testid="revoke-submit"
-                  disabled={!isConnected || !revokePreview?.ok || isPending}
-                  onClick={onRevoke}
-                >
-                  Sign revokeAgent with wallet
-                </button>
-              </section>
-            ),
-          },
-          {
-            id: "rotation",
-            label: "Rotation",
-            hidden: props.registrationMode,
-            content: (
-              <section data-testid="rotation-form">
-                <h2>Agent rotation (revoke old → authorize new)</h2>
-                <p>
-                  Both previews must be confirmed before wallet signing begins. Do not close this
-                  dialog between transactions.
-                </p>
-
-                {rotationPreview && (
-                  <p data-testid="rotation-combined-risk" className="rotation-risk-banner">
-                    {rotationPreview.combinedRiskAnnotation}
-                  </p>
-                )}
-                {rotationPreviewError && (
-                  <p data-testid="rotation-preview-error" className="error">
-                    {rotationPreviewError}
-                  </p>
-                )}
-
-                <label>
-                  Old agent address (to revoke)
-                  <input
-                    data-testid="rotation-old-agent-input"
-                    value={rotationOldAgent}
-                    onChange={(e) => {
-                      setRotationOldAgent(e.target.value);
-                      setRotationStep("idle");
-                    }}
-                    placeholder="0x..."
-                  />
-                </label>
-                <label>
-                  New agent address (to authorize)
-                  <input
-                    data-testid="rotation-new-agent-input"
-                    value={rotationNewAgent}
-                    onChange={(e) => {
-                      setRotationNewAgent(e.target.value);
-                      setRotationStep("idle");
-                    }}
-                    placeholder="0x..."
-                  />
-                </label>
-                <label>
-                  Valid-until (unix seconds)
-                  <input
-                    data-testid="rotation-validUntil-input"
-                    value={rotationValidUntil}
-                    onChange={(e) => setRotationValidUntil(e.target.value)}
-                  />
-                </label>
-                <label>
-                  Max per payment (USDC base units)
-                  <input
-                    data-testid="rotation-maxPerPayment-input"
-                    value={rotationMaxPerPayment}
-                    onChange={(e) => setRotationMaxPerPayment(e.target.value)}
-                  />
-                </label>
-                <label>
-                  Max per window (USDC base units)
-                  <input
-                    data-testid="rotation-maxPerWindow-input"
-                    value={rotationMaxPerWindow}
-                    onChange={(e) => setRotationMaxPerWindow(e.target.value)}
-                  />
-                </label>
-                <label>
-                  Share receiver
-                  <input
-                    data-testid="rotation-shareReceiver-input"
-                    value={rotationShareReceiver}
-                    onChange={(e) => setRotationShareReceiver(e.target.value)}
-                    placeholder="0x..."
-                  />
-                </label>
-
-                <div data-testid="rotation-step1">
-                  <h3>Step 1: revoke old agent</h3>
-                  {rotationRevokePrev && <TxPreview preview={rotationRevokePrev} />}
-                  <button
-                    type="button"
-                    data-testid="rotation-revoke-submit"
-                    disabled={
-                      !isConnected || !rotationPreviewsOk || rotationStep !== "idle" || isPending
-                    }
-                    onClick={onRotationRevoke}
-                  >
-                    Step 1 — Sign revokeAgent(old) with wallet
-                  </button>
-                </div>
-
-                <div data-testid="rotation-step2">
-                  <h3>Step 2: authorize new agent</h3>
-                  {rotationAuthorizePrev && <TxPreview preview={rotationAuthorizePrev} />}
-                  <button
-                    type="button"
-                    data-testid="rotation-authorize-submit"
-                    disabled={
-                      !isConnected ||
-                      !rotationPreviewsOk ||
-                      rotationStep !== "revoke-sent" ||
-                      isPending
-                    }
-                    onClick={onRotationAuthorize}
-                  >
-                    Step 2 — Sign authorizeAgent(new) with wallet
-                  </button>
-                </div>
-
-                {rotationStep === "done" && (
-                  <p data-testid="rotation-complete">Rotation complete. Verify on-chain state.</p>
-                )}
-              </section>
-            ),
-          },
-          {
-            id: "admin-role",
-            label: "Admin Role",
-            hidden: props.registrationMode,
-            content: (
-              <section data-testid="admin-role-form">
-                <h2>ADMIN_ROLE grant / revoke</h2>
-                <p>
-                  Mutually exclusive with AGENT_ROLE and PAUSER_ROLE per
-                  <code> AccessRoles._grantRole</code>. Only DEFAULT_ADMIN_ROLE holders may grant.
-                </p>
-                <label>
-                  ADMIN account address
-                  <input
-                    data-testid="admin-account-input"
-                    value={adminAccount}
-                    onChange={(e) => setAdminAccount(e.target.value)}
-                    placeholder="0x..."
-                  />
-                </label>
-                {grantAdminPreview && (
-                  <div data-testid="grant-admin-preview-wrap">
-                    <TxPreview preview={grantAdminPreview} />
-                  </div>
-                )}
-                <button
-                  type="button"
-                  data-testid="grant-admin-submit"
-                  disabled={!isConnected || !grantAdminPreview?.ok || isPending}
-                  onClick={() =>
-                    grantAdminAction &&
-                    grantAdminPreview?.ok &&
-                    submitRoleCall("grantRole", "ADMIN_ROLE", grantAdminAction.account)
-                  }
-                >
-                  Sign grantRole(ADMIN_ROLE) with wallet
-                </button>
-                {revokeAdminPreview && (
-                  <div data-testid="revoke-admin-preview-wrap">
-                    <TxPreview preview={revokeAdminPreview} />
-                  </div>
-                )}
-                <button
-                  type="button"
-                  data-testid="revoke-admin-submit"
-                  disabled={!isConnected || !revokeAdminPreview?.ok || isPending}
-                  onClick={() =>
-                    revokeAdminAction &&
-                    revokeAdminPreview?.ok &&
-                    submitRoleCall("revokeRole", "ADMIN_ROLE", revokeAdminAction.account)
-                  }
-                >
-                  Sign revokeRole(ADMIN_ROLE) with wallet
-                </button>
-              </section>
-            ),
-          },
-          {
-            id: "pauser-role",
-            label: "Pauser Role",
-            hidden: props.registrationMode,
-            content: (
-              <section data-testid="pauser-role-form">
-                <h2>PAUSER_ROLE grant / revoke</h2>
-                <p>
-                  PAUSER may call <code>pause()</code> only; <code>unpause()</code> requires
-                  ADMIN_ROLE. Mutually exclusive with AGENT_ROLE and ADMIN_ROLE on the same account.
-                </p>
-                <label>
-                  PAUSER account address
-                  <input
-                    data-testid="pauser-account-input"
-                    value={pauserAccount}
-                    onChange={(e) => setPauserAccount(e.target.value)}
-                    placeholder="0x..."
-                  />
-                </label>
-                {grantPauserPreview && (
-                  <div data-testid="grant-pauser-preview-wrap">
-                    <TxPreview preview={grantPauserPreview} />
-                  </div>
-                )}
-                <button
-                  type="button"
-                  data-testid="grant-pauser-submit"
-                  disabled={!isConnected || !grantPauserPreview?.ok || isPending}
-                  onClick={() =>
-                    grantPauserAction &&
-                    grantPauserPreview?.ok &&
-                    submitRoleCall("grantRole", "PAUSER_ROLE", grantPauserAction.account)
-                  }
-                >
-                  Sign grantRole(PAUSER_ROLE) with wallet
-                </button>
-                {revokePauserPreview && (
-                  <div data-testid="revoke-pauser-preview-wrap">
-                    <TxPreview preview={revokePauserPreview} />
-                  </div>
-                )}
-                <button
-                  type="button"
-                  data-testid="revoke-pauser-submit"
-                  disabled={!isConnected || !revokePauserPreview?.ok || isPending}
-                  onClick={() =>
-                    revokePauserAction &&
-                    revokePauserPreview?.ok &&
-                    submitRoleCall("revokeRole", "PAUSER_ROLE", revokePauserAction.account)
-                  }
-                >
-                  Sign revokeRole(PAUSER_ROLE) with wallet
-                </button>
-              </section>
-            ),
-          },
-          {
-            id: "history",
-            label: "History",
-            hidden: props.registrationMode || !(flags.historyPane && validAgent),
-            content: validAgent ? (
-              <HistoryPane agent={agent as Address} apiUrl={resolveExplorerApiUrl(props.flagEnv)} />
-            ) : null,
-          },
-          {
-            id: "export",
-            label: "Export Config",
-            hidden: props.registrationMode || !(validAgent && validReceiver),
-            content:
-              validAgent && validReceiver ? (
-                <ConfigExportPanel
-                  gateway={props.gatewayAddress}
-                  vault={props.vaultAddress}
-                  usdcAddress={usdcAddress}
-                  gatewayRuntimeHash={
-                    props.gatewayVerificationState.status === "verified"
-                      ? props.gatewayVerificationState.computedHash
-                      : ""
-                  }
-                  chainId={chainId}
-                  rpcUrl={props.flagEnv.VITE_FORK_RPC_URL ?? "http://127.0.0.1:8545"}
-                  agent={agent as Address}
-                />
-              ) : null,
-          },
-        ]}
-      />
+      <Tabs tabs={tabs} />
     </main>
   );
 }

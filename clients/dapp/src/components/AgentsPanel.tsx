@@ -18,7 +18,6 @@ import type { VerificationState } from "../lib/useGatewayVerifier";
 interface AgentsPanelProps {
   gatewayAddress: Address;
   vaultAddress: Address;
-  gatewayCodeHashVerified: boolean;
   gatewayVerificationState: VerificationState;
   envClass: "fork" | "devnet" | "testnet" | "mainnet";
   flagEnv: Record<string, string | undefined>;
@@ -57,7 +56,6 @@ export function AgentsPanel(props: AgentsPanelProps) {
     <AdminFlow
       gatewayAddress={props.gatewayAddress}
       vaultAddress={props.vaultAddress}
-      gatewayCodeHashVerified={props.gatewayCodeHashVerified}
       gatewayVerificationState={props.gatewayVerificationState}
       envClass={props.envClass}
       flagEnv={props.flagEnv}

@@ -308,33 +308,6 @@ button:disabled {
 .nav-brand span {
   color: var(--color-accent);
 }
-.nav-links {
-  display: flex;
-  gap: 0.25rem;
-}
-.nav-links a {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: var(--tracking-widest);
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-  text-decoration: none;
-  padding: 0.5rem 0.875rem;
-  border-radius: var(--radius-md);
-  transition:
-    color 150ms,
-    background 150ms;
-}
-.nav-links a:hover {
-  color: var(--color-text);
-  background: var(--color-surface);
-}
-.nav-links a[data-active="true"] {
-  color: var(--color-accent);
-  background: var(--color-surface);
-  box-shadow: 0 0 0 1px var(--color-border) inset;
-}
-
 /* Public view */
 main.public-view {
   max-width: 64rem;
@@ -348,13 +321,6 @@ main.public-view {
   background: transparent;
   border: none;
   padding: 1rem 0 1.5rem;
-}
-.hero-eyebrow {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: var(--tracking-widest);
-  color: var(--color-accent);
-  margin-bottom: 1rem;
 }
 .hero h1 {
   border: none;

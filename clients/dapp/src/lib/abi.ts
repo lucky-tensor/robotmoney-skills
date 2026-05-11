@@ -127,18 +127,3 @@ export const ROLE_HASH: Record<RoleName, `0x${string}`> = {
 
 export const ADMIN_ROLE_HASH = ROLE_HASH.ADMIN_ROLE;
 export const PAUSER_ROLE_HASH = ROLE_HASH.PAUSER_ROLE;
-
-/**
- * Minimal ERC-4626 vault ABI — only the read used to detect that a
- * connected wallet has been registered to a vault (i.e. holds shares).
- * Full vault ABI lives with the Rust client.
- */
-export const vaultAbi = [
-  {
-    type: "function",
-    name: "balanceOf",
-    stateMutability: "view",
-    inputs: [{ name: "account", type: "address" }],
-    outputs: [{ name: "", type: "uint256" }],
-  },
-] as const;
