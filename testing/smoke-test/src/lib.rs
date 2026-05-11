@@ -402,12 +402,13 @@ impl Fixture {
         // OVER_PAYMENT_CAP_DEPOSIT = 20_000 USDC) but stays well under the
         // genesis grant (1M USDC by default in fork-block.json).
         const AGENT_USDC_GRANT: u128 = 500_000 * 1_000_000; // 500k USDC, 6dp
-        fx.fund_usdc(fx.agent(), AGENT_USDC_GRANT).inspect_err(|_| {
-            let _ = Command::new("docker")
-                .args(["compose", "down", "-v", "--remove-orphans"])
-                .current_dir(&fx.compose_dir)
-                .status();
-        })?;
+        fx.fund_usdc(fx.agent(), AGENT_USDC_GRANT)
+            .inspect_err(|_| {
+                let _ = Command::new("docker")
+                    .args(["compose", "down", "-v", "--remove-orphans"])
+                    .current_dir(&fx.compose_dir)
+                    .status();
+            })?;
 
         Ok(fx)
     }
