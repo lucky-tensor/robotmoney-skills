@@ -16,7 +16,12 @@ use tempfile::TempDir;
 
 const APPROVAL_AMOUNT: u64 = 11_223_344;
 
+// TODO(#249): fork fixture USDC is a transparent proxy whose admin slot
+// resolves to address(0), colliding with the default `from` used by
+// `eth_call` and reverting the call. Skipped until the fixture-side fix
+// in #249 lands; rmpc must not work around this by spoofing `from`.
 #[test]
+#[ignore = "blocked on #249: fork fixture USDC proxy-admin collision"]
 fn rmpc_get_allowance_against_fork() {
     skip_if_no_fork!();
     let fx = ForkFixture::new().expect("boot fork");
