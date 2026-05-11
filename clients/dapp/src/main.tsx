@@ -12,6 +12,7 @@ import type { Address } from "viem";
 import { AgentsPanel } from "./components/AgentsPanel";
 import { NavBar } from "./components/NavBar";
 import { StatusHeader } from "./components/StatusHeader";
+import { VerificationBanner } from "./components/VerificationBanner";
 import { makeConfig } from "./lib/wagmi";
 import { useGatewayVerifier } from "./lib/useGatewayVerifier";
 
@@ -32,6 +33,7 @@ function App() {
   return (
     <>
       <NavBar />
+      <VerificationBanner state={verificationState} />
       <StatusHeader gatewayAddress={gateway} vaultAddress={vault} envClass={envClass} />
       <AgentsPanel
         gatewayAddress={gateway}

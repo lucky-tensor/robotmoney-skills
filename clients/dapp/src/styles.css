@@ -364,6 +364,15 @@ main.public-view {
   font-style: italic;
   margin-top: 0.5rem;
 }
+.verification-banner-wrap {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 1rem 1.5rem 0;
+}
+.verification-ok {
+  font-size: 0.75rem;
+  color: var(--color-text-dim);
+}
 main.agents-gate {
   max-width: 64rem;
   margin: 0 auto;

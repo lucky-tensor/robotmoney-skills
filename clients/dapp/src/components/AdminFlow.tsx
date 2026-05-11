@@ -298,26 +298,13 @@ export function AdminFlow(props: AdminFlowProps) {
         </p>
       )}
 
-      <section data-testid="gateway-verification-status">
-        {gatewayVerificationState.status === "pending" && (
-          <p data-testid="gateway-verification-pending">
-            Verifying gateway bytecode hash… Admin writes are disabled until verification completes.
-          </p>
-        )}
-        {gatewayVerificationState.status === "verified" && (
-          <p data-testid="gateway-verification-ok">
-            Gateway bytecode verified: <code>{gatewayVerificationState.computedHash}</code>
-          </p>
-        )}
-        {gatewayVerificationState.status === "refused" && (
-          <p data-testid="gateway-verification-refused" className="unsafe-banner">
-            <strong>Gateway verification refused — admin writes disabled.</strong>{" "}
-            {gatewayVerificationState.reason}
-          </p>
-        )}
-      </section>
+      {gatewayVerificationState.status === "verified" && (
+        <p data-testid="gateway-verification-ok" className="verification-ok">
+          Gateway bytecode verified: <code>{gatewayVerificationState.computedHash}</code>
+        </p>
+      )}
 
-      <section data-testid="connect-section" hidden>
+<section data-testid="connect-section" hidden>
         {!isConnected ? (
           <>
             <p>Connect a wallet to begin.</p>
