@@ -20,17 +20,16 @@
 //! `smoke-test-genesis-ingester` (added in this module) writes it to disk so
 //! the Docker `setup` container can merge it into the generated genesis.
 //!
-//! ## Storage limitations of the current snapshot
+//! ## USDC storage seed
 //!
 //! `CURRENT.anvil-state` is produced by Anvil's `--dump-state`, which only
-//! captures bytecode for addresses that have been explicitly warmed (see
-//! `scripts/devnet/snapshot-fork.sh`). It does NOT capture full storage for
-//! those addresses — only modified slots are emitted. This means the ingested
-//! USDC account has correct code but empty storage. Until an archive RPC is
-//! plumbed in (issue #255 step 7) the builder writes only the *harness balance
-//! grant* slot; reads of `USDC.symbol()` / `name()` / `totalSupply()` on the
-//! devnet will return zero values from cold storage. See
-//! `docs/testing/smoke-test-design.md` for the rollout plan.
+//! captures bytecode for addresses that have been explicitly warmed; full
+//! storage is NOT preserved. To make `USDC.symbol()` / `name()` /
+//! `totalSupply()` resolve to real Base values on the devnet, the builder
+//! layers a committed seed file (`testing/fixtures/fork-state/usdc-storage-seed.json`)
+//! onto the proxy account and registers the FiatTokenV2_2 implementation
+//! contract so the proxy's delegatecall resolves. See
+//! `docs/testing/smoke-test-design.md` for the capture procedure.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -47,10 +46,37 @@ pub const BASE_USDC_ADDR: &str = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
 /// FiatTokenV2_1 storage slot index for the `balances` mapping. The slot
 /// holding `balances[holder]` is `keccak256(abi.encode(holder, 9))`.
+///
+/// Verified empirically against Base mainnet at block 45743443 with
+/// `cast storage 0x8335… $(cast index address <holder> 9)` matching
+/// `balanceOf(<holder>)`.
 pub const FIAT_TOKEN_BALANCES_SLOT: u64 = 9;
 
-/// FiatTokenV2_1 storage slot for `totalSupply`.
-pub const FIAT_TOKEN_TOTAL_SUPPLY_SLOT: u64 = 1;
+/// FiatTokenV2_1 storage slot for `totalSupply_`.
+///
+/// Despite the FiatTokenV1 source code declaring `totalSupply_` early, the
+/// inheritance chain shifts it down: `Ownable` (slot 0), `Pausable`
+/// (slot 1: pauser, slot 2: paused — packed), `Blacklistable` (slot 3:
+/// blacklister, slot 4: blacklisted mapping). Then FiatTokenV1 adds
+/// `name` (slot 5? — actually slot 4 is the name string), `symbol`,
+/// `decimals`, `currency`, `masterMinter`+`initialized` packed, then
+/// `balances`, `allowed`, `totalSupply_`. Verified against Base mainnet:
+/// `cast call totalSupply()` == `cast storage USDC 11`.
+pub const FIAT_TOKEN_TOTAL_SUPPLY_SLOT: u64 = 11;
+
+/// ZeppelinOS proxy implementation slot:
+/// `keccak256("org.zeppelinos.proxy.implementation")`. Circle's
+/// FiatTokenProxy predates EIP-1967 and uses this older scheme. The seed
+/// file at `testing/fixtures/fork-state/usdc-storage-seed.json` records
+/// this slot's value so the devnet proxy can delegatecall the
+/// implementation we register alongside it.
+pub const ZEPPELINOS_PROXY_IMPL_SLOT: &str =
+    "0x7050c9e0f4ca769c69bd3a8ef740bc37934f8e2c036e5a723fd8ee048ed3f8c3";
+
+/// ZeppelinOS proxy admin slot:
+/// `keccak256("org.zeppelinos.proxy.admin")`.
+pub const ZEPPELINOS_PROXY_ADMIN_SLOT: &str =
+    "0x10d6a54a4754c8869d6886b5f5d7fbfa5b4522237ea5c60d11bc4e7a1ff9390b";
 
 // -- Output shape ----------------------------------------------------------
 
@@ -123,8 +149,102 @@ pub enum IngesterError {
         "ingester: snapshot lacks canonical Base USDC ({BASE_USDC_ADDR}); refusing to patch storage without a real USDC entry"
     )]
     MissingUsdc,
+    #[error("ingester: usdc-storage-seed.json: {0}")]
+    UsdcSeed(String),
     #[error("ingester: {0}")]
     Other(String),
+}
+
+// -- USDC storage seed ----------------------------------------------------
+
+/// Default repo-relative path to the committed USDC seed file.
+pub const USDC_SEED_PATH: &str = "testing/fixtures/fork-state/usdc-storage-seed.json";
+
+/// Typed view over `testing/fixtures/fork-state/usdc-storage-seed.json`.
+///
+/// Carries the proxy's critical storage slots (owner, name, symbol, decimals,
+/// totalSupply, masterMinter, proxy impl pointer, …) plus the implementation
+/// contract's bytecode. The genesis alloc builder applies the proxy storage
+/// onto the USDC proxy account ingested from the snapshot, and registers the
+/// implementation account separately so the proxy's delegatecall resolves on
+/// the devnet.
+#[derive(Debug, Clone, Deserialize)]
+pub struct UsdcStorageSeed {
+    pub fork_block: u64,
+    pub chain: String,
+    pub proxy: UsdcProxySeed,
+    pub implementation: UsdcImplSeed,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct UsdcProxySeed {
+    pub address: String,
+    pub storage: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct UsdcImplSeed {
+    pub address: String,
+    pub code: String,
+}
+
+impl UsdcStorageSeed {
+    /// Load + validate the seed file from disk. Validates the proxy address
+    /// matches the canonical Base USDC and the implementation slot inside the
+    /// proxy storage points at the seeded implementation address.
+    pub fn load(path: &Path) -> Result<Self, IngesterError> {
+        let raw = std::fs::read_to_string(path)
+            .map_err(|e| IngesterError::UsdcSeed(format!("read {}: {e}", path.display())))?;
+        let seed: UsdcStorageSeed = serde_json::from_str(&raw)
+            .map_err(|e| IngesterError::UsdcSeed(format!("parse {}: {e}", path.display())))?;
+        seed.validate()?;
+        Ok(seed)
+    }
+
+    fn validate(&self) -> Result<(), IngesterError> {
+        let want: Address = BASE_USDC_ADDR.parse().unwrap();
+        let got: Address = self
+            .proxy
+            .address
+            .parse()
+            .map_err(|e| IngesterError::UsdcSeed(format!("bad proxy address: {e}")))?;
+        if got != want {
+            return Err(IngesterError::UsdcSeed(format!(
+                "proxy address mismatch: seed {got:#x} vs canonical {want:#x}"
+            )));
+        }
+        let impl_addr: Address = self
+            .implementation
+            .address
+            .parse()
+            .map_err(|e| IngesterError::UsdcSeed(format!("bad impl address: {e}")))?;
+        let impl_slot_val = self
+            .proxy
+            .storage
+            .get(ZEPPELINOS_PROXY_IMPL_SLOT)
+            .ok_or_else(|| {
+                IngesterError::UsdcSeed("missing ZeppelinOS implementation slot".into())
+            })?;
+        let stored = U256::from_str_radix(impl_slot_val.trim_start_matches("0x"), 16)
+            .map_err(|e| IngesterError::UsdcSeed(format!("impl slot value parse: {e}")))?;
+        let impl_as_u256 =
+            U256::from_be_slice(&{
+                let mut buf = [0u8; 32];
+                buf[12..].copy_from_slice(impl_addr.as_slice());
+                buf
+            });
+        if stored != impl_as_u256 {
+            return Err(IngesterError::UsdcSeed(format!(
+                "implementation slot {stored:#x} does not point at declared impl {impl_addr:#x}"
+            )));
+        }
+        if !self.implementation.code.starts_with("0x") || self.implementation.code.len() < 4 {
+            return Err(IngesterError::UsdcSeed(
+                "implementation.code must be non-empty 0x-prefixed hex".into(),
+            ));
+        }
+        Ok(())
+    }
 }
 
 // -- Public API ------------------------------------------------------------
@@ -182,12 +302,37 @@ pub fn build_alloc(
 ) -> Result<GenesisAlloc, IngesterError> {
     let raw = std::fs::read_to_string(snapshot_path)?;
     let snap: AnvilState = serde_json::from_str(&raw)?;
-    build_alloc_from_anvil(&snap, manifest)
+    // Resolve the seed file alongside the snapshot. Both live under
+    // `testing/fixtures/fork-state/` so we look there first; callers that
+    // want a different layout can use `build_alloc_with_seed`.
+    let seed_path = snapshot_path
+        .parent()
+        .map(|p| p.join("usdc-storage-seed.json"))
+        .unwrap_or_else(|| std::path::PathBuf::from("usdc-storage-seed.json"));
+    let seed = if seed_path.exists() {
+        Some(UsdcStorageSeed::load(&seed_path)?)
+    } else {
+        None
+    };
+    build_alloc_from_anvil(&snap, manifest, seed.as_ref())
+}
+
+/// Like [`build_alloc`] but with an explicit seed override. Used by tests
+/// that want to construct the seed in-memory.
+pub fn build_alloc_with_seed(
+    snapshot_path: &Path,
+    manifest: &ForkManifest,
+    seed: Option<&UsdcStorageSeed>,
+) -> Result<GenesisAlloc, IngesterError> {
+    let raw = std::fs::read_to_string(snapshot_path)?;
+    let snap: AnvilState = serde_json::from_str(&raw)?;
+    build_alloc_from_anvil(&snap, manifest, seed)
 }
 
 fn build_alloc_from_anvil(
     snap: &AnvilState,
     manifest: &ForkManifest,
+    seed: Option<&UsdcStorageSeed>,
 ) -> Result<GenesisAlloc, IngesterError> {
     let mut out: BTreeMap<String, AllocEntry> = BTreeMap::new();
 
@@ -218,12 +363,39 @@ fn build_alloc_from_anvil(
         });
     }
 
-    // 3. USDC storage patch: balance grant + totalSupply bump.
+    // 3. USDC storage seed: layer committed slots (owner/name/symbol/…)
+    //    onto the proxy account and register the implementation contract
+    //    so the proxy's delegatecall resolves on the devnet.
     let usdc_key = address_key(
         &BASE_USDC_ADDR
             .parse::<Address>()
             .expect("static USDC address parses"),
     );
+
+    if let Some(seed) = seed {
+        let proxy_entry = out
+            .get_mut(&usdc_key)
+            .ok_or(IngesterError::MissingUsdc)?;
+        for (slot, val) in &seed.proxy.storage {
+            proxy_entry
+                .storage
+                .insert(slot.to_ascii_lowercase(), val.clone());
+        }
+        // Implementation account: code + a placeholder balance of 0.
+        let impl_addr: Address = seed
+            .implementation
+            .address
+            .parse()
+            .map_err(|e| IngesterError::UsdcSeed(format!("impl address parse: {e}")))?;
+        let impl_key = address_key(&impl_addr);
+        out.entry(impl_key).or_insert_with(|| AllocEntry {
+            balance: "0x0".to_string(),
+            nonce: None,
+            code: Some(seed.implementation.code.clone()),
+            storage: BTreeMap::new(),
+        });
+    }
+
     let usdc_entry = out
         .get_mut(&usdc_key)
         .ok_or(IngesterError::MissingUsdc)?;
@@ -443,13 +615,46 @@ mod tests {
         let expected = u256_hex(&U256::from(manifest.harness_usdc_grant_units));
         assert_eq!(stored, &expected, "balance slot != grant amount");
 
-        // 4. totalSupply slot was bumped by the grant amount (since the
-        //    snapshot had no prior totalSupply for USDC).
-        let ts_slot = slot_index_hex(1);
+        // 4. totalSupply slot was bumped by the grant amount. Note: when the
+        //    seed file is present the prior value is non-zero (real Base
+        //    totalSupply), so we assert >= grant rather than ==.
+        let ts_slot = slot_index_hex(FIAT_TOKEN_TOTAL_SUPPLY_SLOT);
         let stored_ts = usdc.storage.get(&ts_slot).expect("totalSupply slot present");
-        assert_eq!(stored_ts, &expected, "totalSupply slot != grant amount");
+        let stored_ts_u = U256::from_str_radix(stored_ts.trim_start_matches("0x"), 16).unwrap();
+        assert!(
+            stored_ts_u >= U256::from(manifest.harness_usdc_grant_units),
+            "totalSupply slot {stored_ts_u} < grant {}",
+            manifest.harness_usdc_grant_units
+        );
 
-        // 5. Output is JSON-serializable.
+        // 5. Seeded slots are present at expected positions: name, symbol,
+        //    decimals, totalSupply, implementation pointer.
+        let want_slots = [
+            ("0x0000000000000000000000000000000000000000000000000000000000000004", "name"),
+            ("0x0000000000000000000000000000000000000000000000000000000000000005", "symbol"),
+            ("0x0000000000000000000000000000000000000000000000000000000000000006", "decimals"),
+            (ZEPPELINOS_PROXY_IMPL_SLOT, "impl pointer"),
+        ];
+        for (slot, label) in want_slots {
+            assert!(
+                usdc.storage.contains_key(slot),
+                "seeded slot for {label} missing"
+            );
+        }
+        // Implementation account is registered as its own alloc entry.
+        let impl_addr: Address = "0x2cE6311ddAE708829Bc0784C967b7d77D19FD779"
+            .parse()
+            .unwrap();
+        let impl_entry = alloc
+            .0
+            .get(&address_key(&impl_addr))
+            .expect("USDC impl account registered");
+        assert!(
+            impl_entry.code.as_deref().map(|c| c.len()).unwrap_or(0) > 1000,
+            "USDC impl bytecode missing or stub"
+        );
+
+        // 6. Output is JSON-serializable.
         let _ = serde_json::to_string(&alloc).expect("alloc serializes");
     }
 
@@ -471,7 +676,7 @@ mod tests {
             }"#,
         )
         .unwrap();
-        let err = build_alloc_from_anvil(&snap, &manifest).unwrap_err();
+        let err = build_alloc_from_anvil(&snap, &manifest, None).unwrap_err();
         assert!(matches!(err, IngesterError::MissingIngestedAddress { .. }));
     }
 
@@ -502,7 +707,7 @@ mod tests {
             }"#,
         )
         .unwrap();
-        let err = build_alloc_from_anvil(&snap, &manifest).unwrap_err();
+        let err = build_alloc_from_anvil(&snap, &manifest, None).unwrap_err();
         assert!(matches!(err, IngesterError::MissingUsdc));
     }
 }
