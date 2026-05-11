@@ -1,21 +1,38 @@
 /**
- * React hook — fetch gateway bytecode through the wagmi/viem client
- * and derive a VerificationState using the pure computeVerificationState
- * function from gatewayVerifier.ts.
+ * React hook — fetch gateway bytecode and derive a VerificationState.
  *
- * The hook runs once per mount (wagmi caches the RPC response). It does
- * NOT poll — the operator must reload the page to re-verify. This keeps
- * the verification model simple: the pinned hash must match or writes
- * are refused, with no background re-check window that could be raced.
+ * Calls the injected EIP-1193 provider (`window.ethereum`) directly for
+ * `eth_getCode` instead of going through wagmi's `unstable_connector`
+ * transport. That transport is documented as best-effort and surfaces
+ * wallet-side errors as cryptic "Requested resource not available /
+ * RPC endpoint returned too many errors" messages; calling the wallet
+ * provider directly yields the real wallet error string, which is what
+ * the operator needs to see when verification is refused.
+ *
+ * Reads still traverse the user's wallet RPC per
+ * `docs/security/dapp-topology.md` §2 — the wallet is the network
+ * endpoint, the dapp just asks it for code.
+ *
+ * The hook runs once per mount + when the wallet's chain id changes.
+ * It does not poll; the operator reloads the page to re-verify.
  */
-import { usePublicClient } from "wagmi";
-import { getBytecode } from "viem/actions";
+import { useAccount, useChainId } from "wagmi";
 import { useEffect, useState } from "react";
-import type { Address, Hex } from "viem";
+import type { Hex } from "viem";
 import { computeVerificationState, ZERO_ADDRESS } from "./gatewayVerifier";
 import type { VerificationState } from "./gatewayVerifier";
+import { targetChainId } from "./wagmi";
 
 export { type VerificationState };
+
+interface Eip1193Provider {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+}
+
+function getInjectedProvider(): Eip1193Provider | undefined {
+  if (typeof window === "undefined") return undefined;
+  return (window as unknown as { ethereum?: Eip1193Provider }).ethereum;
+}
 
 /**
  * Returns the current VerificationState for the gateway contract.
@@ -34,52 +51,71 @@ export function useGatewayVerifier(
   const [state, setState] = useState<VerificationState>(() =>
     computeVerificationState(gatewayAddress, expectedCodeHash, undefined),
   );
-
-  // Obtain the viem PublicClient from the wagmi context so we can call
-  // getBytecode directly (useReadContract does not expose eth_getCode).
-  const client = usePublicClient();
+  const { isConnected } = useAccount();
+  const chainId = useChainId();
 
   useEffect(() => {
-    // If the initial state is already refused (missing expected hash or
-    // zero address) there is nothing to fetch.
     const initial = computeVerificationState(gatewayAddress, expectedCodeHash, undefined);
     if (initial.status === "refused") {
       setState(initial);
       return;
     }
+    if (!gatewayAddress || gatewayAddress === ZERO_ADDRESS || !expectedCodeHash) {
+      return;
+    }
+    if (!isConnected) {
+      setState({
+        status: "refused",
+        reason: "Wallet not connected. Click Connect Wallet to verify gateway bytecode.",
+      });
+      return;
+    }
+    if (targetChainId !== undefined && chainId !== targetChainId) {
+      setState({
+        status: "refused",
+        reason: `Wallet is on chain ${chainId}, expected ${targetChainId}. Use the Switch Chain button.`,
+      });
+      return;
+    }
+
+    const provider = getInjectedProvider();
+    if (!provider) {
+      setState({
+        status: "refused",
+        reason: "No injected wallet provider (window.ethereum is undefined).",
+      });
+      return;
+    }
 
     let cancelled = false;
 
-    async function verify() {
-      if (!client) return;
+    async function verify(p: Eip1193Provider) {
       try {
-        const code = await getBytecode(client, {
-          address: gatewayAddress as Address,
-        });
-        if (!cancelled) {
-          // getBytecode returns undefined when no code at address.
-          const resolvedCode: Hex | null = code === undefined ? null : (code as Hex);
-          setState(computeVerificationState(gatewayAddress, expectedCodeHash, resolvedCode));
-        }
+        const code = (await p.request({
+          method: "eth_getCode",
+          params: [gatewayAddress, "latest"],
+        })) as Hex | null | undefined;
+        if (cancelled) return;
+        // eth_getCode returns "0x" for an EOA / un-deployed contract.
+        const resolvedCode: Hex | null =
+          code === undefined || code === null || code === "0x" ? null : code;
+        setState(computeVerificationState(gatewayAddress, expectedCodeHash, resolvedCode));
       } catch (err) {
-        if (!cancelled) {
-          setState({
-            status: "refused",
-            reason: `Failed to fetch gateway bytecode: ${(err as Error).message}`,
-          });
-        }
+        if (cancelled) return;
+        const message = (err as { message?: string }).message ?? String(err);
+        setState({
+          status: "refused",
+          reason: `Wallet returned an error for eth_getCode(${gatewayAddress}): ${message}`,
+        });
       }
     }
 
-    // Only run when we have a real gateway address and expected hash.
-    if (gatewayAddress && gatewayAddress !== ZERO_ADDRESS && expectedCodeHash && client) {
-      void verify();
-    }
+    void verify(provider);
 
     return () => {
       cancelled = true;
     };
-  }, [gatewayAddress, expectedCodeHash, client]);
+  }, [gatewayAddress, expectedCodeHash, isConnected, chainId]);
 
   return state;
 }
