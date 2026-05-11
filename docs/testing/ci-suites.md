@@ -373,10 +373,11 @@ isolation, independent of any client (rmpc, dapp, explorer).
 6. `cargo fmt --check -p smoke-test`
 7. `cargo clippy -p smoke-test --all-targets -- -D warnings`
 8. `cargo build -p smoke-test` — includes the `smoke-test` CLI binary
-9. `cargo test -p smoke-test --release -- --test-threads=1` — boots devnet, deploys contracts, asserts healthy RPC + block production, then tears down; verifies `Drop` runs compose-down cleanly
-10. `docker compose down -v --remove-orphans || true` — safety net teardown (always)
+9. `cargo test -p smoke-test --release --test cli_meta -- --nocapture` — boots `smoke-test --full-stack`, checks the structured endpoint summary, and verifies `--dapp-port` / Ctrl-C teardown
+10. `cargo test -p smoke-test --release --test fixture_meta -- --test-threads=1 --nocapture` — boots devnet, deploys contracts, asserts healthy RPC + block production, then tears down; verifies `Drop` runs compose-down cleanly
+11. `docker compose down -v --remove-orphans || true` — safety net teardown (always)
 
-> **Note:** Step 9 exercises `Fixture::new()` end-to-end — the same code
+> **Note:** Step 10 exercises `Fixture::new()` end-to-end — the same code
 > path that all devnet-backed suites (7, 8, 10, 11, 12) depend on. A
 > failure here blocks those suites before they pay their own boot costs.
 
@@ -420,8 +421,8 @@ isolation, independent of any client (rmpc, dapp, explorer).
 | 7 | `rmpc-integration.yml` | `geth-tests` \| `nonce-race-stress` | `devnet` |
 | 8 | `explorer-indexer.yml` | `fast` \| `devnet` | `devnet` |
 | 9 | `dapp-quality.yml` | `lint-build` | `none` |
-| 10 | `dapp-e2e.yml` | needs suite 9 → `e2e` \| `e2e-history-pane` \| `fork-roundtrip` | `devnet` |
+| 10 | `dapp-e2e.yml` | needs suite 9 → `e2e` \| `e2e-history-pane` \| `devnet-e2e` \| `fork-roundtrip` | `devnet` |
 | 11 | `opencode-smoke.yml` + `opencode-headless.yml` | smoke: `plugin-validate` \| `walkthrough-offline` → `walkthrough-fork`; headless: `refusal` → `deposit` \| `read` | `none` / `devnet` |
 | 12 | `openclaw.yml` | `safety` → `walkthrough` | `devnet` |
 | 13 | `doc-checks.yml` | `doc-validators` \| `schema-validators` | `none` |
-| 14 | `smoke-test.yml` | planned | `devnet` |
+| 14 | `smoke-test.yml` | `smoke-test` | `devnet` |

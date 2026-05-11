@@ -266,6 +266,7 @@ impl Fixture {
             )));
         }
 
+        eprintln!("smoke-test: waiting for chain containers to become ready...");
         wait_for_rpc(&rpc_url, Duration::from_secs(180))?;
 
         // Wait for real block production: RPC up != consensus up.
@@ -648,6 +649,8 @@ pub struct DappEndpoints {
 /// contracts are deployed.
 pub struct DappStack {
     compose_dir: PathBuf,
+    gateway_hex: String,
+    vault_hex: String,
     pub endpoints: DappEndpoints,
 }
 
@@ -663,7 +666,10 @@ impl DappStack {
         let gateway_hex = fixture.gateway_hex();
         let vault_hex = fixture.vault_hex();
         let ports = DappPorts::allocate(dapp_port, &fixture.occupied_ports())?;
-        let cleanup = || {
+        let cleanup_gateway_hex = gateway_hex.to_string();
+        let cleanup_vault_hex = vault_hex.to_string();
+        let cleanup_compose_dir = compose_dir.clone();
+        let cleanup = move || {
             let _ = Command::new("docker")
                 .args([
                     "compose",
@@ -673,7 +679,11 @@ impl DappStack {
                     "-v",
                     "--remove-orphans",
                 ])
-                .current_dir(&compose_dir)
+                .env("VITE_GATEWAY_ADDRESS", &cleanup_gateway_hex)
+                .env("VITE_VAULT_ADDRESS", &cleanup_vault_hex)
+                .env("INDEXER_GATEWAY", &cleanup_gateway_hex)
+                .env("INDEXER_VAULT", &cleanup_vault_hex)
+                .current_dir(&cleanup_compose_dir)
                 .status();
         };
 
@@ -697,6 +707,7 @@ impl DappStack {
             .env("VITE_VAULT_ADDRESS", vault_hex)
             .env("INDEXER_GATEWAY", gateway_hex)
             .env("INDEXER_VAULT", vault_hex)
+            .env("VITE_USE_MOCK_WALLET", "true")
             // RPC is on the host; containers reach it via host.docker.internal
             .env(
                 "INDEXER_RPC_URL",
@@ -719,6 +730,7 @@ impl DappStack {
             ));
         }
 
+        eprintln!("smoke-test: waiting for dapp containers to become ready...");
         // Wait for explorer-api /health endpoint
         wait_for_http_ok(
             &format!("{explorer_api_url}/health"),
@@ -730,6 +742,8 @@ impl DappStack {
 
         Ok(DappStack {
             compose_dir,
+            gateway_hex: gateway_hex.to_string(),
+            vault_hex: vault_hex.to_string(),
             endpoints: DappEndpoints {
                 rpc_url,
                 dapp_url,
@@ -750,6 +764,10 @@ impl Drop for DappStack {
                 "-v",
                 "--remove-orphans",
             ])
+            .env("VITE_GATEWAY_ADDRESS", &self.gateway_hex)
+            .env("VITE_VAULT_ADDRESS", &self.vault_hex)
+            .env("INDEXER_GATEWAY", &self.gateway_hex)
+            .env("INDEXER_VAULT", &self.vault_hex)
             .current_dir(&self.compose_dir)
             .status();
     }
