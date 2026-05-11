@@ -9,6 +9,7 @@
  * user signs Authorize — see useAgentRegistration.ts for the placeholder
  * rationale and the on-chain follow-up.
  */
+import { useState } from "react";
 import { useAccount, useConnect } from "wagmi";
 import type { Address } from "viem";
 import { AdminFlow } from "./AdminFlow";
@@ -16,6 +17,7 @@ import { OnboardingWizard } from "./OnboardingWizard";
 import { useAgentRegistration } from "../lib/useVaultRegistration";
 import type { VerificationState } from "../lib/useGatewayVerifier";
 import type { PreviewContext } from "../lib/preview";
+import { getInjectedProvider, syncDevnetChain } from "../lib/syncDevnetChain";
 
 type Props = Readonly<{
   gatewayAddress: Address;
@@ -30,6 +32,23 @@ export function AgentsPanel(props: Props) {
   const { isConnected } = useAccount();
   const { connect, connectors } = useConnect();
   const status = useAgentRegistration(props.envClass);
+  const [networkSyncError, setNetworkSyncError] = useState<string | undefined>(undefined);
+
+  const handleConnect = (connector: (typeof connectors)[number]) => {
+    connect(
+      { connector },
+      {
+        onSuccess: () => {
+          const provider = getInjectedProvider();
+          if (!provider) {
+            setNetworkSyncError("No injected wallet provider (window.ethereum is undefined).");
+            return;
+          }
+          void syncDevnetChain(provider).then(setNetworkSyncError);
+        },
+      },
+    );
+  };
 
   if (!isConnected) {
     return (
@@ -41,13 +60,18 @@ export function AgentsPanel(props: Props) {
             <button
               type="button"
               data-testid="connect-wallet"
-              onClick={() => connect({ connector: connectors[0] })}
+              onClick={() => handleConnect(connectors[0])}
             >
               Connect wallet
             </button>
           ) : (
             <p data-testid="no-connectors" className="hint">
               No browser wallet detected. Install a wallet extension to continue.
+            </p>
+          )}
+          {networkSyncError && (
+            <p data-testid="network-sync-error" className="unsafe-banner">
+              <strong>Network setup error:</strong> {networkSyncError}
             </p>
           )}
         </section>

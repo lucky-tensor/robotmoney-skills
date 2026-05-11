@@ -5,11 +5,12 @@
  */
 import type { VerificationState } from "../lib/useGatewayVerifier";
 
-interface Props {
+type Props = Readonly<{
   state: VerificationState;
-}
+  refresh: () => void;
+}>;
 
-export function VerificationBanner({ state }: Props) {
+export function VerificationBanner({ state, refresh }: Props) {
   if (state.status === "verified") return null;
   return (
     <div className="verification-banner-wrap">
@@ -21,7 +22,10 @@ export function VerificationBanner({ state }: Props) {
         )}
         {state.status === "refused" && (
           <p data-testid="gateway-verification-refused" className="unsafe-banner">
-            <strong>Gateway verification refused — admin writes disabled.</strong> {state.reason}
+            <strong>Gateway verification refused — admin writes disabled.</strong> {state.reason}{" "}
+            <button type="button" data-testid="gateway-verification-retry" onClick={refresh}>
+              Re-verify
+            </button>
           </p>
         )}
       </section>

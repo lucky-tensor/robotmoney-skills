@@ -4,9 +4,12 @@
  * the gateway: paused state + USDC token address. Other addresses
  * come from build-time env (VITE_GATEWAY_ADDRESS, VITE_VAULT_ADDRESS).
  */
+import { useState } from "react";
 import { useAccount, useChainId, useDisconnect, useReadContract } from "wagmi";
 import type { Address } from "viem";
 import { gatewayAbi } from "../lib/abi";
+import { targetChainId } from "../lib/wagmi";
+import { getInjectedProvider, syncDevnetChain } from "../lib/syncDevnetChain";
 
 interface StatusHeaderProps {
   gatewayAddress: Address;
@@ -35,6 +38,16 @@ export function StatusHeader(props: StatusHeaderProps) {
   });
   const usdcAddress = (usdcAddressData as Address | undefined) ?? "";
 
+  const [networkSyncError, setNetworkSyncError] = useState<string | undefined>(undefined);
+  const handleSwitchChain = () => {
+    const provider = getInjectedProvider();
+    if (!provider) {
+      setNetworkSyncError("No injected wallet provider (window.ethereum is undefined).");
+      return;
+    }
+    void syncDevnetChain(provider).then(setNetworkSyncError);
+  };
+
   return (
     <section className="status-header" data-testid="status-header">
       <div className="hero">
@@ -48,10 +61,20 @@ export function StatusHeader(props: StatusHeaderProps) {
             <code data-testid="connected-address" className="wallet-address">
               {address}
             </code>
+            {targetChainId !== undefined && chainId !== targetChainId && (
+              <button type="button" data-testid="switch-chain" onClick={handleSwitchChain}>
+                Switch to Robot Money devnet
+              </button>
+            )}
             <button type="button" data-testid="disconnect" onClick={() => disconnect()}>
               Disconnect
             </button>
           </div>
+        )}
+        {networkSyncError && (
+          <p data-testid="network-sync-error" className="unsafe-banner">
+            <strong>Network setup error:</strong> {networkSyncError}
+          </p>
         )}
       </div>
       <div className="stat-grid">

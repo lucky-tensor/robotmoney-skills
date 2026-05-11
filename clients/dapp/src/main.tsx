@@ -28,7 +28,10 @@ const expectedCodeHash = env.VITE_GATEWAY_EXPECTED_CODE_HASH;
 const envClass = (env.VITE_ENV_CLASS as "fork" | "devnet" | "testnet" | "mainnet") ?? "fork";
 
 function App() {
-  const verificationState = useGatewayVerifier(gateway, expectedCodeHash);
+  const { state: verificationState, refresh: verificationRefresh } = useGatewayVerifier(
+    gateway,
+    expectedCodeHash,
+  );
 
   return (
     <>
@@ -38,7 +41,7 @@ function App() {
         forkBlock={env.VITE_FORK_BLOCK_NUMBER}
       />
       <NavBar />
-      <VerificationBanner state={verificationState} />
+      <VerificationBanner state={verificationState} refresh={verificationRefresh} />
       <StatusHeader gatewayAddress={gateway} vaultAddress={vault} envClass={envClass} />
       <AgentsPanel
         gatewayAddress={gateway}

@@ -83,7 +83,8 @@ export function OnboardingWizard(props: Props) {
     if (address) markRegistered(address);
   };
 
-  const activePrompt = BOOTSTRAP_PROMPTS.find((p) => p.id === runtime) ?? BOOTSTRAP_PROMPTS[0]!;
+  const activePrompt = BOOTSTRAP_PROMPTS.find((p) => p.id === runtime) ?? BOOTSTRAP_PROMPTS[0];
+  if (!activePrompt) throw new Error("BOOTSTRAP_PROMPTS is empty");
 
   return (
     <main className="onboarding-wizard" data-testid="onboarding-wizard">
@@ -100,9 +101,9 @@ export function OnboardingWizard(props: Props) {
         <section data-testid="wizard-step-1">
           <h2>Bootstrap your agent runtime</h2>
           <p>
-            Pick the agent runtime you'll be using. Paste the prompt below into a fresh session of
-            that agent. The agent will download <code>rmpc</code>, write its operator config, and
-            print its public address — copy that address; you'll paste it on the next step.
+            Pick the agent runtime you&apos;ll be using. Paste the prompt below into a fresh session
+            of that agent. The agent will download <code>rmpc</code>, write its operator config, and
+            print its public address — copy that address; you&apos;ll paste it on the next step.
           </p>
           <p className="hint">
             We never generate or hold private keys in the dapp. See <code>BOOTSTRAP.md</code> for
@@ -134,7 +135,7 @@ export function OnboardingWizard(props: Props) {
           </button>
           <div className="wizard-nav">
             <button type="button" data-testid="step-1-next" onClick={() => setStep(2)}>
-              I've started the agent — next
+              I&apos;ve started the agent — next
             </button>
           </div>
         </section>
@@ -142,7 +143,7 @@ export function OnboardingWizard(props: Props) {
 
       {step === 2 && (
         <section data-testid="wizard-step-2">
-          <h2>Paste the agent's public address</h2>
+          <h2>Paste the agent&apos;s public address</h2>
           <p>
             Once your agent has bootstrapped, it printed a public address (an <code>0x…</code>
             string). Paste it here along with the wallet that should receive rmUSDC shares, then set

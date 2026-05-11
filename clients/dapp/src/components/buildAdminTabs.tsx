@@ -135,7 +135,6 @@ export function buildAdminTabs(a: BuildAdminTabsArgs): TabDef[] {
           usdcAddress={a.usdcAddress}
           gatewayRuntimeHash={runtimeHash}
           chainId={a.chainId}
-          rpcUrl={a.flagEnv.VITE_FORK_RPC_URL ?? "http://127.0.0.1:8545"}
           agent={a.agent as Address}
         />
       ),
