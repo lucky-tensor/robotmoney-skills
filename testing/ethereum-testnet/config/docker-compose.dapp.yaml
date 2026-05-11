@@ -104,9 +104,9 @@ services:
         VITE_EXPLORER_API_URL: ${VITE_EXPLORER_API_URL:-http://localhost:8080}
         VITE_GATEWAY_ADDRESS: ${VITE_GATEWAY_ADDRESS:?VITE_GATEWAY_ADDRESS must be set}
         VITE_VAULT_ADDRESS: ${VITE_VAULT_ADDRESS:?VITE_VAULT_ADDRESS must be set}
+        VITE_GATEWAY_EXPECTED_CODE_HASH: ${VITE_GATEWAY_EXPECTED_CODE_HASH:?VITE_GATEWAY_EXPECTED_CODE_HASH must be set to enable admin writes}
         VITE_GATEWAY_CODE_HASH_VERIFIED: "false"
         VITE_ENV_CLASS: fork
-        VITE_USE_MOCK_WALLET: ${VITE_USE_MOCK_WALLET:-true}
         VITE_BROWSER_KEYGEN: "false"
         VITE_HISTORY_PANE: "true"
     container_name: dapp-frontend

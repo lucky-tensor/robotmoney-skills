@@ -57,6 +57,36 @@ The binary blocks until interrupted; `Drop` (or a SIGINT handler) runs
 
 ---
 
+## Guiding principle: no test-only code in production
+
+Every dapp E2E spec runs against a build of `clients/dapp` that is
+bit-identical to what would ship to operators. The `src/` tree contains
+no `VITE_USE_MOCK_WALLET`, no `VITE_GATEWAY_VERIFY_BYPASS_FOR_TEST`,
+no env-gated mock connectors, no test-only refusal bypasses, and no
+"if testing" branches of any kind.
+
+This is enforced structurally, not by convention:
+
+- **Wallets.** The dapp ships with `connectors: [injected()]` only. To
+  drive flows in Playwright, tests install a JS-level EIP-1193 provider
+  on `window.ethereum` via `page.addInitScript` *before* the dapp
+  bundle loads. The provider is backed by viem's `privateKeyToAccount`
+  for signing and forwards reads to the real RPC URL. The dapp's prod
+  `injected()` connector handles it like a real wallet extension; it
+  cannot tell the difference. Helper: `tests/e2e/helpers/wallet.ts`.
+- **Bytecode verification.** The dapp refuses admin writes unless
+  `VITE_GATEWAY_EXPECTED_CODE_HASH` matches `keccak256(getBytecode(gateway))`
+  on-chain. There is no bypass path. The smoke-test harness deploys
+  the gateway, computes `fixture.gateway_runtime_hash()`, and pipes it
+  into `docker compose up --build` as a build arg so the dapp container
+  is built with the real hash pinned. Verification then passes
+  end-to-end against a real chain, exactly as in prod.
+
+The cost of this principle is that every dapp E2E spec must boot the
+smoke-test full stack (no local `vite preview` shortcut). The reward
+is that CI failures map to real product failures: there is no class of
+"works in tests, breaks in prod because the test flag papered over it".
+
 ## Guiding principle: the test runner owns the stack
 
 The devnet lifecycle — boot, contract deployment, health-wait, teardown —

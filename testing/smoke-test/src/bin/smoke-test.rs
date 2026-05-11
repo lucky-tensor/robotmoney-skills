@@ -79,10 +79,29 @@ fn main() {
         }
 
         // Structured endpoint summary — printed after all health checks pass.
+        // Includes the deterministic test-EOA private keys so the Playwright
+        // harness can inject a window.ethereum provider without re-deriving
+        // them. These keys are test-only fixtures hardcoded in lib.rs and
+        // are not secrets.
         println!("--- endpoint summary ---");
         println!("rpc_url={}", stack.endpoints.rpc_url);
         println!("dapp_url={}", stack.endpoints.dapp_url);
         println!("explorer_api_url={}", stack.endpoints.explorer_api_url);
+        println!("chain_id={}", fixture.chain_id());
+        println!("gateway_addr={:#x}", fixture.gateway());
+        println!("vault_addr={:#x}", fixture.vault());
+        println!("usdc_addr={:#x}", fixture.usdc());
+        println!("agent_addr={:#x}", fixture.agent());
+        println!("admin_addr={}", smoke_test::DEPLOYER_ADDRESS_HEX);
+        println!("pauser_addr={}", smoke_test::PAUSER_ADDRESS_HEX);
+        println!("share_receiver_addr={}", smoke_test::SHARE_RECEIVER_ADDRESS_HEX);
+        println!("admin_private_key={}", smoke_test::DEPLOYER_PRIVATE_KEY_HEX);
+        println!("pauser_private_key={}", smoke_test::PAUSER_PRIVATE_KEY_HEX);
+        println!(
+            "agent_private_key=0x{}",
+            hex::encode(smoke_test::AGENT_PRIVATE_KEY)
+        );
+        println!("gateway_runtime_hash={}", fixture.gateway_runtime_hash());
         println!("--- end endpoint summary ---");
 
         Some(stack)

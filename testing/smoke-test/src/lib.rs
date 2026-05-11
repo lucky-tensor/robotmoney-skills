@@ -651,6 +651,7 @@ pub struct DappStack {
     compose_dir: PathBuf,
     gateway_hex: String,
     vault_hex: String,
+    gateway_runtime_hash: String,
     pub endpoints: DappEndpoints,
 }
 
@@ -665,9 +666,11 @@ impl DappStack {
         let compose_dir = fixture.repo_root().join("testing/ethereum-testnet/config");
         let gateway_hex = fixture.gateway_hex();
         let vault_hex = fixture.vault_hex();
+        let gateway_runtime_hash = fixture.gateway_runtime_hash().to_string();
         let ports = DappPorts::allocate(dapp_port, &fixture.occupied_ports())?;
         let cleanup_gateway_hex = gateway_hex.to_string();
         let cleanup_vault_hex = vault_hex.to_string();
+        let cleanup_runtime_hash = gateway_runtime_hash.clone();
         let cleanup_compose_dir = compose_dir.clone();
         let cleanup = move || {
             let _ = Command::new("docker")
@@ -681,6 +684,7 @@ impl DappStack {
                 ])
                 .env("VITE_GATEWAY_ADDRESS", &cleanup_gateway_hex)
                 .env("VITE_VAULT_ADDRESS", &cleanup_vault_hex)
+                .env("VITE_GATEWAY_EXPECTED_CODE_HASH", &cleanup_runtime_hash)
                 .env("INDEXER_GATEWAY", &cleanup_gateway_hex)
                 .env("INDEXER_VAULT", &cleanup_vault_hex)
                 .current_dir(&cleanup_compose_dir)
@@ -705,9 +709,9 @@ impl DappStack {
             .env("DAPP_PORT", ports.dapp_port.to_string())
             .env("VITE_GATEWAY_ADDRESS", gateway_hex)
             .env("VITE_VAULT_ADDRESS", vault_hex)
+            .env("VITE_GATEWAY_EXPECTED_CODE_HASH", &gateway_runtime_hash)
             .env("INDEXER_GATEWAY", gateway_hex)
             .env("INDEXER_VAULT", vault_hex)
-            .env("VITE_USE_MOCK_WALLET", "true")
             // RPC is on the host; containers reach it via host.docker.internal
             .env(
                 "INDEXER_RPC_URL",
@@ -744,6 +748,7 @@ impl DappStack {
             compose_dir,
             gateway_hex: gateway_hex.to_string(),
             vault_hex: vault_hex.to_string(),
+            gateway_runtime_hash,
             endpoints: DappEndpoints {
                 rpc_url,
                 dapp_url,
@@ -766,6 +771,7 @@ impl Drop for DappStack {
             ])
             .env("VITE_GATEWAY_ADDRESS", &self.gateway_hex)
             .env("VITE_VAULT_ADDRESS", &self.vault_hex)
+            .env("VITE_GATEWAY_EXPECTED_CODE_HASH", &self.gateway_runtime_hash)
             .env("INDEXER_GATEWAY", &self.gateway_hex)
             .env("INDEXER_VAULT", &self.vault_hex)
             .current_dir(&self.compose_dir)
