@@ -417,7 +417,7 @@ export function AdminFlow(props: AdminFlowProps) {
             label: "Deposit & Withdraw",
             hidden: props.registrationMode,
             content: (
-              <>
+              <div className="form-grid">
                 <section data-testid="deposit-form">
                   <h2>Deposit USDC</h2>
                   <p>Send USDC to the gateway. Receive vault shares.</p>
@@ -453,7 +453,7 @@ export function AdminFlow(props: AdminFlowProps) {
                   </button>
                   <p className="hint">Vault integration pending.</p>
                 </section>
-              </>
+              </div>
             ),
           },
           {
