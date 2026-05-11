@@ -5,20 +5,20 @@ import { gatewayAbi, ROLE_HASH, type RoleName } from "../../lib/abi";
 import { buildPreview, type AdminAction, type PreviewContext } from "../../lib/preview";
 import { TxPreview } from "../TxPreview";
 
-interface RoleTabProps {
+type Props = Readonly<{
   role: RoleName;
   gatewayAddress: Address;
   ctx: PreviewContext;
   /** Inline note shown under the heading. */
   description: React.ReactNode;
-}
+}>;
 
 const SLUG: Record<RoleName, string> = {
   ADMIN_ROLE: "admin",
   PAUSER_ROLE: "pauser",
 };
 
-export function RoleTab(props: RoleTabProps) {
+export function RoleTab(props: Props) {
   const { isConnected } = useAccount();
   const { writeContract, isPending } = useWriteContract();
   const [account, setAccount] = useState("");

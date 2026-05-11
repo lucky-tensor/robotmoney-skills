@@ -1,8 +1,4 @@
-/**
- * Pure factory for the AdminFlow tab list. Lives here (not in lib/) so the
- * JSX stays colocated with the tab components it instantiates. Not a
- * component itself — returns TabDef[] consumed by <Tabs/>.
- */
+/** Factory for the AdminFlow tab list. Not a component — returns TabDef[]. */
 import type { Dispatch, SetStateAction } from "react";
 import type { Address } from "viem";
 import { isAddress } from "viem";

@@ -7,16 +7,16 @@ import { markRegistered } from "../../lib/useVaultRegistration";
 import { TxPreview } from "../TxPreview";
 import { PolicyFields } from "./PolicyFields";
 
-interface AuthorizeTabProps {
+type Props = Readonly<{
   gatewayAddress: Address;
   ctx: PreviewContext;
   agent: string;
   setAgent: Dispatch<SetStateAction<string>>;
   shareReceiver: string;
   setShareReceiver: Dispatch<SetStateAction<string>>;
-}
+}>;
 
-export function AuthorizeTab(props: AuthorizeTabProps) {
+export function AuthorizeTab(props: Props) {
   const { address, isConnected } = useAccount();
   const { writeContract, isPending } = useWriteContract();
 

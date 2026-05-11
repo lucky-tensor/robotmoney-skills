@@ -4,13 +4,13 @@ import { gatewayAbi } from "../../lib/abi";
 import { buildPreview, type AdminAction, type PreviewContext } from "../../lib/preview";
 import { TxPreview } from "../TxPreview";
 
-interface RevokeTabProps {
+type Props = Readonly<{
   gatewayAddress: Address;
   ctx: PreviewContext;
   agent: string;
-}
+}>;
 
-export function RevokeTab(props: RevokeTabProps) {
+export function RevokeTab(props: Props) {
   const { isConnected } = useAccount();
   const { writeContract, isPending } = useWriteContract();
 
