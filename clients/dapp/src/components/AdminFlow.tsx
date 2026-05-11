@@ -22,12 +22,6 @@ type Props = Readonly<{
   flagEnv: Record<string, string | undefined>;
   /** Wall-clock ms at mount, injected so render stays deterministic. */
   now: number;
-  /**
-   * When true the user hasn't authorized any agent yet — render only
-   * the Authorize tab so the registration step is the focused next
-   * action. AgentsPanel sets this from useAgentRegistration.
-   */
-  registrationMode?: boolean;
 }>;
 
 export function AdminFlow(props: Props) {
@@ -48,7 +42,7 @@ export function AdminFlow(props: Props) {
   const [agent, setAgent] = useState("");
   const [shareReceiver, setShareReceiver] = useState("");
 
-  const { gatewayVerificationState, registrationMode = false } = props;
+  const { gatewayVerificationState } = props;
   const ctx: PreviewContext = {
     gateway: props.gatewayAddress,
     gatewayCodeHashVerified: gatewayVerificationState.status === "verified",
@@ -64,7 +58,6 @@ export function AdminFlow(props: Props) {
     gatewayVerificationState,
     flagEnv: props.flagEnv,
     historyPaneEnabled: flags.historyPane,
-    registrationMode,
     agent,
     setAgent,
     shareReceiver,
@@ -74,28 +67,11 @@ export function AdminFlow(props: Props) {
 
   return (
     <main className="admin-flow">
-      <h1>{registrationMode ? "Authorize your first agent" : "Agents"}</h1>
-      {registrationMode && (
-        <p className="hint" data-testid="registration-hint">
-          Authorize an agent to unlock the full agents panel (revoke, rotation, roles, history,
-          export).
-        </p>
-      )}
+      <h1>Agents</h1>
 
       {gatewayVerificationState.status === "verified" && (
         <p data-testid="gateway-verification-ok" className="verification-ok">
           Gateway bytecode verified: <code>{gatewayVerificationState.computedHash}</code>
-        </p>
-      )}
-
-      {flags.browserGeneratedCredential ? (
-        <section data-testid="browser-keygen" className="unsafe-banner">
-          <strong>UNSAFE: software-backed credential</strong>
-          <p>Browser-generated keypair flow ENABLED. Fork/devnet only.</p>
-        </section>
-      ) : (
-        <p data-testid="browser-keygen-disabled" hidden>
-          Browser-generated credential flow disabled.
         </p>
       )}
 

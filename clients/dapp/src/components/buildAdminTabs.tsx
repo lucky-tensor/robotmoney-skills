@@ -24,7 +24,6 @@ export type BuildAdminTabsArgs = Readonly<{
   gatewayVerificationState: VerificationState;
   flagEnv: Record<string, string | undefined>;
   historyPaneEnabled: boolean;
-  registrationMode: boolean;
   agent: string;
   setAgent: Dispatch<SetStateAction<string>>;
   shareReceiver: string;
@@ -53,8 +52,6 @@ export function buildAdminTabs(a: BuildAdminTabsArgs): TabDef[] {
       ),
     },
   ];
-
-  if (a.registrationMode) return tabs;
 
   tabs.push(
     { id: "deposit-withdraw", label: "Deposit & Withdraw", content: <DepositWithdrawTab /> },

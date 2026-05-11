@@ -91,6 +91,43 @@ main.admin-flow {
   gap: 1.5rem;
 }
 
+main.onboarding-wizard {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+.wizard-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  gap: 1rem;
+  font-size: 0.8125rem;
+  color: var(--color-text-dim);
+}
+.wizard-steps li[data-active="true"] {
+  color: var(--color-text);
+  font-weight: 600;
+}
+.bootstrap-prompt {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  white-space: pre-wrap;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.wizard-nav {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
 /* Typography */
 h1 {
   font-family: var(--font-serif);

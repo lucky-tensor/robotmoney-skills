@@ -2,29 +2,31 @@
  * AgentsPanel — gates the full per-user agent management surface.
  *
  *   no wallet            → connect prompt
- *   wallet, no agent     → AdminFlow in registration mode (Authorize only)
+ *   wallet, no agent     → OnboardingWizard (bootstrap → address → authorize)
  *   wallet, has agent    → full AdminFlow (all management tabs)
  *
- * "Has agent" today reads a localStorage flag set optimistically when
- * the user clicks Authorize — see useAgentRegistration.ts for the
- * placeholder rationale and the on-chain follow-up.
+ * "Has agent" today reads a localStorage flag set optimistically when the
+ * user signs Authorize — see useAgentRegistration.ts for the placeholder
+ * rationale and the on-chain follow-up.
  */
 import { useAccount, useConnect } from "wagmi";
 import type { Address } from "viem";
 import { AdminFlow } from "./AdminFlow";
+import { OnboardingWizard } from "./OnboardingWizard";
 import { useAgentRegistration } from "../lib/useVaultRegistration";
 import type { VerificationState } from "../lib/useGatewayVerifier";
+import type { PreviewContext } from "../lib/preview";
 
-interface AgentsPanelProps {
+type Props = Readonly<{
   gatewayAddress: Address;
   vaultAddress: Address;
   gatewayVerificationState: VerificationState;
   envClass: "fork" | "devnet" | "testnet" | "mainnet";
   flagEnv: Record<string, string | undefined>;
   now: number;
-}
+}>;
 
-export function AgentsPanel(props: AgentsPanelProps) {
+export function AgentsPanel(props: Props) {
   const { isConnected } = useAccount();
   const { connect, connectors } = useConnect();
   const status = useAgentRegistration(props.envClass);
@@ -53,6 +55,15 @@ export function AgentsPanel(props: AgentsPanelProps) {
     );
   }
 
+  if (status === "unregistered") {
+    const ctx: PreviewContext = {
+      gateway: props.gatewayAddress,
+      gatewayCodeHashVerified: props.gatewayVerificationState.status === "verified",
+      envClass: props.envClass,
+    };
+    return <OnboardingWizard gatewayAddress={props.gatewayAddress} ctx={ctx} now={props.now} />;
+  }
+
   return (
     <AdminFlow
       gatewayAddress={props.gatewayAddress}
@@ -61,7 +72,6 @@ export function AgentsPanel(props: AgentsPanelProps) {
       envClass={props.envClass}
       flagEnv={props.flagEnv}
       now={props.now}
-      registrationMode={status === "unregistered"}
     />
   );
 }
