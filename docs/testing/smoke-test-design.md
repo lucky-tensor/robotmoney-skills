@@ -36,17 +36,18 @@ fn gateway_accepts_deposit() {
 This is the same pattern used by `rmpc-fork-e2e` (`ForkFixture::new` +
 `Drop`). Each test owns its entire stack; there is no global state.
 
-The crate also exposes a binary target. Running `cargo r smoke-test` from
-the workspace root starts the full stack and keeps it alive, printing the
+The crate also exposes a binary target. Running `cargo r -p smoke-test -- --full-stack`
+from the workspace root starts the full stack and keeps it alive, printing the
 allocated URLs and addresses to stdout. This lets a developer point other
 tests or tools at the running network without waiting for the boot sequence
-on every test run.
+on every test run. Pass `--dapp-port <port>` when you want the webapp to stay
+on a fixed host port for a reverse proxy; otherwise the harness randomizes it.
 
 ```
-$ cargo r smoke-test
+$ cargo r -p smoke-test -- --full-stack
 rpc_url=http://127.0.0.1:54321
 explorer_api_url=http://127.0.0.1:54322
-dapp_url=http://127.0.0.1:54323
+dapp_url=http://localhost:54323
 gateway_addr=0xabc...
 ^C  ← stack torn down on SIGINT
 ```
@@ -90,13 +91,13 @@ devnet instance is reproducible.
 
 ## Port allocation
 
-Every port used by the stack is chosen by binding to `0` (OS-assigned)
-at fixture construction time and recorded in `FullStackFixture`. No port
-number is hardcoded anywhere in the harness — not in the compose file, not
-in the test code, not in the CI workflow.
+Every host port used by the stack is chosen by binding to `0`
+(OS-assigned) at fixture construction time and recorded in the harness.
+No port number is hardcoded anywhere in the runtime path unless the user
+explicitly sets `--dapp-port` for the webapp.
 
 ```rust
-pub struct FullStackFixture {
+pub struct Fixture {
     pub rpc_url: String,
     pub explorer_api_url: String,
     pub dapp_url: String,
@@ -105,11 +106,12 @@ pub struct FullStackFixture {
 }
 ```
 
-`FullStackFixture::new()` picks each port by opening a `TcpListener` on
+`Fixture::new()` picks each port by opening a `TcpListener` on
 `127.0.0.1:0`, reading the OS-assigned port, closing the listener, then
 passing that port to the compose service via env vars. The compose file
-exposes each service port via the env var (e.g. `GETH_RPC_PORT`,
-`EXPLORER_API_PORT`) rather than a fixed `ports:` mapping.
+exposes each service port via env var-backed `ports:` mappings (e.g.
+`GETH_RPC_PORT`, `EXPLORER_API_PORT`, `DAPP_PORT`) rather than hardcoded
+host ports.
 
 This makes parallel runs safe by construction: two fixture instances
 running simultaneously will never collide on a port.

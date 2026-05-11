@@ -28,11 +28,11 @@ Deferred to follow-ups:
 ## Running
 
 ```sh
-pnpm install
-pnpm dev                              # http://127.0.0.1:5173
-pnpm test                             # Vitest
-VITE_USE_MOCK_WALLET=true pnpm dev    # mock wallet for E2E
-pnpm test:e2e:install && pnpm test:e2e
+bun install
+bun run dev                           # http://127.0.0.1:5173
+bun run test                          # Vitest
+VITE_USE_MOCK_WALLET=true bun run dev # mock wallet for E2E
+bunx playwright install --with-deps chromium && bun run test:e2e
 ```
 
 ## Env

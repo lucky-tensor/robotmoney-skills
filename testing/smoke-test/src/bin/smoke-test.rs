@@ -22,6 +22,11 @@ struct Cli {
     /// endpoint summary once all services are healthy.
     #[arg(long, default_value_t = false)]
     full_stack: bool,
+
+    /// Fix the host port for the dapp frontend instead of randomizing it.
+    /// Useful when attaching a reverse proxy to the webapp.
+    #[arg(long, value_parser = clap::value_parser!(u16).range(1..))]
+    dapp_port: Option<u16>,
 }
 
 fn main() {
@@ -50,7 +55,8 @@ fn main() {
     // down the compose stack together with the chain fixture.
     let _dapp_stack: Option<smoke_test::DappStack> = if cli.full_stack {
         eprintln!("smoke-test: starting full-stack (dapp + explorer-api + indexer + postgres)...");
-        let stack = smoke_test::DappStack::boot(&fixture).expect("dapp stack boot failed");
+        let stack =
+            smoke_test::DappStack::boot(&fixture, cli.dapp_port).expect("dapp stack boot failed");
 
         // Structured endpoint summary — printed after all health checks pass.
         println!("--- endpoint summary ---");

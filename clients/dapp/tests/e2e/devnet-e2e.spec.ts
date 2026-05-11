@@ -2,14 +2,14 @@
  * Playwright E2E — full-stack Geth+Lighthouse devnet.
  *
  * Gated by DEVNET_E2E_ENABLED=1. Without that flag the entire describe
- * block is skipped so `pnpm test:e2e` stays green with no extra deps.
+ * block is skipped so `bun run test:e2e` stays green with no extra deps.
  *
  * When enabled, devnet-global-setup.ts has already:
- *   1. Booted `cargo run --bin smoke-test -- --full-stack`.
+ *   1. Booted `cargo run -p smoke-test -- --full-stack`.
  *   2. Parsed the endpoint summary and written it to a JSON file whose
  *      path is in DEVNET_ENDPOINTS_FILE.
- *   3. Set baseURL in the Playwright config to the dapp_url from the
- *      summary (done via playwright.config.ts conditional logic).
+ *   3. Made the dapp URL available via that endpoints file so the test
+ *      can navigate to the randomized host port directly.
  *
  * This spec asserts:
  *   (A) The dapp renders the correct gateway address injected at build time.
@@ -135,9 +135,8 @@ test.describe("devnet E2E — full-stack Geth+Lighthouse", () => {
   });
 
   test("(A) dapp renders the deployed gateway address in the DOM", async ({ page }) => {
-    // Navigate to the dapp (baseURL is set to dapp_url by playwright.config.ts
-    // when DEVNET_E2E_ENABLED=1).
-    await page.goto("/");
+    // Navigate to the dapp using the randomized host port from smoke-test.
+    await page.goto(endpoints.dapp_url);
 
     // The gateway address is baked into the dapp at build time via
     // VITE_GATEWAY_ADDRESS and rendered inside the AdminFlow as part of the
@@ -167,7 +166,7 @@ test.describe("devnet E2E — full-stack Geth+Lighthouse", () => {
     // If not present in the endpoints file, fall back to the known fixture constant.
     const agentAddr = endpoints.agent_addr ?? "0xf93Ee4Cf8c6c40b329b0c0626F28333c132CF241";
 
-    await page.goto("/");
+    await page.goto(endpoints.dapp_url);
 
     // Connect via the mock wallet connector.
     await page.getByTestId("connect-mock").click();

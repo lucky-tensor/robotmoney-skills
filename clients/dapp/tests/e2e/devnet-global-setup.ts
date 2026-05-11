@@ -2,9 +2,9 @@
  * Playwright globalSetup for the full-stack Geth+Lighthouse devnet E2E suite.
  *
  * Gated by DEVNET_E2E_ENABLED=1. When active:
- *   - Spawns `cargo run --bin smoke-test -- --full-stack` as a child process.
+ *   - Spawns `cargo run -p smoke-test -- --full-stack` as a child process.
  *   - Reads stdout line-by-line until the "--- endpoint summary ---" block
- *     appears and all four key=value pairs are parsed.
+ *     appears and all required key=value pairs are parsed.
  *   - Writes the parsed endpoints to a temp JSON file whose path is stored in
  *     DEVNET_ENDPOINTS_FILE so devnet-e2e.spec.ts can read it.
  *   - globalTeardown kills the child process, which triggers the binary's
@@ -179,7 +179,7 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
   console.log(`devnet-global-setup: cargo workspace root = ${cargoRoot}`);
   console.log("devnet-global-setup: spawning smoke-test --full-stack …");
 
-  smokeTestProc = spawn("cargo", ["run", "--bin", "smoke-test", "--", "--full-stack"], {
+  smokeTestProc = spawn("cargo", ["run", "-p", "smoke-test", "--", "--full-stack"], {
     cwd: cargoRoot,
     stdio: ["ignore", "pipe", "pipe"],
     // Detach so the child's process group can be killed on teardown.

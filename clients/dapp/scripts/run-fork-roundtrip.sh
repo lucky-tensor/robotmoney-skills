@@ -12,7 +12,7 @@
 #      account[1] (the agent EOA), and writes an rmpc.toml that
 #      points at the deployed gateway.
 #   4. Exports ROUNDTRIP_* env vars so Playwright can find everything,
-#      then runs `pnpm test:e2e -- fork-roundtrip.spec.ts`.
+#      then runs `bunx playwright test tests/e2e/fork-roundtrip.spec.ts`.
 #
 # Cleanup: kills anvil on EXIT regardless of test result.
 #
@@ -68,7 +68,7 @@ require_bin() {
 require_bin anvil
 require_bin forge
 require_bin cargo
-require_bin pnpm
+require_bin bun
 
 # ---- 1. Boot anvil --------------------------------------------------
 echo "fork-roundtrip: booting anvil on $RPC_URL"
@@ -178,5 +178,5 @@ VITE_GATEWAY_ADDRESS="$GATEWAY_ADDRESS" \
 VITE_VAULT_ADDRESS="$VAULT_ADDRESS" \
 VITE_ENV_CLASS=fork \
 VITE_GATEWAY_EXPECTED_CODE_HASH="$GATEWAY_RUNTIME_HASH" \
-    pnpm exec playwright test tests/e2e/fork-roundtrip.spec.ts "$@"
+    bunx playwright test tests/e2e/fork-roundtrip.spec.ts "$@"
 popd >/dev/null

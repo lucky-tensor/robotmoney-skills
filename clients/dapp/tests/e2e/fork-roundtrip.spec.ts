@@ -26,7 +26,7 @@
  *      unrelated misconfiguration in the harness.
  *
  * The whole spec is gated by ROUNDTRIP_ENABLED=1. Without that flag
- * the test is skipped so the existing default `pnpm test:e2e` run
+ * the test is skipped so the existing default `bun run test:e2e` run
  * (which boots only a bare anvil with no gateway deployed) stays
  * green.
  */
