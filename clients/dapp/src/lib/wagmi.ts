@@ -11,12 +11,26 @@
 import { unstable_connector, http, createConfig } from "wagmi";
 import { foundry, mainnet, sepolia } from "wagmi/chains";
 import { injected } from "wagmi/connectors";
+import { defineChain } from "viem";
+
+// Robot Money devnet (Geth+Lighthouse fork). Real prod-shaped chain id;
+// not the same as foundry/anvil (31337). Used by the smoke-test stack
+// and any hosted devnet. RPC URL is intentionally empty here — the
+// dapp never builds an HTTP transport for this chain, see §2 of
+// docs/security/dapp-topology.md.
+const devnet = defineChain({
+  id: 32382,
+  name: "Robot Money devnet",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  rpcUrls: { default: { http: [] } },
+});
 
 export function makeConfig(_env: Record<string, string | undefined>) {
   return createConfig({
-    chains: [foundry, sepolia, mainnet],
+    chains: [devnet, foundry, sepolia, mainnet],
     connectors: [injected()],
     transports: {
+      [devnet.id]: unstable_connector(injected),
       [foundry.id]: unstable_connector(injected),
       [sepolia.id]: http(),
       [mainnet.id]: http(),
