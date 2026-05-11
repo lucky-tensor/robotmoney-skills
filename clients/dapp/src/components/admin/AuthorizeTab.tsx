@@ -1,5 +1,5 @@
-import { useState, type Dispatch, type SetStateAction } from "react";
-import { useAccount, useWriteContract } from "wagmi";
+import { useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
+import { useAccount, useSimulateContract, useWriteContract } from "wagmi";
 import { isAddress, type Address } from "viem";
 import { gatewayAbi } from "../../lib/abi";
 import { buildPreview, type AdminAction, type PreviewContext } from "../../lib/preview";
@@ -47,19 +47,23 @@ export function AuthorizeTab(props: Props) {
 
   const preview = action ? buildPreview(action, props.ctx) : null;
 
-  const onSubmit = () => {
-    if (!action || !preview?.ok) return;
-    writeContract({
-      address: props.gatewayAddress,
-      abi: gatewayAbi,
-      functionName: "authorizeAgent",
-      args: [action.agent, action.policy],
-    });
+  const { data: sim } = useSimulateContract({
+    address: props.gatewayAddress,
+    abi: gatewayAbi,
+    functionName: "authorizeAgent",
+    args: action ? [action.agent, action.policy] : undefined,
+    query: { enabled: isConnected && preview?.ok === true },
+  });
+
+  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!sim) return;
+    writeContract(sim.request);
     if (address) markRegistered(address);
   };
 
   return (
-    <section data-testid="authorize-form">
+    <form data-testid="authorize-form" onSubmit={onSubmit}>
       <h2>Authorize agent</h2>
       <label>
         Agent address
@@ -82,13 +86,12 @@ export function AuthorizeTab(props: Props) {
       />
       {preview && <TxPreview preview={preview} />}
       <button
-        type="button"
+        type="submit"
         data-testid="authorize-submit"
-        disabled={!isConnected || !preview?.ok || isPending}
-        onClick={onSubmit}
+        disabled={!isConnected || !sim || isPending}
       >
         Sign authorizeAgent with wallet
       </button>
-    </section>
+    </form>
   );
 }

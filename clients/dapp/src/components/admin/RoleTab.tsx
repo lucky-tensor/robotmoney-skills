@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAccount, useWriteContract } from "wagmi";
+import { useAccount, useSimulateContract, useWriteContract } from "wagmi";
 import { isAddress, type Address } from "viem";
 import { gatewayAbi, ROLE_HASH, type RoleName } from "../../lib/abi";
 import { buildPreview, type AdminAction, type PreviewContext } from "../../lib/preview";
@@ -25,6 +25,8 @@ export function RoleTab(props: Props) {
 
   const slug = SLUG[props.role];
   const valid = isAddress(account);
+  const roleHash = ROLE_HASH[props.role];
+  const accountAddr = valid ? (account as Address) : undefined;
 
   const grantAction: AdminAction | null = valid
     ? { kind: "grantRole", role: props.role, account: account as Address }
@@ -36,14 +38,20 @@ export function RoleTab(props: Props) {
   const grantPreview = grantAction ? buildPreview(grantAction, props.ctx) : null;
   const revokePreview = revokeAction ? buildPreview(revokeAction, props.ctx) : null;
 
-  const submit = (fn: "grantRole" | "revokeRole", target: Address) => {
-    writeContract({
-      address: props.gatewayAddress,
-      abi: gatewayAbi,
-      functionName: fn,
-      args: [ROLE_HASH[props.role], target],
-    });
-  };
+  const { data: grantSim } = useSimulateContract({
+    address: props.gatewayAddress,
+    abi: gatewayAbi,
+    functionName: "grantRole",
+    args: accountAddr ? [roleHash, accountAddr] : undefined,
+    query: { enabled: isConnected && grantPreview?.ok === true },
+  });
+  const { data: revokeSim } = useSimulateContract({
+    address: props.gatewayAddress,
+    abi: gatewayAbi,
+    functionName: "revokeRole",
+    args: accountAddr ? [roleHash, accountAddr] : undefined,
+    query: { enabled: isConnected && revokePreview?.ok === true },
+  });
 
   return (
     <section data-testid={`${slug}-role-form`}>
@@ -66,8 +74,8 @@ export function RoleTab(props: Props) {
       <button
         type="button"
         data-testid={`grant-${slug}-submit`}
-        disabled={!isConnected || !grantPreview?.ok || isPending}
-        onClick={() => grantAction && grantPreview?.ok && submit("grantRole", grantAction.account)}
+        disabled={!isConnected || !grantSim || isPending}
+        onClick={() => grantSim && writeContract(grantSim.request)}
       >
         Sign grantRole({props.role}) with wallet
       </button>
@@ -79,10 +87,8 @@ export function RoleTab(props: Props) {
       <button
         type="button"
         data-testid={`revoke-${slug}-submit`}
-        disabled={!isConnected || !revokePreview?.ok || isPending}
-        onClick={() =>
-          revokeAction && revokePreview?.ok && submit("revokeRole", revokeAction.account)
-        }
+        disabled={!isConnected || !revokeSim || isPending}
+        onClick={() => revokeSim && writeContract(revokeSim.request)}
       >
         Sign revokeRole({props.role}) with wallet
       </button>

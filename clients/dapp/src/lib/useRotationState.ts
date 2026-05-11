@@ -7,7 +7,7 @@
  * handlers for each step. RotationTab is left as render-only.
  */
 import { useState } from "react";
-import { useWriteContract } from "wagmi";
+import { useSimulateContract, useWriteContract } from "wagmi";
 import { isAddress, type Address } from "viem";
 import { gatewayAbi } from "./abi";
 import { buildPreview, type AdminAction, type Preview, type PreviewContext } from "./preview";
@@ -110,27 +110,32 @@ export function useRotationState(
 
   const revokePreview = revokeAction ? buildPreview(revokeAction, ctx) : null;
   const authorizePreview = authorizeAction ? buildPreview(authorizeAction, ctx) : null;
-  const previewsOk = combinedOk && revokePreview?.ok === true && authorizePreview?.ok === true;
+
+  const { data: revokeSim } = useSimulateContract({
+    address: gatewayAddress,
+    abi: gatewayAbi,
+    functionName: "revokeAgent",
+    args: revokeAction ? [revokeAction.agent] : undefined,
+    query: { enabled: combinedOk && revokePreview?.ok === true },
+  });
+  const { data: authorizeSim } = useSimulateContract({
+    address: gatewayAddress,
+    abi: gatewayAbi,
+    functionName: "authorizeAgent",
+    args: authorizeAction ? [authorizeAction.agent, authorizeAction.policy] : undefined,
+    query: { enabled: combinedOk && authorizePreview?.ok === true },
+  });
+  const previewsOk = combinedOk && Boolean(revokeSim) && Boolean(authorizeSim);
 
   const onRevoke = () => {
-    if (!revokeAction || revokePreview?.ok !== true) return;
-    writeContract({
-      address: gatewayAddress,
-      abi: gatewayAbi,
-      functionName: "revokeAgent",
-      args: [revokeAction.agent],
-    });
+    if (!revokeSim) return;
+    writeContract(revokeSim.request);
     setStep("revoke-sent");
   };
 
   const onAuthorize = () => {
-    if (!authorizeAction || authorizePreview?.ok !== true) return;
-    writeContract({
-      address: gatewayAddress,
-      abi: gatewayAbi,
-      functionName: "authorizeAgent",
-      args: [authorizeAction.agent, authorizeAction.policy],
-    });
+    if (!authorizeSim) return;
+    writeContract(authorizeSim.request);
     setStep("done");
   };
 

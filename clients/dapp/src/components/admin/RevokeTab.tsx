@@ -1,4 +1,4 @@
-import { useAccount, useWriteContract } from "wagmi";
+import { useAccount, useSimulateContract, useWriteContract } from "wagmi";
 import { isAddress, type Address } from "viem";
 import { gatewayAbi } from "../../lib/abi";
 import { buildPreview, type AdminAction, type PreviewContext } from "../../lib/preview";
@@ -19,14 +19,17 @@ export function RevokeTab(props: Props) {
     : null;
   const preview = action ? buildPreview(action, props.ctx) : null;
 
+  const { data: sim } = useSimulateContract({
+    address: props.gatewayAddress,
+    abi: gatewayAbi,
+    functionName: "revokeAgent",
+    args: action ? [action.agent] : undefined,
+    query: { enabled: isConnected && preview?.ok === true },
+  });
+
   const onSubmit = () => {
-    if (!action || !preview?.ok) return;
-    writeContract({
-      address: props.gatewayAddress,
-      abi: gatewayAbi,
-      functionName: "revokeAgent",
-      args: [action.agent],
-    });
+    if (!sim) return;
+    writeContract(sim.request);
   };
 
   return (
@@ -36,7 +39,7 @@ export function RevokeTab(props: Props) {
       <button
         type="button"
         data-testid="revoke-submit"
-        disabled={!isConnected || !preview?.ok || isPending}
+        disabled={!isConnected || !sim || isPending}
         onClick={onSubmit}
       >
         Sign revokeAgent with wallet
