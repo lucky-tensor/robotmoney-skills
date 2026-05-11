@@ -215,7 +215,11 @@ export async function openDapp(
     rpcUrl: endpoints.rpc_url,
     chainId: endpoints.chain_id,
   });
-  await page.goto(endpoints.dapp_url);
+  // All current e2e specs interact with the admin surface; navigate to
+  // /admin so the AdminFlow component mounts (PublicView is the new `/`).
+  const url = new URL(endpoints.dapp_url);
+  url.pathname = "/admin";
+  await page.goto(url.toString());
   if (opts.connect !== false) {
     await connectInjectedWallet(page);
   }

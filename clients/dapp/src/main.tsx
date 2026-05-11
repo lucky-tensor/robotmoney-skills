@@ -10,12 +10,14 @@
  *   refusal previews and disable every admin write button.
  */
 import "./styles.css";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WagmiProvider } from "wagmi";
 import type { Address } from "viem";
 import { AdminFlow } from "./components/AdminFlow";
+import { NavBar } from "./components/NavBar";
+import { PublicView } from "./components/PublicView";
 import { makeConfig } from "./lib/wagmi";
 import { useGatewayVerifier } from "./lib/useGatewayVerifier";
 
@@ -34,18 +36,44 @@ const envClass = (env.VITE_ENV_CLASS as "fork" | "devnet" | "testnet" | "mainnet
  * useGatewayVerifier hook has access to the wagmi context.
  */
 function App() {
+  const [path, setPath] = useState(window.location.pathname);
+  useEffect(() => {
+    const onPop = () => setPath(window.location.pathname);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  const navigate = (next: string) => {
+    if (next === path) return;
+    window.history.pushState(null, "", next);
+    setPath(next);
+  };
+
   const verificationState = useGatewayVerifier(gateway, expectedCodeHash);
   const gatewayCodeHashVerified = verificationState.status === "verified";
 
+  const isAdmin = path.startsWith("/admin");
+
   return (
-    <AdminFlow
-      gatewayAddress={gateway}
-      vaultAddress={vault}
-      gatewayCodeHashVerified={gatewayCodeHashVerified}
-      gatewayVerificationState={verificationState}
-      envClass={envClass}
-      flagEnv={env}
-    />
+    <>
+      <NavBar path={isAdmin ? "/admin" : "/"} onNavigate={navigate} />
+      {isAdmin ? (
+        <AdminFlow
+          gatewayAddress={gateway}
+          vaultAddress={vault}
+          gatewayCodeHashVerified={gatewayCodeHashVerified}
+          gatewayVerificationState={verificationState}
+          envClass={envClass}
+          flagEnv={env}
+        />
+      ) : (
+        <PublicView
+          gatewayAddress={gateway}
+          vaultAddress={vault}
+          envClass={envClass}
+          flagEnv={env}
+        />
+      )}
+    </>
   );
 }
 
