@@ -80,6 +80,11 @@ export function AdminFlow(props: AdminFlowProps) {
   const [maxPerWindow, setMaxPerWindow] = useState("1000000000"); // 1000 USDC
   const [shareReceiver, setShareReceiver] = useState("");
 
+  // Deposit + withdraw inputs. Vault ABI for these actions is not yet
+  // wired in src/lib/abi.ts — the buttons stay disabled until it lands.
+  const [depositAmount, setDepositAmount] = useState("");
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+
   // Rotation flow state: old agent address + new agent address + new policy.
   // The rotation section is independent from the single-action authorize/revoke
   // forms above. Both revoke (old) and authorize (new) previews must be OK
@@ -418,6 +423,55 @@ export function AdminFlow(props: AdminFlowProps) {
         </button>
       </section>
 
+            ),
+          },
+          {
+            id: "deposit",
+            label: "Deposit",
+            hidden: props.registrationMode,
+            content: (
+              <section data-testid="deposit-form">
+                <h2>Deposit USDC</h2>
+                <p>Send USDC to the gateway. Receive vault shares.</p>
+                <label>
+                  Amount (USDC)
+                  <input
+                    data-testid="deposit-amount"
+                    value={depositAmount}
+                    onChange={(e) => setDepositAmount(e.target.value)}
+                    placeholder="0.00"
+                  />
+                </label>
+                {/* TODO: vault ABI not yet wired — see src/lib/abi.ts */}
+                <button data-testid="deposit-submit" disabled>
+                  Sign deposit with wallet
+                </button>
+                <p className="hint">Vault integration pending.</p>
+              </section>
+            ),
+          },
+          {
+            id: "withdraw",
+            label: "Withdraw",
+            hidden: props.registrationMode,
+            content: (
+              <section data-testid="withdraw-form">
+                <h2>Withdraw</h2>
+                <p>Burn vault shares. Receive USDC.</p>
+                <label>
+                  Shares
+                  <input
+                    data-testid="withdraw-amount"
+                    value={withdrawAmount}
+                    onChange={(e) => setWithdrawAmount(e.target.value)}
+                    placeholder="0.00"
+                  />
+                </label>
+                <button data-testid="withdraw-submit" disabled>
+                  Sign withdraw with wallet
+                </button>
+                <p className="hint">Vault integration pending.</p>
+              </section>
             ),
           },
           {

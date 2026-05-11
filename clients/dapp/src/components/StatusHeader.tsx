@@ -1,0 +1,75 @@
+/**
+ * StatusHeader — protocol context shown above the Agents panel.
+ * Always visible regardless of registration state. Live reads from
+ * the gateway: paused state + USDC token address. Other addresses
+ * come from build-time env (VITE_GATEWAY_ADDRESS, VITE_VAULT_ADDRESS).
+ */
+import { useAccount, useChainId, useReadContract } from "wagmi";
+import type { Address } from "viem";
+import { gatewayAbi } from "../lib/abi";
+
+interface StatusHeaderProps {
+  gatewayAddress: Address;
+  vaultAddress: Address;
+  envClass: "fork" | "devnet" | "testnet" | "mainnet";
+}
+
+export function StatusHeader(props: StatusHeaderProps) {
+  const { isConnected } = useAccount();
+  const chainId = useChainId();
+
+  const { data: pausedData } = useReadContract({
+    address: props.gatewayAddress,
+    abi: gatewayAbi,
+    functionName: "paused",
+    query: { enabled: isConnected },
+  });
+  const paused = Boolean(pausedData);
+
+  const { data: usdcAddressData } = useReadContract({
+    address: props.gatewayAddress,
+    abi: gatewayAbi,
+    functionName: "usdc",
+    query: { enabled: isConnected },
+  });
+  const usdcAddress = (usdcAddressData as Address | undefined) ?? "";
+
+  return (
+    <section className="status-header" data-testid="status-header">
+      <p className="hero-eyebrow">{props.envClass.toUpperCase()}</p>
+      <div className="stat-grid">
+        <div className="stat-card">
+          <p className="stat-label">Chain</p>
+          <p className="stat-value">{isConnected ? chainId : "—"}</p>
+        </div>
+        <div className="stat-card">
+          <p className="stat-label">Gateway</p>
+          <p className="stat-value font-mono">{shortAddr(props.gatewayAddress)}</p>
+        </div>
+        <div className="stat-card">
+          <p className="stat-label">Vault</p>
+          <p className="stat-value font-mono">{shortAddr(props.vaultAddress)}</p>
+        </div>
+        <div className="stat-card">
+          <p className="stat-label">USDC</p>
+          <p className="stat-value font-mono">{usdcAddress ? shortAddr(usdcAddress) : "—"}</p>
+        </div>
+        <div className="stat-card">
+          <p className="stat-label">Status</p>
+          <p
+            className="stat-value"
+            data-testid="public-paused"
+            style={{ color: paused ? "var(--color-warn)" : "var(--color-accent)" }}
+          >
+            {isConnected ? (paused ? "PAUSED" : "ACTIVE") : "—"}
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function shortAddr(a: string): string {
+  if (!a || a === "0x0000000000000000000000000000000000000000") return "—";
+  return `${a.slice(0, 6)}…${a.slice(-4)}`;
+}

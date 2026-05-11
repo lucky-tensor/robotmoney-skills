@@ -1,7 +1,7 @@
 /**
  * Entry point. Reads runtime config from `import.meta.env` and bootstraps
- * the wagmi provider. Renders the brand nav and the two top-level
- * surfaces (Dashboard + Agents) as tabs on a single route.
+ * the wagmi provider. Renders the brand nav, a always-on status header,
+ * and the per-user Agents panel.
  */
 import "./styles.css";
 import React from "react";
@@ -11,8 +11,7 @@ import { WagmiProvider } from "wagmi";
 import type { Address } from "viem";
 import { AgentsPanel } from "./components/AgentsPanel";
 import { NavBar } from "./components/NavBar";
-import { PublicView } from "./components/PublicView";
-import { Tabs } from "./components/Tabs";
+import { StatusHeader } from "./components/StatusHeader";
 import { makeConfig } from "./lib/wagmi";
 import { useGatewayVerifier } from "./lib/useGatewayVerifier";
 
@@ -33,35 +32,14 @@ function App() {
   return (
     <>
       <NavBar />
-      <Tabs
-        tabs={[
-          {
-            id: "dashboard",
-            label: "Dashboard",
-            content: (
-              <PublicView
-                gatewayAddress={gateway}
-                vaultAddress={vault}
-                envClass={envClass}
-                flagEnv={env}
-              />
-            ),
-          },
-          {
-            id: "agents",
-            label: "Agents",
-            content: (
-              <AgentsPanel
-                gatewayAddress={gateway}
-                vaultAddress={vault}
-                gatewayCodeHashVerified={gatewayCodeHashVerified}
-                gatewayVerificationState={verificationState}
-                envClass={envClass}
-                flagEnv={env}
-              />
-            ),
-          },
-        ]}
+      <StatusHeader gatewayAddress={gateway} vaultAddress={vault} envClass={envClass} />
+      <AgentsPanel
+        gatewayAddress={gateway}
+        vaultAddress={vault}
+        gatewayCodeHashVerified={gatewayCodeHashVerified}
+        gatewayVerificationState={verificationState}
+        envClass={envClass}
+        flagEnv={env}
       />
     </>
   );

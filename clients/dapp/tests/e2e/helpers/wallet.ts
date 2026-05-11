@@ -219,11 +219,8 @@ export async function openDapp(
   if (opts.connect !== false) {
     await connectInjectedWallet(page);
   }
-  // All current e2e specs interact with the Agents surface; click the
-  // top-level Agents tab so the AdminFlow tree mounts. fork/devnet
-  // env classes bypass the registration gate (see useVaultRegistration).
-  await page.getByTestId("tab-agents").click();
-  await page.getByTestId("tabpanel-agents").waitFor({ state: "visible" });
+  // fork/devnet env classes bypass the registration gate
+  // (see useVaultRegistration.ts), so AdminFlow mounts directly.
 }
 
 /**
@@ -233,6 +230,8 @@ export async function openDapp(
  */
 export type AdminTabId =
   | "authorize"
+  | "deposit"
+  | "withdraw"
   | "pause"
   | "revoke"
   | "rotation"
