@@ -139,18 +139,29 @@ the user signs.
 
 ## Current gap vs. target
 
-The dapp today ships with `VITE_FORK_RPC_URL` baked in and uses it
-directly for `eth_getCode` and other reads (see
-`docs/testing/smoke-test-design.md`). To reach the topology above:
+Status of the migration toward this topology:
 
-1. Migrate the dapp's read calls onto the injected EIP-1193 provider.
-2. Remove `VITE_FORK_RPC_URL` from the build matrix.
+1. ~~Migrate the dapp's read calls onto the injected EIP-1193 provider.~~
+   **Done.** `clients/dapp/src/lib/wagmi.ts` uses
+   `unstable_connector(injected)` as the foundry-chain transport; all
+   reads on the devnet/operator chain route through the wallet RPC.
+2. ~~Remove `VITE_FORK_RPC_URL` from the build matrix.~~ **Done.**
+   Stripped from `clients/dapp/Dockerfile`, the dapp's `docker-compose.yml`,
+   `testing/ethereum-testnet/config/docker-compose.dapp.yaml`, the
+   smoke-test harness, and `.github/workflows/release-dapp.yml`. The
+   bundle no longer has a hoster-controlled RPC endpoint.
 3. Add CI publication of the IPFS CID + sigstore attestation.
 4. Configure ENS contenthash for the canonical name.
 5. Tighten CSP to forbid `connect-src` outside the wallet bridge.
 
-Each step is independent and can land separately; the migration of
-reads onto the wallet provider is the largest behavioural change.
+Open items (3–5) are independent of each other.
+
+The `rmpc` config export panel still surfaces an `rpcUrl` field, but
+that URL is for the off-chain `rmpc` client the operator runs
+themselves (it lives in the downloaded TOML, not in any browser fetch
+the dapp performs). The field is now operator-editable in the UI with
+a `http://127.0.0.1:8545` default, instead of being baked at build
+time — see `clients/dapp/src/components/ConfigExportPanel.tsx`.
 
 ---
 

@@ -635,7 +635,6 @@ export function AdminFlow(props: AdminFlowProps) {
               : ""
           }
           chainId={chainId}
-          rpcUrl={props.flagEnv.VITE_FORK_RPC_URL ?? "http://127.0.0.1:8545"}
           agent={agent as Address}
         />
       )}

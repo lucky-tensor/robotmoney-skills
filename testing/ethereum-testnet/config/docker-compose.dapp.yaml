@@ -18,7 +18,6 @@
 #   #   INDEXER_VAULT         — same as VITE_VAULT_ADDRESS
 #   #
 #   # Optional (defaults shown):
-#   #   VITE_FORK_RPC_URL=http://localhost:8545
 #   #   VITE_EXPLORER_API_URL=http://localhost:8080
 #   #   INDEXER_RPC_URL=http://host.docker.internal:8545
 #   #   INDEXER_CHAIN_ID=32382
@@ -100,7 +99,6 @@ services:
       context: ../../..
       dockerfile: clients/dapp/Dockerfile
       args:
-        VITE_FORK_RPC_URL: ${VITE_FORK_RPC_URL:-http://localhost:8545}
         VITE_EXPLORER_API_URL: ${VITE_EXPLORER_API_URL:-http://localhost:8080}
         VITE_GATEWAY_ADDRESS: ${VITE_GATEWAY_ADDRESS:?VITE_GATEWAY_ADDRESS must be set}
         VITE_VAULT_ADDRESS: ${VITE_VAULT_ADDRESS:?VITE_VAULT_ADDRESS must be set}
