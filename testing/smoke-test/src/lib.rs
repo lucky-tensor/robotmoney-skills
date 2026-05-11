@@ -771,7 +771,10 @@ impl Drop for DappStack {
             ])
             .env("VITE_GATEWAY_ADDRESS", &self.gateway_hex)
             .env("VITE_VAULT_ADDRESS", &self.vault_hex)
-            .env("VITE_GATEWAY_EXPECTED_CODE_HASH", &self.gateway_runtime_hash)
+            .env(
+                "VITE_GATEWAY_EXPECTED_CODE_HASH",
+                &self.gateway_runtime_hash,
+            )
             .env("INDEXER_GATEWAY", &self.gateway_hex)
             .env("INDEXER_VAULT", &self.vault_hex)
             .current_dir(&self.compose_dir)

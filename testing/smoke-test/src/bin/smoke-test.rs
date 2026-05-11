@@ -94,7 +94,10 @@ fn main() {
         println!("agent_addr={:#x}", fixture.agent());
         println!("admin_addr={}", smoke_test::DEPLOYER_ADDRESS_HEX);
         println!("pauser_addr={}", smoke_test::PAUSER_ADDRESS_HEX);
-        println!("share_receiver_addr={}", smoke_test::SHARE_RECEIVER_ADDRESS_HEX);
+        println!(
+            "share_receiver_addr={}",
+            smoke_test::SHARE_RECEIVER_ADDRESS_HEX
+        );
         println!("admin_private_key={}", smoke_test::DEPLOYER_PRIVATE_KEY_HEX);
         println!("pauser_private_key={}", smoke_test::PAUSER_PRIVATE_KEY_HEX);
         println!(
