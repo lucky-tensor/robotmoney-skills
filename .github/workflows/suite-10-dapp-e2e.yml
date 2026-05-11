@@ -69,17 +69,11 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
       - uses: oven-sh/setup-bun@v2
 
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: pnpm
-          cache-dependency-path: clients/dapp/pnpm-lock.yaml
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -88,8 +82,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: pnpm install
-        run: pnpm install --frozen-lockfile
+      - name: Install dependencies
+        run: bun install
 
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
@@ -124,20 +118,14 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
       - uses: oven-sh/setup-bun@v2
 
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: pnpm
-          cache-dependency-path: clients/dapp/pnpm-lock.yaml
 
-      - name: pnpm install
-        run: pnpm install --frozen-lockfile
+      - name: Install dependencies
+        run: bun install
 
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
@@ -167,17 +155,11 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
       - uses: oven-sh/setup-bun@v2
 
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: pnpm
-          cache-dependency-path: clients/dapp/pnpm-lock.yaml
 
       - name: Verify Docker is available
         run: |
@@ -194,8 +176,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: pnpm install
-        run: pnpm install --frozen-lockfile
+      - name: Install dependencies
+        run: bun install
 
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
@@ -222,15 +204,11 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
+      - uses: oven-sh/setup-bun@v2
 
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: pnpm
-          cache-dependency-path: clients/dapp/pnpm-lock.yaml
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -242,13 +220,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: pnpm install
+      - name: Install dependencies
         working-directory: clients/dapp
-        run: pnpm install --frozen-lockfile
+        run: bun install
 
       - name: Install Playwright Chromium
         working-directory: clients/dapp
-        run: pnpm exec playwright install --with-deps chromium
+        run: bunx playwright install --with-deps chromium
 
       - name: Fork round-trip
         env:
