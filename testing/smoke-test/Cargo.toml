@@ -5,6 +5,10 @@ edition = "2021"
 description = "Devnet fixture library and CLI for Robot Money integration tests."
 license = "MIT"
 publish = false
+# CI + integration tests invoke `cargo run -p smoke-test -- --full-stack`.
+# With multiple `[[bin]]` entries Cargo otherwise errors with
+#   "could not determine which binary to run".
+default-run = "smoke-test"
 
 # Canonical: docs/testing/smoke-test-design.md
 # Implements: issue #146
