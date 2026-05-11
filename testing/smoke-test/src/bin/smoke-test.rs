@@ -31,10 +31,21 @@ struct Cli {
     /// Useful when attaching a reverse proxy to the webapp.
     #[arg(long, value_parser = clap::value_parser!(u16).range(1..))]
     dapp_port: Option<u16>,
+
+    /// Open ephemeral `trycloudflare.com` tunnels for the dapp, explorer-api,
+    /// and Geth RPC ports, and build the dapp bundle with those public URLs
+    /// in the standard `VITE_*` env vars. Tunnels close when smoke-test exits.
+    /// Requires `--full-stack`.
+    #[arg(long, default_value_t = false)]
+    tunnel: bool,
 }
 
 fn main() {
     let cli = Cli::parse();
+    if cli.tunnel && !cli.full_stack {
+        eprintln!("smoke-test: --tunnel requires --full-stack.");
+        std::process::exit(2);
+    }
     let interrupted = Arc::new(AtomicBool::new(false));
     {
         let interrupted = Arc::clone(&interrupted);
@@ -71,8 +82,8 @@ fn main() {
     // down the compose stack together with the chain fixture.
     let _dapp_stack: Option<smoke_test::DappStack> = if cli.full_stack {
         eprintln!("smoke-test: starting full-stack (dapp + explorer-api + indexer + postgres)...");
-        let stack =
-            smoke_test::DappStack::boot(&fixture, cli.dapp_port).expect("dapp stack boot failed");
+        let stack = smoke_test::DappStack::boot(&fixture, cli.dapp_port, cli.tunnel)
+            .expect("dapp stack boot failed");
         if interrupted.load(Ordering::SeqCst) {
             eprintln!("smoke-test: interrupted during full-stack startup.");
             return;
