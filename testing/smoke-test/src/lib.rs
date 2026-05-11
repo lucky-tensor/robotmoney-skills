@@ -275,24 +275,55 @@ impl Fixture {
         let compose_dir = repo_root.join("testing/ethereum-testnet/config");
         let chain_ports = ChainPorts::allocate()?;
         let rpc_url = chain_ports.rpc_url();
-        let cleanup = || {
-            let _ = Command::new("docker")
-                .args([
-                    "compose",
-                    "-f",
-                    "docker-compose.yaml",
-                    "down",
-                    "-v",
-                    "--remove-orphans",
-                ])
-                .current_dir(&compose_dir)
-                .status();
+
+        // Issue #255: render the genesis alloc overlay before booting compose
+        // so the `setup` container can bind-mount + merge it into the EL
+        // genesis.json. If rendering fails (missing fixture, malformed
+        // manifest), fall back to the legacy clean-room genesis path —
+        // verbose-logging the reason so the operator can fix it offline.
+        let alloc_overlay_path = match render_genesis_alloc_overlay(&repo_root, tmp.path()) {
+            Ok(Some(p)) => Some(p),
+            Ok(None) => {
+                eprintln!(
+                    "smoke-test: skipping genesis alloc overlay (fixture or manifest absent); \
+                     booting with clean-room genesis (legacy behaviour)"
+                );
+                None
+            }
+            Err(e) => {
+                eprintln!(
+                    "smoke-test: genesis alloc overlay rendering failed: {e}; \
+                     falling back to clean-room genesis"
+                );
+                None
+            }
         };
 
-        let status = Command::new("docker")
-            .arg("compose")
-            .arg("-f")
-            .arg("docker-compose.yaml")
+        let compose_files: Vec<&str> = if alloc_overlay_path.is_some() {
+            vec!["-f", "docker-compose.yaml", "-f", "docker-compose.alloc.yaml"]
+        } else {
+            vec!["-f", "docker-compose.yaml"]
+        };
+        let compose_files_owned: Vec<String> = compose_files.iter().map(|s| s.to_string()).collect();
+        let cleanup_compose_files = compose_files_owned.clone();
+        let cleanup_compose_dir = compose_dir.clone();
+        let cleanup = move || {
+            let mut c = Command::new("docker");
+            c.arg("compose");
+            for f in &cleanup_compose_files {
+                c.arg(f);
+            }
+            c.args(["down", "-v", "--remove-orphans"]);
+            c.current_dir(&cleanup_compose_dir);
+            let _ = c.status();
+        };
+
+        let mut up_cmd = Command::new("docker");
+        up_cmd.arg("compose");
+        for f in &compose_files_owned {
+            up_cmd.arg(f);
+        }
+        up_cmd
             .arg("up")
             .arg("-d")
             .arg("--build")
@@ -300,9 +331,11 @@ impl Fixture {
             .env("GETH_WS_PORT", chain_ports.ws_port.to_string())
             .env("GETH_AUTHRPC_PORT", chain_ports.authrpc_port.to_string())
             .env("BEACON_PORT", chain_ports.beacon_port.to_string())
-            .current_dir(&compose_dir)
-            .status()
-            .map_err(HarnessError::from)?;
+            .current_dir(&compose_dir);
+        if let Some(ref p) = alloc_overlay_path {
+            up_cmd.env("SMOKE_GENESIS_ALLOC_FILE", p);
+        }
+        let status = up_cmd.status().map_err(HarnessError::from)?;
         if !status.success() {
             cleanup();
             return Err(HarnessError::Docker(format!(
@@ -563,6 +596,45 @@ pub fn prerequisites_available() -> bool {
 }
 
 // -- Internal helpers -------------------------------------------------
+
+/// Issue #255: render the genesis alloc overlay JSON into `out_dir` and
+/// return its absolute path. Returns `Ok(None)` (NOT an error) when either
+/// the fork-block manifest or the Anvil fixture snapshot is missing — the
+/// caller falls back to the legacy clean-room genesis path in that case so
+/// developer shells without the snapshot still work.
+///
+/// Errors are reserved for cases where both inputs exist but the build
+/// itself fails (malformed manifest, missing required ingested address, IO
+/// failure writing the output). The caller logs these and falls back.
+fn render_genesis_alloc_overlay(
+    repo_root: &Path,
+    out_dir: &Path,
+) -> Result<Option<PathBuf>, HarnessError> {
+    let manifest_path = repo_root.join("testing/ethereum-testnet/config/fork-block.json");
+    let snapshot_path = repo_root.join("testing/fixtures/fork-state/CURRENT.anvil-state");
+    if !manifest_path.exists() || !snapshot_path.exists() {
+        return Ok(None);
+    }
+
+    let manifest = fork_manifest::ForkManifest::load(&manifest_path)
+        .map_err(|e| HarnessError::other(format!("load fork-block.json: {e}")))?;
+    let alloc = genesis_alloc::build_alloc(&snapshot_path, &manifest)
+        .map_err(|e| HarnessError::other(format!("build alloc: {e}")))?;
+    let json = serde_json::to_string_pretty(&alloc)
+        .map_err(|e| HarnessError::other(format!("serialize alloc: {e}")))?;
+
+    let out_path = out_dir.join("genesis-alloc.json");
+    std::fs::write(&out_path, json)?;
+    // docker requires an absolute path for bind-mount source; the tempdir
+    // path already is absolute, but be defensive.
+    let absolute = std::fs::canonicalize(&out_path)?;
+    eprintln!(
+        "smoke-test: rendered genesis alloc overlay ({} accounts) -> {}",
+        alloc.0.len(),
+        absolute.display()
+    );
+    Ok(Some(absolute))
+}
 
 fn derive_address(privkey: &[u8; 32]) -> Address {
     use k256::ecdsa::SigningKey;

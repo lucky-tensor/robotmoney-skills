@@ -38,6 +38,30 @@ fi
 echo "📂 Debugging Metadata contents:"
 ls -la /data/metadata/
 
+# Issue #255: when the host has rendered a genesis alloc via
+# `smoke-test-genesis-ingester` and bind-mounted it at /alloc-overlay.json
+# (see docker-compose.alloc.yaml), merge it into the EL genesis.json's
+# `alloc` map BEFORE geth init reads the file. Without the bind mount, the
+# generated genesis keeps its default empty alloc — preserving the legacy
+# clean-room behaviour for callers that haven't opted in yet.
+if [ -f /alloc-overlay.json ]; then
+    echo "🔁 Merging host-rendered alloc overlay (/alloc-overlay.json) into genesis.json"
+    if ! command -v jq >/dev/null 2>&1; then
+        echo "ERROR: jq required to merge alloc overlay but not present in image" >&2
+        exit 1
+    fi
+    # The overlay JSON is a map { "0x…address": { balance, code, storage, … } }
+    # whose entries follow geth's alloc schema. The merge expression
+    # right-joins so overlay entries override (and add to) the existing
+    # alloc — leaving any pre-seeded accounts intact.
+    MERGED=/data/metadata/genesis.merged.json
+    jq --slurpfile overlay /alloc-overlay.json \
+       '.alloc = ((.alloc // {}) + $overlay[0])' \
+       /data/metadata/genesis.json > "$MERGED"
+    mv "$MERGED" /data/metadata/genesis.json
+    echo "🔁 alloc overlay merged ($(jq '.alloc | length' /data/metadata/genesis.json) total entries)"
+fi
+
 # Now move artifacts to final locations
 # EL Genesis
 mv /data/metadata/genesis.json $GETH_DIR/genesis.json
