@@ -47,7 +47,6 @@ pub fn run(config_path: &Path, owner_hex: &str, spender_hex: &str, pretty: bool)
     let cfg = match Config::from_path(config_path) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("rmpc get-allowance: failed to load config: {e}");
             log::error!("rmpc get-allowance: failed to load config: {e}");
             return EXIT_STARTUP_FAIL;
         }
@@ -56,7 +55,6 @@ pub fn run(config_path: &Path, owner_hex: &str, spender_hex: &str, pretty: bool)
     let owner = match Address::from_str(owner_hex) {
         Ok(a) => a,
         Err(e) => {
-            eprintln!("rmpc get-allowance: --owner not a 20-byte hex address: {e}");
             log::error!("rmpc get-allowance: --owner not a 20-byte hex address: {e}");
             return EXIT_INPUT_FAIL;
         }
@@ -64,7 +62,6 @@ pub fn run(config_path: &Path, owner_hex: &str, spender_hex: &str, pretty: bool)
     let spender = match Address::from_str(spender_hex) {
         Ok(a) => a,
         Err(e) => {
-            eprintln!("rmpc get-allowance: --spender not a 20-byte hex address: {e}");
             log::error!("rmpc get-allowance: --spender not a 20-byte hex address: {e}");
             return EXIT_INPUT_FAIL;
         }
@@ -73,7 +70,6 @@ pub fn run(config_path: &Path, owner_hex: &str, spender_hex: &str, pretty: bool)
     let token = match Address::from_str(&cfg.usdc_address) {
         Ok(a) => a,
         Err(e) => {
-            eprintln!("rmpc get-allowance: usdc_address parse error: {e}");
             log::error!("rmpc get-allowance: usdc_address parse error: {e}");
             return EXIT_STARTUP_FAIL;
         }
@@ -85,7 +81,6 @@ pub fn run(config_path: &Path, owner_hex: &str, spender_hex: &str, pretty: bool)
     {
         Ok(rt) => rt,
         Err(e) => {
-            eprintln!("rmpc get-allowance: tokio runtime build failed: {e}");
             log::error!("rmpc get-allowance: tokio runtime build failed: {e}");
             return EXIT_STARTUP_FAIL;
         }
@@ -94,7 +89,6 @@ pub fn run(config_path: &Path, owner_hex: &str, spender_hex: &str, pretty: bool)
     let rpc = match RpcClient::new(&cfg.rpc_url) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("rmpc get-allowance: rpc client init failed: {e}");
             log::error!("rmpc get-allowance: rpc client init failed: {e}");
             return EXIT_STARTUP_FAIL;
         }
@@ -137,7 +131,6 @@ pub fn run(config_path: &Path, owner_hex: &str, spender_hex: &str, pretty: bool)
             EXIT_OK
         }
         Err(msg) => {
-            eprintln!("rmpc get-allowance: {msg}");
             log::error!("rmpc get-allowance: {msg}");
             EXIT_STARTUP_FAIL
         }
@@ -155,10 +148,7 @@ async fn call_allowance(
         .eth_call(
             &CallRequest {
                 to: token,
-                // Use owner as from so the transparent proxy does not reject
-                // the call via its admin-only guard (address(0) default in
-                // anvil coincides with the USDC proxy admin in the fixture).
-                from: Some(owner),
+                from: None,
                 data: data.into(),
             },
             None,

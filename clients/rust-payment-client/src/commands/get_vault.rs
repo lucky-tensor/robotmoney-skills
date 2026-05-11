@@ -283,7 +283,7 @@ async fn call_asset(
         .eth_call(
             &CallRequest {
                 to: vault,
-                from: Some(vault),
+                from: None,
                 data: data.into(),
             },
             Some(block_tag),
@@ -305,7 +305,7 @@ async fn call_decimals(
         .eth_call(
             &CallRequest {
                 to: vault,
-                from: Some(vault),
+                from: None,
                 data: data.into(),
             },
             Some(block_tag),
@@ -333,7 +333,7 @@ where
         .eth_call(
             &CallRequest {
                 to: vault,
-                from: Some(vault),
+                from: None,
                 data: data.into(),
             },
             Some(block_tag),
@@ -374,7 +374,7 @@ where
         .eth_call(
             &CallRequest {
                 to: vault,
-                from: Some(vault),
+                from: None,
                 data: data.into(),
             },
             Some(block_tag),
