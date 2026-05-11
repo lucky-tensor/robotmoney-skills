@@ -229,8 +229,7 @@ export async function openDapp(
  */
 export type AdminTabId =
   | "authorize"
-  | "deposit"
-  | "withdraw"
+  | "deposit-withdraw"
   | "pause"
   | "revoke"
   | "rotation"
