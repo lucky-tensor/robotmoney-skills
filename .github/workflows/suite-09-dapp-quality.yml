@@ -60,7 +60,7 @@ jobs:
           node-version: "22"
 
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
       - name: Prettier check
         run: bun run fmt
@@ -72,7 +72,7 @@ jobs:
         run: bunx tsc -b
 
       - name: Vitest
-        run: bun test
+        run: bun run test
 
       - name: Production build
         run: bun run build
