@@ -21,8 +21,7 @@ export function VerificationBanner({ state }: Props) {
         )}
         {state.status === "refused" && (
           <p data-testid="gateway-verification-refused" className="unsafe-banner">
-            <strong>Gateway verification refused — admin writes disabled.</strong>{" "}
-            {state.reason}
+            <strong>Gateway verification refused — admin writes disabled.</strong> {state.reason}
           </p>
         )}
       </section>

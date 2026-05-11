@@ -74,6 +74,7 @@ export function AdminFlow(props: AdminFlowProps) {
 
   const [agent, setAgent] = useState("");
   const [validUntil, setValidUntil] = useState(() =>
+    // eslint-disable-next-line no-restricted-syntax -- TODO(react-guide §Prime directives): inject clock; lazy init runs once at mount.
     Math.floor(Date.now() / 1000 + 86400).toString(),
   );
   const [maxPerPayment, setMaxPerPayment] = useState("100000000"); // 100 USDC
@@ -92,6 +93,7 @@ export function AdminFlow(props: AdminFlowProps) {
   const [rotationOldAgent, setRotationOldAgent] = useState("");
   const [rotationNewAgent, setRotationNewAgent] = useState("");
   const [rotationValidUntil, setRotationValidUntil] = useState(() =>
+    // eslint-disable-next-line no-restricted-syntax -- TODO(react-guide §Prime directives): inject clock; lazy init runs once at mount.
     Math.floor(Date.now() / 1000 + 86400).toString(),
   );
   const [rotationMaxPerPayment, setRotationMaxPerPayment] = useState("100000000"); // 100 USDC
@@ -304,7 +306,7 @@ export function AdminFlow(props: AdminFlowProps) {
         </p>
       )}
 
-<section data-testid="connect-section" hidden>
+      <section data-testid="connect-section" hidden>
         {!isConnected ? (
           <>
             <p>Connect a wallet to begin.</p>
@@ -354,62 +356,61 @@ export function AdminFlow(props: AdminFlowProps) {
             id: "authorize",
             label: "Authorize",
             content: (
-      <section data-testid="authorize-form">
-        <h2>Authorize agent</h2>
-        <label>
-          Agent address
-          <input
-            data-testid="agent-input"
-            value={agent}
-            onChange={(e) => setAgent(e.target.value)}
-            placeholder="0x..."
-          />
-        </label>
-        <label>
-          Valid-until (unix seconds)
-          <input
-            data-testid="validUntil-input"
-            value={validUntil}
-            onChange={(e) => setValidUntil(e.target.value)}
-          />
-        </label>
-        <label>
-          Max per payment (USDC base units)
-          <input
-            data-testid="maxPerPayment-input"
-            value={maxPerPayment}
-            onChange={(e) => setMaxPerPayment(e.target.value)}
-          />
-        </label>
-        <label>
-          Max per window (USDC base units)
-          <input
-            data-testid="maxPerWindow-input"
-            value={maxPerWindow}
-            onChange={(e) => setMaxPerWindow(e.target.value)}
-          />
-        </label>
-        <label>
-          Share receiver
-          <input
-            data-testid="shareReceiver-input"
-            value={shareReceiver}
-            onChange={(e) => setShareReceiver(e.target.value)}
-            placeholder="0x..."
-          />
-        </label>
+              <section data-testid="authorize-form">
+                <h2>Authorize agent</h2>
+                <label>
+                  Agent address
+                  <input
+                    data-testid="agent-input"
+                    value={agent}
+                    onChange={(e) => setAgent(e.target.value)}
+                    placeholder="0x..."
+                  />
+                </label>
+                <label>
+                  Valid-until (unix seconds)
+                  <input
+                    data-testid="validUntil-input"
+                    value={validUntil}
+                    onChange={(e) => setValidUntil(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Max per payment (USDC base units)
+                  <input
+                    data-testid="maxPerPayment-input"
+                    value={maxPerPayment}
+                    onChange={(e) => setMaxPerPayment(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Max per window (USDC base units)
+                  <input
+                    data-testid="maxPerWindow-input"
+                    value={maxPerWindow}
+                    onChange={(e) => setMaxPerWindow(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Share receiver
+                  <input
+                    data-testid="shareReceiver-input"
+                    value={shareReceiver}
+                    onChange={(e) => setShareReceiver(e.target.value)}
+                    placeholder="0x..."
+                  />
+                </label>
 
-        {authorizePreview && <TxPreview preview={authorizePreview} />}
+                {authorizePreview && <TxPreview preview={authorizePreview} />}
 
-        <button
-          data-testid="authorize-submit"
-          disabled={!isConnected || !authorizePreview?.ok || isPending}
-          onClick={onAuthorize}
-        >
-          Sign authorizeAgent with wallet
-        </button>
-      </section>
-
+                <button
+                  data-testid="authorize-submit"
+                  disabled={!isConnected || !authorizePreview?.ok || isPending}
+                  onClick={onAuthorize}
+                >
+                  Sign authorizeAgent with wallet
+                </button>
+              </section>
             ),
           },
           {
@@ -473,19 +474,17 @@ export function AdminFlow(props: AdminFlowProps) {
             label: "Revoke",
             hidden: props.registrationMode,
             content: (
-
-      <section data-testid="revoke-form">
-        <h2>Revoke agent</h2>
-        {revokePreview && <TxPreview preview={revokePreview} />}
-        <button
-          data-testid="revoke-submit"
-          disabled={!isConnected || !revokePreview?.ok || isPending}
-          onClick={onRevoke}
-        >
-          Sign revokeAgent with wallet
-        </button>
-      </section>
-
+              <section data-testid="revoke-form">
+                <h2>Revoke agent</h2>
+                {revokePreview && <TxPreview preview={revokePreview} />}
+                <button
+                  data-testid="revoke-submit"
+                  disabled={!isConnected || !revokePreview?.ok || isPending}
+                  onClick={onRevoke}
+                >
+                  Sign revokeAgent with wallet
+                </button>
+              </section>
             ),
           },
           {
@@ -493,113 +492,117 @@ export function AdminFlow(props: AdminFlowProps) {
             label: "Rotation",
             hidden: props.registrationMode,
             content: (
-      <section data-testid="rotation-form">
-        <h2>Agent rotation (revoke old → authorize new)</h2>
-        <p>
-          Both previews must be confirmed before wallet signing begins. Do not close this dialog
-          between transactions.
-        </p>
+              <section data-testid="rotation-form">
+                <h2>Agent rotation (revoke old → authorize new)</h2>
+                <p>
+                  Both previews must be confirmed before wallet signing begins. Do not close this
+                  dialog between transactions.
+                </p>
 
-        {rotationPreview && (
-          <p data-testid="rotation-combined-risk" className="rotation-risk-banner">
-            {rotationPreview.combinedRiskAnnotation}
-          </p>
-        )}
-        {rotationPreviewError && (
-          <p data-testid="rotation-preview-error" className="error">
-            {rotationPreviewError}
-          </p>
-        )}
+                {rotationPreview && (
+                  <p data-testid="rotation-combined-risk" className="rotation-risk-banner">
+                    {rotationPreview.combinedRiskAnnotation}
+                  </p>
+                )}
+                {rotationPreviewError && (
+                  <p data-testid="rotation-preview-error" className="error">
+                    {rotationPreviewError}
+                  </p>
+                )}
 
-        <label>
-          Old agent address (to revoke)
-          <input
-            data-testid="rotation-old-agent-input"
-            value={rotationOldAgent}
-            onChange={(e) => {
-              setRotationOldAgent(e.target.value);
-              setRotationStep("idle");
-            }}
-            placeholder="0x..."
-          />
-        </label>
-        <label>
-          New agent address (to authorize)
-          <input
-            data-testid="rotation-new-agent-input"
-            value={rotationNewAgent}
-            onChange={(e) => {
-              setRotationNewAgent(e.target.value);
-              setRotationStep("idle");
-            }}
-            placeholder="0x..."
-          />
-        </label>
-        <label>
-          Valid-until (unix seconds)
-          <input
-            data-testid="rotation-validUntil-input"
-            value={rotationValidUntil}
-            onChange={(e) => setRotationValidUntil(e.target.value)}
-          />
-        </label>
-        <label>
-          Max per payment (USDC base units)
-          <input
-            data-testid="rotation-maxPerPayment-input"
-            value={rotationMaxPerPayment}
-            onChange={(e) => setRotationMaxPerPayment(e.target.value)}
-          />
-        </label>
-        <label>
-          Max per window (USDC base units)
-          <input
-            data-testid="rotation-maxPerWindow-input"
-            value={rotationMaxPerWindow}
-            onChange={(e) => setRotationMaxPerWindow(e.target.value)}
-          />
-        </label>
-        <label>
-          Share receiver
-          <input
-            data-testid="rotation-shareReceiver-input"
-            value={rotationShareReceiver}
-            onChange={(e) => setRotationShareReceiver(e.target.value)}
-            placeholder="0x..."
-          />
-        </label>
+                <label>
+                  Old agent address (to revoke)
+                  <input
+                    data-testid="rotation-old-agent-input"
+                    value={rotationOldAgent}
+                    onChange={(e) => {
+                      setRotationOldAgent(e.target.value);
+                      setRotationStep("idle");
+                    }}
+                    placeholder="0x..."
+                  />
+                </label>
+                <label>
+                  New agent address (to authorize)
+                  <input
+                    data-testid="rotation-new-agent-input"
+                    value={rotationNewAgent}
+                    onChange={(e) => {
+                      setRotationNewAgent(e.target.value);
+                      setRotationStep("idle");
+                    }}
+                    placeholder="0x..."
+                  />
+                </label>
+                <label>
+                  Valid-until (unix seconds)
+                  <input
+                    data-testid="rotation-validUntil-input"
+                    value={rotationValidUntil}
+                    onChange={(e) => setRotationValidUntil(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Max per payment (USDC base units)
+                  <input
+                    data-testid="rotation-maxPerPayment-input"
+                    value={rotationMaxPerPayment}
+                    onChange={(e) => setRotationMaxPerPayment(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Max per window (USDC base units)
+                  <input
+                    data-testid="rotation-maxPerWindow-input"
+                    value={rotationMaxPerWindow}
+                    onChange={(e) => setRotationMaxPerWindow(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Share receiver
+                  <input
+                    data-testid="rotation-shareReceiver-input"
+                    value={rotationShareReceiver}
+                    onChange={(e) => setRotationShareReceiver(e.target.value)}
+                    placeholder="0x..."
+                  />
+                </label>
 
-        <div data-testid="rotation-step1">
-          <h3>Step 1: revoke old agent</h3>
-          {rotationRevokePrev && <TxPreview preview={rotationRevokePrev} />}
-          <button
-            data-testid="rotation-revoke-submit"
-            disabled={!isConnected || !rotationPreviewsOk || rotationStep !== "idle" || isPending}
-            onClick={onRotationRevoke}
-          >
-            Step 1 — Sign revokeAgent(old) with wallet
-          </button>
-        </div>
+                <div data-testid="rotation-step1">
+                  <h3>Step 1: revoke old agent</h3>
+                  {rotationRevokePrev && <TxPreview preview={rotationRevokePrev} />}
+                  <button
+                    data-testid="rotation-revoke-submit"
+                    disabled={
+                      !isConnected || !rotationPreviewsOk || rotationStep !== "idle" || isPending
+                    }
+                    onClick={onRotationRevoke}
+                  >
+                    Step 1 — Sign revokeAgent(old) with wallet
+                  </button>
+                </div>
 
-        <div data-testid="rotation-step2">
-          <h3>Step 2: authorize new agent</h3>
-          {rotationAuthorizePrev && <TxPreview preview={rotationAuthorizePrev} />}
-          <button
-            data-testid="rotation-authorize-submit"
-            disabled={
-              !isConnected || !rotationPreviewsOk || rotationStep !== "revoke-sent" || isPending
-            }
-            onClick={onRotationAuthorize}
-          >
-            Step 2 — Sign authorizeAgent(new) with wallet
-          </button>
-        </div>
+                <div data-testid="rotation-step2">
+                  <h3>Step 2: authorize new agent</h3>
+                  {rotationAuthorizePrev && <TxPreview preview={rotationAuthorizePrev} />}
+                  <button
+                    data-testid="rotation-authorize-submit"
+                    disabled={
+                      !isConnected ||
+                      !rotationPreviewsOk ||
+                      rotationStep !== "revoke-sent" ||
+                      isPending
+                    }
+                    onClick={onRotationAuthorize}
+                  >
+                    Step 2 — Sign authorizeAgent(new) with wallet
+                  </button>
+                </div>
 
-        {rotationStep === "done" && (
-          <p data-testid="rotation-complete">Rotation complete. Verify on-chain state.</p>
-        )}
-      </section>
-
+                {rotationStep === "done" && (
+                  <p data-testid="rotation-complete">Rotation complete. Verify on-chain state.</p>
+                )}
+              </section>
             ),
           },
           {
@@ -607,55 +610,54 @@ export function AdminFlow(props: AdminFlowProps) {
             label: "Admin Role",
             hidden: props.registrationMode,
             content: (
-      <section data-testid="admin-role-form">
-        <h2>ADMIN_ROLE grant / revoke</h2>
-        <p>
-          Mutually exclusive with AGENT_ROLE and PAUSER_ROLE per
-          <code> AccessRoles._grantRole</code>. Only DEFAULT_ADMIN_ROLE holders may grant.
-        </p>
-        <label>
-          ADMIN account address
-          <input
-            data-testid="admin-account-input"
-            value={adminAccount}
-            onChange={(e) => setAdminAccount(e.target.value)}
-            placeholder="0x..."
-          />
-        </label>
-        {grantAdminPreview && (
-          <div data-testid="grant-admin-preview-wrap">
-            <TxPreview preview={grantAdminPreview} />
-          </div>
-        )}
-        <button
-          data-testid="grant-admin-submit"
-          disabled={!isConnected || !grantAdminPreview?.ok || isPending}
-          onClick={() =>
-            grantAdminAction &&
-            grantAdminPreview?.ok &&
-            submitRoleCall("grantRole", "ADMIN_ROLE", grantAdminAction.account)
-          }
-        >
-          Sign grantRole(ADMIN_ROLE) with wallet
-        </button>
-        {revokeAdminPreview && (
-          <div data-testid="revoke-admin-preview-wrap">
-            <TxPreview preview={revokeAdminPreview} />
-          </div>
-        )}
-        <button
-          data-testid="revoke-admin-submit"
-          disabled={!isConnected || !revokeAdminPreview?.ok || isPending}
-          onClick={() =>
-            revokeAdminAction &&
-            revokeAdminPreview?.ok &&
-            submitRoleCall("revokeRole", "ADMIN_ROLE", revokeAdminAction.account)
-          }
-        >
-          Sign revokeRole(ADMIN_ROLE) with wallet
-        </button>
-      </section>
-
+              <section data-testid="admin-role-form">
+                <h2>ADMIN_ROLE grant / revoke</h2>
+                <p>
+                  Mutually exclusive with AGENT_ROLE and PAUSER_ROLE per
+                  <code> AccessRoles._grantRole</code>. Only DEFAULT_ADMIN_ROLE holders may grant.
+                </p>
+                <label>
+                  ADMIN account address
+                  <input
+                    data-testid="admin-account-input"
+                    value={adminAccount}
+                    onChange={(e) => setAdminAccount(e.target.value)}
+                    placeholder="0x..."
+                  />
+                </label>
+                {grantAdminPreview && (
+                  <div data-testid="grant-admin-preview-wrap">
+                    <TxPreview preview={grantAdminPreview} />
+                  </div>
+                )}
+                <button
+                  data-testid="grant-admin-submit"
+                  disabled={!isConnected || !grantAdminPreview?.ok || isPending}
+                  onClick={() =>
+                    grantAdminAction &&
+                    grantAdminPreview?.ok &&
+                    submitRoleCall("grantRole", "ADMIN_ROLE", grantAdminAction.account)
+                  }
+                >
+                  Sign grantRole(ADMIN_ROLE) with wallet
+                </button>
+                {revokeAdminPreview && (
+                  <div data-testid="revoke-admin-preview-wrap">
+                    <TxPreview preview={revokeAdminPreview} />
+                  </div>
+                )}
+                <button
+                  data-testid="revoke-admin-submit"
+                  disabled={!isConnected || !revokeAdminPreview?.ok || isPending}
+                  onClick={() =>
+                    revokeAdminAction &&
+                    revokeAdminPreview?.ok &&
+                    submitRoleCall("revokeRole", "ADMIN_ROLE", revokeAdminAction.account)
+                  }
+                >
+                  Sign revokeRole(ADMIN_ROLE) with wallet
+                </button>
+              </section>
             ),
           },
           {
@@ -663,55 +665,54 @@ export function AdminFlow(props: AdminFlowProps) {
             label: "Pauser Role",
             hidden: props.registrationMode,
             content: (
-      <section data-testid="pauser-role-form">
-        <h2>PAUSER_ROLE grant / revoke</h2>
-        <p>
-          PAUSER may call <code>pause()</code> only; <code>unpause()</code> requires ADMIN_ROLE.
-          Mutually exclusive with AGENT_ROLE and ADMIN_ROLE on the same account.
-        </p>
-        <label>
-          PAUSER account address
-          <input
-            data-testid="pauser-account-input"
-            value={pauserAccount}
-            onChange={(e) => setPauserAccount(e.target.value)}
-            placeholder="0x..."
-          />
-        </label>
-        {grantPauserPreview && (
-          <div data-testid="grant-pauser-preview-wrap">
-            <TxPreview preview={grantPauserPreview} />
-          </div>
-        )}
-        <button
-          data-testid="grant-pauser-submit"
-          disabled={!isConnected || !grantPauserPreview?.ok || isPending}
-          onClick={() =>
-            grantPauserAction &&
-            grantPauserPreview?.ok &&
-            submitRoleCall("grantRole", "PAUSER_ROLE", grantPauserAction.account)
-          }
-        >
-          Sign grantRole(PAUSER_ROLE) with wallet
-        </button>
-        {revokePauserPreview && (
-          <div data-testid="revoke-pauser-preview-wrap">
-            <TxPreview preview={revokePauserPreview} />
-          </div>
-        )}
-        <button
-          data-testid="revoke-pauser-submit"
-          disabled={!isConnected || !revokePauserPreview?.ok || isPending}
-          onClick={() =>
-            revokePauserAction &&
-            revokePauserPreview?.ok &&
-            submitRoleCall("revokeRole", "PAUSER_ROLE", revokePauserAction.account)
-          }
-        >
-          Sign revokeRole(PAUSER_ROLE) with wallet
-        </button>
-      </section>
-
+              <section data-testid="pauser-role-form">
+                <h2>PAUSER_ROLE grant / revoke</h2>
+                <p>
+                  PAUSER may call <code>pause()</code> only; <code>unpause()</code> requires
+                  ADMIN_ROLE. Mutually exclusive with AGENT_ROLE and ADMIN_ROLE on the same account.
+                </p>
+                <label>
+                  PAUSER account address
+                  <input
+                    data-testid="pauser-account-input"
+                    value={pauserAccount}
+                    onChange={(e) => setPauserAccount(e.target.value)}
+                    placeholder="0x..."
+                  />
+                </label>
+                {grantPauserPreview && (
+                  <div data-testid="grant-pauser-preview-wrap">
+                    <TxPreview preview={grantPauserPreview} />
+                  </div>
+                )}
+                <button
+                  data-testid="grant-pauser-submit"
+                  disabled={!isConnected || !grantPauserPreview?.ok || isPending}
+                  onClick={() =>
+                    grantPauserAction &&
+                    grantPauserPreview?.ok &&
+                    submitRoleCall("grantRole", "PAUSER_ROLE", grantPauserAction.account)
+                  }
+                >
+                  Sign grantRole(PAUSER_ROLE) with wallet
+                </button>
+                {revokePauserPreview && (
+                  <div data-testid="revoke-pauser-preview-wrap">
+                    <TxPreview preview={revokePauserPreview} />
+                  </div>
+                )}
+                <button
+                  data-testid="revoke-pauser-submit"
+                  disabled={!isConnected || !revokePauserPreview?.ok || isPending}
+                  onClick={() =>
+                    revokePauserAction &&
+                    revokePauserPreview?.ok &&
+                    submitRoleCall("revokeRole", "PAUSER_ROLE", revokePauserAction.account)
+                  }
+                >
+                  Sign revokeRole(PAUSER_ROLE) with wallet
+                </button>
+              </section>
             ),
           },
           {
