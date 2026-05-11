@@ -38,7 +38,6 @@ export function StatusHeader(props: StatusHeaderProps) {
   return (
     <section className="status-header" data-testid="status-header">
       <div className="hero">
-        <p className="hero-eyebrow">{props.envClass.toUpperCase()}</p>
         <h1>One USDC transfer. Diversified exposure.</h1>
         <p className="hero-sub">
           Authorize an agent to allocate USDC across the bucket portfolio on your behalf. One

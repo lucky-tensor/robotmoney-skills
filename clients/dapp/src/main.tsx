@@ -12,6 +12,7 @@ import type { Address } from "viem";
 import { AgentsPanel } from "./components/AgentsPanel";
 import { NavBar } from "./components/NavBar";
 import { StatusHeader } from "./components/StatusHeader";
+import { TestnetBanner } from "./components/TestnetBanner";
 import { VerificationBanner } from "./components/VerificationBanner";
 import { makeConfig } from "./lib/wagmi";
 import { useGatewayVerifier } from "./lib/useGatewayVerifier";
@@ -32,6 +33,11 @@ function App() {
 
   return (
     <>
+      <TestnetBanner
+        envClass={envClass}
+        forkTimestamp={env.VITE_FORK_BLOCK_TIMESTAMP}
+        forkBlock={env.VITE_FORK_BLOCK_NUMBER}
+      />
       <NavBar />
       <VerificationBanner state={verificationState} />
       <StatusHeader gatewayAddress={gateway} vaultAddress={vault} envClass={envClass} />
