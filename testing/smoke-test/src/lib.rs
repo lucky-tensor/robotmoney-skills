@@ -18,6 +18,7 @@
 //!   `testing/ethereum-testnet/config/fork-block.json` (issue #255).
 
 pub mod fork_manifest;
+pub mod genesis_alloc;
 
 use std::collections::HashSet;
 use std::io::{BufRead, BufReader};
