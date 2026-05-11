@@ -16,6 +16,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
+import { fileURLToPath } from "node:url";
 import * as path from "node:path";
 import * as readline from "node:readline";
 import type { FullConfig } from "@playwright/test";
@@ -175,7 +176,9 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
     return;
   }
 
-  const cargoRoot = findCargoWorkspaceRoot(path.resolve(__dirname, "../../../.."));
+  const cargoRoot = findCargoWorkspaceRoot(
+    path.resolve(fileURLToPath(import.meta.url), "../../../.."),
+  );
   console.log(`devnet-global-setup: cargo workspace root = ${cargoRoot}`);
   console.log("devnet-global-setup: spawning smoke-test --full-stack …");
 
