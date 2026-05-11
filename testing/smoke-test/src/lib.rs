@@ -538,37 +538,23 @@ impl Fixture {
         )
     }
 
-    /// Mint mock USDC to `recipient` via `MockUSDC.mint`.
+    /// Fund `recipient` with `amount` USDC by signing a real
+    /// `transfer(address,uint256)` from [`HARNESS_USDC_HOLDER_PRIVATE_KEY_HEX`].
+    ///
+    /// This is the canonical USDC faucet for the smoke-test devnet. The
+    /// holder EOA receives its USDC balance at genesis (the alloc builder
+    /// patches `balances[holder] += grant` and `totalSupply += grant`), so
+    /// `fund_usdc` is a vanilla ERC-20 transfer signed by the holder's key
+    /// — no `cast send` from the deployer, no Anvil cheats, no whale
+    /// impersonation. The signature is recoverable, the Transfer event
+    /// fires, and behaviour matches prod.
     pub fn fund_usdc(&self, recipient: Address, amount: u128) -> Result<String, HarnessError> {
-        let usdc = format!("{:#x}", self.usdc());
-        let recipient_hex = format!("{recipient:#x}");
-        let amount_str = amount.to_string();
-        let out = Command::new("cast")
-            .args([
-                "send",
-                "--rpc-url",
-                &self.rpc_url,
-                "--private-key",
-                DEPLOYER_PRIVATE_KEY_HEX,
-                &usdc,
-                "mint(address,uint256)",
-                &recipient_hex,
-                &amount_str,
-                "--json",
-            ])
-            .output()?;
-        if !out.status.success() {
-            return Err(HarnessError::other(format!(
-                "cast send mint failed: {}",
-                String::from_utf8_lossy(&out.stderr)
-            )));
-        }
-        let v: serde_json::Value = serde_json::from_slice(&out.stdout)
-            .map_err(|e| HarnessError::other(format!("cast send mint json: {e}")))?;
-        Ok(v.get("transactionHash")
-            .and_then(|x| x.as_str())
-            .unwrap_or("")
-            .to_string())
+        self.cast_send(
+            HARNESS_USDC_HOLDER_PRIVATE_KEY_HEX,
+            self.usdc(),
+            "transfer(address,uint256)",
+            &[&format!("{recipient:#x}"), &amount.to_string()],
+        )
     }
 }
 
