@@ -383,7 +383,7 @@ impl Fixture {
         fund_eth_from_deployer(&rpc_url, &agent_hex, "1000000000000000000")?;
         fund_eth_from_deployer(&rpc_url, PAUSER_ADDRESS_HEX, "1000000000000000000")?;
 
-        Ok(Fixture {
+        let fx = Fixture {
             compose_dir,
             tmp,
             chain_ports,
@@ -392,7 +392,24 @@ impl Fixture {
             chain_id,
             deployment,
             repo_root,
-        })
+        };
+
+        // Fund the agent's USDC balance. Deploy.s.sol no longer mints (USDC
+        // is now real Base USDC seeded into genesis alloc, not MockUSDC), so
+        // the harness funds via a real ERC-20 transfer from
+        // HARNESS_USDC_HOLDER. Use a generous amount that comfortably
+        // exceeds every scenario's deposit (largest is
+        // OVER_PAYMENT_CAP_DEPOSIT = 20_000 USDC) but stays well under the
+        // genesis grant (1M USDC by default in fork-block.json).
+        const AGENT_USDC_GRANT: u128 = 500_000 * 1_000_000; // 500k USDC, 6dp
+        fx.fund_usdc(fx.agent(), AGENT_USDC_GRANT).inspect_err(|_| {
+            let _ = Command::new("docker")
+                .args(["compose", "down", "-v", "--remove-orphans"])
+                .current_dir(&fx.compose_dir)
+                .status();
+        })?;
+
+        Ok(fx)
     }
 
     // ---- accessors --------------------------------------------------
