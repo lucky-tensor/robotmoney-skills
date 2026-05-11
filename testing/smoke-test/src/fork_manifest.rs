@@ -126,7 +126,9 @@ impl ForkManifest {
             .snapshot_uri
             .ok_or_else(|| ManifestError::Invalid("missing field: snapshot_uri".into()))?;
         if snapshot_uri.is_empty() {
-            return Err(ManifestError::Invalid("snapshot_uri must not be empty".into()));
+            return Err(ManifestError::Invalid(
+                "snapshot_uri must not be empty".into(),
+            ));
         }
 
         let ingested_raw = raw
@@ -273,7 +275,9 @@ mod tests {
             "",
         );
         let err = ForkManifest::from_str(&bad).unwrap_err();
-        assert!(matches!(err, ManifestError::Invalid(s) if s.contains("missing field: block_hash")));
+        assert!(
+            matches!(err, ManifestError::Invalid(s) if s.contains("missing field: block_hash"))
+        );
     }
 
     #[test]
@@ -310,10 +314,8 @@ mod tests {
 
     #[test]
     fn rejects_invalid_ingested_address() {
-        let bad = valid_manifest_json().replace(
-            "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-            "0xnothex",
-        );
+        let bad =
+            valid_manifest_json().replace("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", "0xnothex");
         let err = ForkManifest::from_str(&bad).unwrap_err();
         assert!(matches!(err, ManifestError::Invalid(s) if s.contains("ingested_addresses[0]")));
     }
@@ -345,16 +347,16 @@ mod tests {
     fn rejects_non_numeric_grant_units() {
         let bad = valid_manifest_json().replace("\"1000000000000\"", "\"not-a-number\"");
         let err = ForkManifest::from_str(&bad).unwrap_err();
-        assert!(
-            matches!(err, ManifestError::Invalid(s) if s.contains("must parse as u128"))
-        );
+        assert!(matches!(err, ManifestError::Invalid(s) if s.contains("must parse as u128")));
     }
 
     #[test]
     fn rejects_empty_snapshot_uri() {
         let bad = valid_manifest_json().replace("\"file://x\"", "\"\"");
         let err = ForkManifest::from_str(&bad).unwrap_err();
-        assert!(matches!(err, ManifestError::Invalid(s) if s.contains("snapshot_uri must not be empty")));
+        assert!(
+            matches!(err, ManifestError::Invalid(s) if s.contains("snapshot_uri must not be empty"))
+        );
     }
 
     #[test]
@@ -377,10 +379,9 @@ mod tests {
             ForkManifest::load(&repo.join("testing/ethereum-testnet/config/fork-block.json"))
                 .expect("manifest validates");
 
-        let current_raw = std::fs::read_to_string(
-            repo.join("testing/fixtures/fork-state/CURRENT.json"),
-        )
-        .expect("CURRENT.json readable");
+        let current_raw =
+            std::fs::read_to_string(repo.join("testing/fixtures/fork-state/CURRENT.json"))
+                .expect("CURRENT.json readable");
         let current: serde_json::Value =
             serde_json::from_str(&current_raw).expect("CURRENT.json parses");
         let current_fork_block = current["fork_block"]
@@ -416,9 +417,8 @@ mod tests {
     fn committed_manifest_validates() {
         let repo = crate::locate_repo_root().expect("locate repo root");
         let path = repo.join("testing/ethereum-testnet/config/fork-block.json");
-        let m = ForkManifest::load(&path).unwrap_or_else(|e| {
-            panic!("committed fork-block.json failed validation: {e}")
-        });
+        let m = ForkManifest::load(&path)
+            .unwrap_or_else(|e| panic!("committed fork-block.json failed validation: {e}"));
         assert_eq!(m.chain, "base");
         // The harness EOA in the committed manifest must match the constant
         // exported from `smoke_test::HARNESS_USDC_HOLDER_ADDRESS_HEX`.

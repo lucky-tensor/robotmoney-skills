@@ -43,10 +43,14 @@ fn fund_usdc_increases_recipient_balance() {
 
     let before = usdc_balance_of(fx, recipient);
     let tx_hash = fx.fund_usdc(recipient, amount).expect("fund_usdc");
-    assert!(tx_hash.starts_with("0x") && tx_hash.len() == 66, "tx_hash {tx_hash:?}");
+    assert!(
+        tx_hash.starts_with("0x") && tx_hash.len() == 66,
+        "tx_hash {tx_hash:?}"
+    );
     let after = usdc_balance_of(fx, recipient);
     assert_eq!(
-        after, before + U256::from(amount),
+        after,
+        before + U256::from(amount),
         "recipient USDC balance did not grow by exact amount"
     );
 }
@@ -64,11 +68,13 @@ fn fund_usdc_emits_transfer_log_from_harness_holder() {
 
     let tx_hash = fx.fund_usdc(recipient, amount).expect("fund_usdc");
     let receipt = get_receipt(fx, &tx_hash);
-    let logs = receipt.get("logs").and_then(|v| v.as_array()).expect("logs array");
+    let logs = receipt
+        .get("logs")
+        .and_then(|v| v.as_array())
+        .expect("logs array");
 
     // ERC-20 Transfer topic: keccak256("Transfer(address,address,uint256)").
-    let transfer_topic =
-        B256::from(keccak256("Transfer(address,address,uint256)".as_bytes()));
+    let transfer_topic = B256::from(keccak256("Transfer(address,address,uint256)".as_bytes()));
     let harness_holder: Address = HARNESS_USDC_HOLDER_ADDRESS_HEX.parse().unwrap();
 
     let mut matching = 0usize;
@@ -78,7 +84,10 @@ fn fund_usdc_emits_transfer_log_from_harness_holder() {
         if log_addr != fx.usdc() {
             continue;
         }
-        let topics = log.get("topics").and_then(|v| v.as_array()).expect("topics");
+        let topics = log
+            .get("topics")
+            .and_then(|v| v.as_array())
+            .expect("topics");
         if topics.len() != 3 {
             continue;
         }
@@ -97,7 +106,10 @@ fn fund_usdc_emits_transfer_log_from_harness_holder() {
         assert_eq!(value, U256::from(amount), "Transfer.value != amount");
         matching += 1;
     }
-    assert_eq!(matching, 1, "expected exactly one matching Transfer log, got {matching}");
+    assert_eq!(
+        matching, 1,
+        "expected exactly one matching Transfer log, got {matching}"
+    );
 }
 
 // -- 3. Signature recovers to HARNESS_USDC_HOLDER ---------------------------
@@ -139,7 +151,11 @@ fn fund_usdc_signature_recovers_to_harness_holder() {
     // in the first place — but we keep this check as an extra defense.
     let r = h256(&tx, "r");
     let s = h256(&tx, "s");
-    let v_hex = tx.get("v").or_else(|| tx.get("yParity")).and_then(|x| x.as_str()).unwrap_or("0x0");
+    let v_hex = tx
+        .get("v")
+        .or_else(|| tx.get("yParity"))
+        .and_then(|x| x.as_str())
+        .unwrap_or("0x0");
     let v_u = u64::from_str_radix(v_hex.trim_start_matches("0x"), 16).unwrap_or(0);
     // For EIP-1559 / EIP-2930, yParity in {0, 1}. For legacy, v = 27/28 or chain-id-encoded.
     let rec_id_byte: u8 = if v_u <= 1 {
@@ -295,8 +311,7 @@ fn rpc_raw(url: &str, method: &str, params: serde_json::Value) -> serde_json::Va
         .timeout(std::time::Duration::from_secs(10))
         .build()
         .unwrap();
-    let body =
-        serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params});
+    let body = serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params});
     client
         .post(url)
         .json(&body)

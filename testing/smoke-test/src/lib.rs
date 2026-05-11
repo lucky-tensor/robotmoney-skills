@@ -300,11 +300,17 @@ impl Fixture {
         };
 
         let compose_files: Vec<&str> = if alloc_overlay_path.is_some() {
-            vec!["-f", "docker-compose.yaml", "-f", "docker-compose.alloc.yaml"]
+            vec![
+                "-f",
+                "docker-compose.yaml",
+                "-f",
+                "docker-compose.alloc.yaml",
+            ]
         } else {
             vec!["-f", "docker-compose.yaml"]
         };
-        let compose_files_owned: Vec<String> = compose_files.iter().map(|s| s.to_string()).collect();
+        let compose_files_owned: Vec<String> =
+            compose_files.iter().map(|s| s.to_string()).collect();
         let cleanup_compose_files = compose_files_owned.clone();
         let cleanup_compose_dir = compose_dir.clone();
         let cleanup = move || {

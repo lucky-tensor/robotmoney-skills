@@ -178,9 +178,8 @@ contract Deploy is Script {
         require(p.usdcAddress.code.length > 0, "USDC_ADDRESS has no code");
         d.usdc = p.usdcAddress;
         d.vault = new MockVault(d.usdc);
-        d.gateway = new RobotMoneyGateway(
-            IERC20(d.usdc), IERC4626(address(d.vault)), d.admin, d.pauser
-        );
+        d.gateway =
+            new RobotMoneyGateway(IERC20(d.usdc), IERC4626(address(d.vault)), d.admin, d.pauser);
 
         // 2. Authorize agent under a sane initial policy. The gateway's
         //    authorizeAgent re-asserts role separation post-grant.

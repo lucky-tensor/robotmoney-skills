@@ -227,12 +227,11 @@ impl UsdcStorageSeed {
             })?;
         let stored = U256::from_str_radix(impl_slot_val.trim_start_matches("0x"), 16)
             .map_err(|e| IngesterError::UsdcSeed(format!("impl slot value parse: {e}")))?;
-        let impl_as_u256 =
-            U256::from_be_slice(&{
-                let mut buf = [0u8; 32];
-                buf[12..].copy_from_slice(impl_addr.as_slice());
-                buf
-            });
+        let impl_as_u256 = U256::from_be_slice(&{
+            let mut buf = [0u8; 32];
+            buf[12..].copy_from_slice(impl_addr.as_slice());
+            buf
+        });
         if stored != impl_as_u256 {
             return Err(IngesterError::UsdcSeed(format!(
                 "implementation slot {stored:#x} does not point at declared impl {impl_addr:#x}"
@@ -344,11 +343,12 @@ fn build_alloc_from_anvil(
         .collect();
     for addr in &manifest.ingested_addresses {
         let key = address_key(addr);
-        let snap_acct = lower_accounts.get(&key).ok_or_else(|| {
-            IngesterError::MissingIngestedAddress {
-                address: format!("{addr:#x}"),
-            }
-        })?;
+        let snap_acct =
+            lower_accounts
+                .get(&key)
+                .ok_or_else(|| IngesterError::MissingIngestedAddress {
+                    address: format!("{addr:#x}"),
+                })?;
         out.insert(key, anvil_to_alloc(snap_acct));
     }
 
@@ -373,9 +373,7 @@ fn build_alloc_from_anvil(
     );
 
     if let Some(seed) = seed {
-        let proxy_entry = out
-            .get_mut(&usdc_key)
-            .ok_or(IngesterError::MissingUsdc)?;
+        let proxy_entry = out.get_mut(&usdc_key).ok_or(IngesterError::MissingUsdc)?;
         for (slot, val) in &seed.proxy.storage {
             proxy_entry
                 .storage
@@ -396,9 +394,7 @@ fn build_alloc_from_anvil(
         });
     }
 
-    let usdc_entry = out
-        .get_mut(&usdc_key)
-        .ok_or(IngesterError::MissingUsdc)?;
+    let usdc_entry = out.get_mut(&usdc_key).ok_or(IngesterError::MissingUsdc)?;
 
     let grant = U256::from(manifest.harness_usdc_grant_units);
 
@@ -619,7 +615,10 @@ mod tests {
         //    seed file is present the prior value is non-zero (real Base
         //    totalSupply), so we assert >= grant rather than ==.
         let ts_slot = slot_index_hex(FIAT_TOKEN_TOTAL_SUPPLY_SLOT);
-        let stored_ts = usdc.storage.get(&ts_slot).expect("totalSupply slot present");
+        let stored_ts = usdc
+            .storage
+            .get(&ts_slot)
+            .expect("totalSupply slot present");
         let stored_ts_u = U256::from_str_radix(stored_ts.trim_start_matches("0x"), 16).unwrap();
         assert!(
             stored_ts_u >= U256::from(manifest.harness_usdc_grant_units),
@@ -630,9 +629,18 @@ mod tests {
         // 5. Seeded slots are present at expected positions: name, symbol,
         //    decimals, totalSupply, implementation pointer.
         let want_slots = [
-            ("0x0000000000000000000000000000000000000000000000000000000000000004", "name"),
-            ("0x0000000000000000000000000000000000000000000000000000000000000005", "symbol"),
-            ("0x0000000000000000000000000000000000000000000000000000000000000006", "decimals"),
+            (
+                "0x0000000000000000000000000000000000000000000000000000000000000004",
+                "name",
+            ),
+            (
+                "0x0000000000000000000000000000000000000000000000000000000000000005",
+                "symbol",
+            ),
+            (
+                "0x0000000000000000000000000000000000000000000000000000000000000006",
+                "decimals",
+            ),
             (ZEPPELINOS_PROXY_IMPL_SLOT, "impl pointer"),
         ];
         for (slot, label) in want_slots {
