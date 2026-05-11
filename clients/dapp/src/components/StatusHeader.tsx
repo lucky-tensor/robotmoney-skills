@@ -48,7 +48,7 @@ export function StatusHeader(props: StatusHeaderProps) {
             <code data-testid="connected-address" className="wallet-address">
               {address}
             </code>
-            <button data-testid="disconnect" onClick={() => disconnect()}>
+            <button type="button" data-testid="disconnect" onClick={() => disconnect()}>
               Disconnect
             </button>
           </div>

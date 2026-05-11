@@ -7,11 +7,14 @@ module.exports = {
   env: { browser: true, es2022: true, node: true },
   parser: "@typescript-eslint/parser",
   parserOptions: { ecmaVersion: "latest", sourceType: "module" },
-  plugins: ["@typescript-eslint", "react-hooks", "react-refresh"],
+  plugins: ["@typescript-eslint", "react", "react-hooks", "react-refresh"],
   extends: [
     "eslint:recommended",
     "plugin:@typescript-eslint/recommended",
+    "plugin:react/recommended",
+    "plugin:react/jsx-runtime",
   ],
+  settings: { react: { version: "detect" } },
   ignorePatterns: ["dist", "node_modules", ".eslintrc.cjs"],
   rules: {
     // Types (guide §Types)
@@ -27,6 +30,16 @@ module.exports = {
       objectLiteralTypeAssertions: "never",
     }],
     "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+
+    // React (guide §Components, §Rendering)
+    "react/no-array-index-key": "error",
+    "react/no-danger": "error",
+    "react/no-unstable-nested-components": ["error", { allowAsProps: false }],
+    "react/jsx-no-target-blank": ["error", { allowReferrer: false, enforceDynamicLinks: "always" }],
+    "react/button-has-type": "error",
+    "react/jsx-no-useless-fragment": "error",
+    "react/self-closing-comp": "error",
+    "react/prop-types": "off",
 
     // Hooks (guide §State & data)
     "react-hooks/rules-of-hooks": "error",

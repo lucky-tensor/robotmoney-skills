@@ -37,6 +37,7 @@ export function AgentsPanel(props: AgentsPanelProps) {
           <p>Connect a wallet to authorize your first agent and manage your policies.</p>
           {connectors[0] ? (
             <button
+              type="button"
               data-testid="connect-wallet"
               onClick={() => connect({ connector: connectors[0] })}
             >

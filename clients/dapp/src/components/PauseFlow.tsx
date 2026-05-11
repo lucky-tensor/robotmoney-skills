@@ -105,6 +105,7 @@ export function PauseFlow(props: PauseFlowProps) {
         </p>
         <TxPreview preview={pausePreview} />
         <button
+          type="button"
           data-testid="pause-submit"
           disabled={!isConnected || !pausePreview.ok || !hasPauserRole || paused || isPending}
           onClick={onPause}
@@ -120,6 +121,7 @@ export function PauseFlow(props: PauseFlowProps) {
         </p>
         <TxPreview preview={unpausePreview} />
         <button
+          type="button"
           data-testid="unpause-submit"
           disabled={!isConnected || !unpausePreview.ok || !hasAdminRole || !paused || isPending}
           onClick={onUnpause}

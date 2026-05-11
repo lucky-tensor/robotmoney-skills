@@ -312,6 +312,7 @@ export function AdminFlow(props: AdminFlowProps) {
             <p>Connect a wallet to begin.</p>
             {connectors.map((c) => (
               <button
+                type="button"
                 key={c.uid}
                 data-testid={`connect-${c.id}-legacy`}
                 onClick={() => connect({ connector: c })}
@@ -332,7 +333,7 @@ export function AdminFlow(props: AdminFlowProps) {
               <code data-testid="connected-chain">{chainId}</code> · paused{" "}
               <code data-testid="gateway-paused">{String(paused)}</code>
             </p>
-            <button data-testid="disconnect-legacy" onClick={() => disconnect()}>
+            <button type="button" data-testid="disconnect-legacy" onClick={() => disconnect()}>
               Disconnect
             </button>
           </>
@@ -404,6 +405,7 @@ export function AdminFlow(props: AdminFlowProps) {
                 {authorizePreview && <TxPreview preview={authorizePreview} />}
 
                 <button
+                  type="button"
                   data-testid="authorize-submit"
                   disabled={!isConnected || !authorizePreview?.ok || isPending}
                   onClick={onAuthorize}
@@ -432,7 +434,7 @@ export function AdminFlow(props: AdminFlowProps) {
                     />
                   </label>
                   {/* TODO: vault ABI not yet wired — see src/lib/abi.ts */}
-                  <button data-testid="deposit-submit" disabled>
+                  <button type="button" data-testid="deposit-submit" disabled>
                     Sign deposit with wallet
                   </button>
                   <p className="hint">Vault integration pending.</p>
@@ -449,7 +451,7 @@ export function AdminFlow(props: AdminFlowProps) {
                       placeholder="0.00"
                     />
                   </label>
-                  <button data-testid="withdraw-submit" disabled>
+                  <button type="button" data-testid="withdraw-submit" disabled>
                     Sign withdraw with wallet
                   </button>
                   <p className="hint">Vault integration pending.</p>
@@ -478,6 +480,7 @@ export function AdminFlow(props: AdminFlowProps) {
                 <h2>Revoke agent</h2>
                 {revokePreview && <TxPreview preview={revokePreview} />}
                 <button
+                  type="button"
                   data-testid="revoke-submit"
                   disabled={!isConnected || !revokePreview?.ok || isPending}
                   onClick={onRevoke}
@@ -572,6 +575,7 @@ export function AdminFlow(props: AdminFlowProps) {
                   <h3>Step 1: revoke old agent</h3>
                   {rotationRevokePrev && <TxPreview preview={rotationRevokePrev} />}
                   <button
+                    type="button"
                     data-testid="rotation-revoke-submit"
                     disabled={
                       !isConnected || !rotationPreviewsOk || rotationStep !== "idle" || isPending
@@ -586,6 +590,7 @@ export function AdminFlow(props: AdminFlowProps) {
                   <h3>Step 2: authorize new agent</h3>
                   {rotationAuthorizePrev && <TxPreview preview={rotationAuthorizePrev} />}
                   <button
+                    type="button"
                     data-testid="rotation-authorize-submit"
                     disabled={
                       !isConnected ||
@@ -631,6 +636,7 @@ export function AdminFlow(props: AdminFlowProps) {
                   </div>
                 )}
                 <button
+                  type="button"
                   data-testid="grant-admin-submit"
                   disabled={!isConnected || !grantAdminPreview?.ok || isPending}
                   onClick={() =>
@@ -647,6 +653,7 @@ export function AdminFlow(props: AdminFlowProps) {
                   </div>
                 )}
                 <button
+                  type="button"
                   data-testid="revoke-admin-submit"
                   disabled={!isConnected || !revokeAdminPreview?.ok || isPending}
                   onClick={() =>
@@ -686,6 +693,7 @@ export function AdminFlow(props: AdminFlowProps) {
                   </div>
                 )}
                 <button
+                  type="button"
                   data-testid="grant-pauser-submit"
                   disabled={!isConnected || !grantPauserPreview?.ok || isPending}
                   onClick={() =>
@@ -702,6 +710,7 @@ export function AdminFlow(props: AdminFlowProps) {
                   </div>
                 )}
                 <button
+                  type="button"
                   data-testid="revoke-pauser-submit"
                   disabled={!isConnected || !revokePauserPreview?.ok || isPending}
                   onClick={() =>
