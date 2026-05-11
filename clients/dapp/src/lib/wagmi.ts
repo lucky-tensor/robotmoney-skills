@@ -22,7 +22,7 @@ import { defineChain } from "viem";
 // always override before accepting.
 const devnetRpcUrl = (import.meta.env.VITE_DEVNET_RPC_URL ?? "") as string;
 const devnet = defineChain({
-  id: 32382,
+  id: 918453,
   name: "Robot Money devnet",
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   rpcUrls: { default: { http: devnetRpcUrl ? [devnetRpcUrl] : [] } },

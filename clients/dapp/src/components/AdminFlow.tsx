@@ -82,6 +82,8 @@ interface AdminFlowProps {
   gatewayCodeHashVerified: boolean;
   /** Full verification state for rendering the status banner. */
   gatewayVerificationState: VerificationState;
+  /** Re-trigger the verification fetch. Wired to the refusal-state retry button. */
+  gatewayVerificationRefresh: () => void;
   envClass: PreviewContext["envClass"];
   flagEnv: Record<string, string | undefined>;
 }
@@ -360,7 +362,13 @@ export function AdminFlow(props: AdminFlowProps) {
         {gatewayVerificationState.status === "refused" && (
           <p data-testid="gateway-verification-refused" className="unsafe-banner">
             <strong>Gateway verification refused — admin writes disabled.</strong>{" "}
-            {gatewayVerificationState.reason}
+            {gatewayVerificationState.reason}{" "}
+            <button
+              data-testid="gateway-verification-retry"
+              onClick={props.gatewayVerificationRefresh}
+            >
+              Re-verify
+            </button>
           </p>
         )}
       </section>

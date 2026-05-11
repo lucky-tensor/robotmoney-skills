@@ -167,10 +167,22 @@ fn browser_url(port: u16) -> String {
 }
 
 impl ChainPorts {
+    /// Allocate chain ports. The Geth RPC port may be pinned via the
+    /// `SMOKE_TEST_GETH_RPC_PORT` env var so an external reverse proxy
+    /// (e.g. a named cloudflared tunnel with a stable hostname) can
+    /// target a deterministic local port. WS / authrpc / beacon stay
+    /// randomized since nothing outside the host attaches to them.
     fn allocate() -> Result<Self, HarnessError> {
         let mut used = HashSet::new();
+        let rpc_port = match std::env::var("SMOKE_TEST_GETH_RPC_PORT")
+            .ok()
+            .and_then(|v| v.parse::<u16>().ok())
+        {
+            Some(p) => reserve_port(&mut used, p, "geth_rpc")?,
+            None => allocate_unique_port(&mut used)?,
+        };
         Ok(Self {
-            rpc_port: allocate_unique_port(&mut used)?,
+            rpc_port,
             ws_port: allocate_unique_port(&mut used)?,
             authrpc_port: allocate_unique_port(&mut used)?,
             beacon_port: allocate_unique_port(&mut used)?,
@@ -183,14 +195,21 @@ impl ChainPorts {
 }
 
 impl DappPorts {
-    fn allocate(dapp_port: Option<u16>, occupied_ports: &[u16]) -> Result<Self, HarnessError> {
+    fn allocate(
+        dapp_port: Option<u16>,
+        explorer_api_port: Option<u16>,
+        occupied_ports: &[u16],
+    ) -> Result<Self, HarnessError> {
         let mut used = occupied_ports.iter().copied().collect::<HashSet<_>>();
         let dapp_port = match dapp_port {
             Some(port) => reserve_port(&mut used, port, "dapp")?,
             None => allocate_unique_port(&mut used)?,
         };
         let postgres_port = allocate_unique_port(&mut used)?;
-        let explorer_api_port = allocate_unique_port(&mut used)?;
+        let explorer_api_port = match explorer_api_port {
+            Some(port) => reserve_port(&mut used, port, "explorer_api")?,
+            None => allocate_unique_port(&mut used)?,
+        };
 
         Ok(Self {
             postgres_port,
@@ -658,29 +677,49 @@ pub struct DappStack {
     _tunnels: Option<Tunnels>,
 }
 
+/// Where the dapp, RPC, and explorer-api are publicly reachable from a
+/// browser. Selected by [`DappStack::boot`]:
+///
+/// - [`PublicEndpoints::Local`] — bind only to localhost; no public
+///   reachability. Default for unit / Playwright tests.
+/// - [`PublicEndpoints::EphemeralTunnel`] — open three
+///   `trycloudflare.com` quick tunnels and bake the random URLs into
+///   the dapp bundle. Demo affordance only.
+/// - [`PublicEndpoints::Named`] — caller supplies the three public
+///   URLs explicitly. Use when a stable reverse proxy (e.g. a named
+///   cloudflared tunnel with fixed hostnames) already fronts the
+///   pinned local ports. The bundle is built with those URLs.
+pub enum PublicEndpoints {
+    Local,
+    EphemeralTunnel,
+    Named {
+        rpc_url: String,
+        dapp_url: String,
+        explorer_api_url: String,
+    },
+}
+
+/// Options for [`DappStack::boot`].
+pub struct DappStackOptions {
+    pub dapp_port: Option<u16>,
+    pub explorer_api_port: Option<u16>,
+    pub public_endpoints: PublicEndpoints,
+}
+
 impl DappStack {
     /// Build and start the dapp compose stack, injecting the deployed
     /// contract addresses as build args. Waits for the dapp and
     /// explorer-api health checks to pass before returning.
-    ///
-    /// `gateway_hex` and `vault_hex` are the checksummed hex addresses
-    /// returned by [`Fixture::gateway_hex`] and [`Fixture::vault_hex`].
-    ///
-    /// When `tunnel` is true, ephemeral `trycloudflare.com` tunnels are
-    /// opened for the RPC, explorer-api, and dapp host ports before the
-    /// dapp builds; the resulting public URLs are baked into the dapp
-    /// bundle via the same `VITE_*` env vars production uses. Tunnels
-    /// close when the returned `DappStack` is dropped.
-    pub fn boot(
-        fixture: &Fixture,
-        dapp_port: Option<u16>,
-        tunnel: bool,
-    ) -> Result<Self, HarnessError> {
+    pub fn boot(fixture: &Fixture, opts: DappStackOptions) -> Result<Self, HarnessError> {
         let compose_dir = fixture.repo_root().join("testing/ethereum-testnet/config");
         let gateway_hex = fixture.gateway_hex();
         let vault_hex = fixture.vault_hex();
         let gateway_runtime_hash = fixture.gateway_runtime_hash().to_string();
-        let ports = DappPorts::allocate(dapp_port, &fixture.occupied_ports())?;
+        let ports = DappPorts::allocate(
+            opts.dapp_port,
+            opts.explorer_api_port,
+            &fixture.occupied_ports(),
+        )?;
         let cleanup_gateway_hex = gateway_hex.to_string();
         let cleanup_vault_hex = vault_hex.to_string();
         let cleanup_runtime_hash = gateway_runtime_hash.clone();
@@ -708,24 +747,29 @@ impl DappStack {
         let local_explorer_api_url = ports.explorer_api_url();
         let local_rpc_url = fixture.rpc_url().to_string();
 
-        let tunnels = if tunnel {
-            Some(Tunnels::start(
-                fixture.rpc_port(),
-                ports.dapp_port,
-                ports.explorer_api_port,
-            )?)
-        } else {
-            None
-        };
-
-        let (vite_rpc_url, vite_dapp_url, vite_explorer_api_url) = match &tunnels {
-            Some(t) => (t.rpc_url.clone(), t.dapp_url.clone(), t.explorer_api_url.clone()),
-            None => (
-                local_rpc_url.clone(),
-                local_dapp_url.clone(),
-                local_explorer_api_url.clone(),
-            ),
-        };
+        let (tunnels, vite_rpc_url, vite_dapp_url, vite_explorer_api_url) =
+            match opts.public_endpoints {
+                PublicEndpoints::Local => (
+                    None,
+                    local_rpc_url.clone(),
+                    local_dapp_url.clone(),
+                    local_explorer_api_url.clone(),
+                ),
+                PublicEndpoints::EphemeralTunnel => {
+                    let t = Tunnels::start(
+                        fixture.rpc_port(),
+                        ports.dapp_port,
+                        ports.explorer_api_port,
+                    )?;
+                    let urls = (t.rpc_url.clone(), t.dapp_url.clone(), t.explorer_api_url.clone());
+                    (Some(t), urls.0, urls.1, urls.2)
+                }
+                PublicEndpoints::Named {
+                    rpc_url,
+                    dapp_url,
+                    explorer_api_url,
+                } => (None, rpc_url, dapp_url, explorer_api_url),
+            };
 
         eprintln!("smoke-test: building and starting dapp stack (this may take several minutes for first build)...");
 
@@ -754,14 +798,14 @@ impl DappStack {
             // docs/security/dapp-topology.md §2). VITE_DEVNET_RPC_URL is
             // passed as a *UX hint*: the dapp's Connect Wallet button uses
             // it to call `wallet_addEthereumChain` so MetaMask prefills the
-            // RPC URL when prompting the user to add chain 32382. The
+            // RPC URL when prompting the user to add chain 918453. The
             // dapp never fetches from this URL itself.
             .env("VITE_DEVNET_RPC_URL", &vite_rpc_url)
             .env("VITE_EXPLORER_API_URL", &vite_explorer_api_url)
             .env("VITE_DAPP_URL", &vite_dapp_url)
-            .env("INDEXER_CHAIN_ID", "32382")
+            .env("INDEXER_CHAIN_ID", "918453")
             .env("INDEXER_CHAIN_NAME", "devnet")
-            .env("EXPLORER_API_CHAIN_ID", "32382")
+            .env("EXPLORER_API_CHAIN_ID", "918453")
             .current_dir(&compose_dir)
             .status()
             .map_err(HarnessError::from)?;
