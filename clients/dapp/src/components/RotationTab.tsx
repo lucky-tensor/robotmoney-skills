@@ -1,8 +1,9 @@
+import type { FormEvent } from "react";
 import { useAccount } from "wagmi";
 import type { Address } from "viem";
-import type { PreviewContext } from "../../lib/preview";
-import { useRotationState } from "../../lib/useRotationState";
-import { TxPreview } from "../TxPreview";
+import type { PreviewContext } from "../lib/preview";
+import { useRotationState } from "../lib/useRotationState";
+import { TxPreview } from "./TxPreview";
 import { PolicyFields } from "./PolicyFields";
 
 type Props = Readonly<{
@@ -67,31 +68,33 @@ export function RotationTab(props: Props) {
         setShareReceiver={r.setShareReceiver}
       />
 
-      <div data-testid="rotation-step1">
+      <form
+        data-testid="rotation-step1"
+        onSubmit={(e: FormEvent<HTMLFormElement>) => {
+          e.preventDefault();
+          r.onRevoke();
+        }}
+      >
         <h3>Step 1: revoke old agent</h3>
         {r.revokePreview && <TxPreview preview={r.revokePreview} />}
-        <button
-          type="button"
-          data-testid="rotation-revoke-submit"
-          disabled={disableRevoke}
-          onClick={r.onRevoke}
-        >
+        <button type="submit" data-testid="rotation-revoke-submit" disabled={disableRevoke}>
           Step 1 — Sign revokeAgent(old) with wallet
         </button>
-      </div>
+      </form>
 
-      <div data-testid="rotation-step2">
+      <form
+        data-testid="rotation-step2"
+        onSubmit={(e: FormEvent<HTMLFormElement>) => {
+          e.preventDefault();
+          r.onAuthorize();
+        }}
+      >
         <h3>Step 2: authorize new agent</h3>
         {r.authorizePreview && <TxPreview preview={r.authorizePreview} />}
-        <button
-          type="button"
-          data-testid="rotation-authorize-submit"
-          disabled={disableAuthorize}
-          onClick={r.onAuthorize}
-        >
+        <button type="submit" data-testid="rotation-authorize-submit" disabled={disableAuthorize}>
           Step 2 — Sign authorizeAgent(new) with wallet
         </button>
-      </div>
+      </form>
 
       {r.step === "done" && (
         <p data-testid="rotation-complete">Rotation complete. Verify on-chain state.</p>

@@ -1,8 +1,8 @@
 import { useAccount, useSimulateContract, useWriteContract } from "wagmi";
 import { isAddress, type Address } from "viem";
-import { gatewayAbi } from "../../lib/abi";
-import { buildPreview, type AdminAction, type PreviewContext } from "../../lib/preview";
-import { TxPreview } from "../TxPreview";
+import { gatewayAbi } from "../lib/abi";
+import { buildPreview, type AdminAction, type PreviewContext } from "../lib/preview";
+import { TxPreview } from "./TxPreview";
 
 type Props = Readonly<{
   gatewayAddress: Address;

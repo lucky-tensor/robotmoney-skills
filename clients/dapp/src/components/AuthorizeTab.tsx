@@ -1,10 +1,10 @@
 import { useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
 import { useAccount, useSimulateContract, useWriteContract } from "wagmi";
 import { isAddress, type Address } from "viem";
-import { gatewayAbi } from "../../lib/abi";
-import { buildPreview, type AdminAction, type PreviewContext } from "../../lib/preview";
-import { markRegistered } from "../../lib/useVaultRegistration";
-import { TxPreview } from "../TxPreview";
+import { gatewayAbi } from "../lib/abi";
+import { buildPreview, type AdminAction, type PreviewContext } from "../lib/preview";
+import { markRegistered } from "../lib/useVaultRegistration";
+import { TxPreview } from "./TxPreview";
 import { PolicyFields } from "./PolicyFields";
 
 type Props = Readonly<{

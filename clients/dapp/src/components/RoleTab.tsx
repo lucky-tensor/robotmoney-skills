@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { useAccount, useSimulateContract, useWriteContract } from "wagmi";
 import { isAddress, type Address } from "viem";
-import { gatewayAbi, ROLE_HASH, type RoleName } from "../../lib/abi";
-import { buildPreview, type AdminAction, type PreviewContext } from "../../lib/preview";
-import { TxPreview } from "../TxPreview";
+import { gatewayAbi, ROLE_HASH, type RoleName } from "../lib/abi";
+import { buildPreview, type AdminAction, type PreviewContext } from "../lib/preview";
+import { TxPreview } from "./TxPreview";
 
 type Props = Readonly<{
   role: RoleName;
@@ -66,32 +66,44 @@ export function RoleTab(props: Props) {
           placeholder="0x..."
         />
       </label>
-      {grantPreview && (
-        <div data-testid={`grant-${slug}-preview-wrap`}>
-          <TxPreview preview={grantPreview} />
-        </div>
-      )}
-      <button
-        type="button"
-        data-testid={`grant-${slug}-submit`}
-        disabled={!isConnected || !grantSim || isPending}
-        onClick={() => grantSim && writeContract(grantSim.request)}
+      <form
+        onSubmit={(e: FormEvent<HTMLFormElement>) => {
+          e.preventDefault();
+          if (grantSim) writeContract(grantSim.request);
+        }}
       >
-        Sign grantRole({props.role}) with wallet
-      </button>
-      {revokePreview && (
-        <div data-testid={`revoke-${slug}-preview-wrap`}>
-          <TxPreview preview={revokePreview} />
-        </div>
-      )}
-      <button
-        type="button"
-        data-testid={`revoke-${slug}-submit`}
-        disabled={!isConnected || !revokeSim || isPending}
-        onClick={() => revokeSim && writeContract(revokeSim.request)}
+        {grantPreview && (
+          <div data-testid={`grant-${slug}-preview-wrap`}>
+            <TxPreview preview={grantPreview} />
+          </div>
+        )}
+        <button
+          type="submit"
+          data-testid={`grant-${slug}-submit`}
+          disabled={!isConnected || !grantSim || isPending}
+        >
+          Sign grantRole({props.role}) with wallet
+        </button>
+      </form>
+      <form
+        onSubmit={(e: FormEvent<HTMLFormElement>) => {
+          e.preventDefault();
+          if (revokeSim) writeContract(revokeSim.request);
+        }}
       >
-        Sign revokeRole({props.role}) with wallet
-      </button>
+        {revokePreview && (
+          <div data-testid={`revoke-${slug}-preview-wrap`}>
+            <TxPreview preview={revokePreview} />
+          </div>
+        )}
+        <button
+          type="submit"
+          data-testid={`revoke-${slug}-submit`}
+          disabled={!isConnected || !revokeSim || isPending}
+        >
+          Sign revokeRole({props.role}) with wallet
+        </button>
+      </form>
     </section>
   );
 }

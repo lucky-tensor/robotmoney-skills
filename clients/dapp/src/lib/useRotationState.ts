@@ -10,45 +10,12 @@ import { useState } from "react";
 import { useSimulateContract, useWriteContract } from "wagmi";
 import { isAddress, type Address } from "viem";
 import { gatewayAbi } from "./abi";
-import { buildPreview, type AdminAction, type Preview, type PreviewContext } from "./preview";
+import { buildPreview, type AdminAction, type PreviewContext } from "./preview";
 import { composeRotationPreview } from "./rotation";
 
-export type RotationStep = "idle" | "revoke-sent" | "done";
+type RotationStep = "idle" | "revoke-sent" | "done";
 
-export interface RotationStateHandle {
-  // form state
-  oldAgent: string;
-  setOldAgent: (v: string) => void;
-  newAgent: string;
-  setNewAgent: (v: string) => void;
-  validUntil: string;
-  setValidUntil: React.Dispatch<React.SetStateAction<string>>;
-  maxPerPayment: string;
-  setMaxPerPayment: React.Dispatch<React.SetStateAction<string>>;
-  maxPerWindow: string;
-  setMaxPerWindow: React.Dispatch<React.SetStateAction<string>>;
-  shareReceiver: string;
-  setShareReceiver: React.Dispatch<React.SetStateAction<string>>;
-
-  // derived
-  step: RotationStep;
-  revokePreview: Preview | null;
-  authorizePreview: Preview | null;
-  combinedRiskAnnotation: string | null;
-  combinedError: string | null;
-  previewsOk: boolean;
-  isPending: boolean;
-
-  // handlers
-  onRevoke: () => void;
-  onAuthorize: () => void;
-}
-
-export function useRotationState(
-  gatewayAddress: Address,
-  ctx: PreviewContext,
-  now: number,
-): RotationStateHandle {
+export function useRotationState(gatewayAddress: Address, ctx: PreviewContext, now: number) {
   const { writeContract, isPending } = useWriteContract();
 
   const [oldAgentRaw, setOldAgentRaw] = useState("");

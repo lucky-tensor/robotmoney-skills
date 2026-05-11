@@ -12,7 +12,7 @@ import type { PreviewContext } from "../lib/preview";
 import { Tabs } from "./Tabs";
 import { resolveFlags } from "../lib/featureFlags";
 import type { VerificationState } from "../lib/useGatewayVerifier";
-import { buildAdminTabs } from "./admin/buildAdminTabs";
+import { buildAdminTabs } from "./buildAdminTabs";
 
 type Props = Readonly<{
   gatewayAddress: Address;
