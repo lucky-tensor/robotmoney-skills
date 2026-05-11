@@ -36,6 +36,10 @@ struct Cli {
     /// and Geth RPC ports, and build the dapp bundle with those public URLs
     /// in the standard `VITE_*` env vars. Tunnels close when smoke-test exits.
     /// Requires `--full-stack`.
+    ///
+    /// Demo affordance only — bakes hoster-controlled URLs into the bundle
+    /// and is explicitly out of scope for `docs/security/dapp-topology.md`.
+    /// Not a production hosting pattern.
     #[arg(long, default_value_t = false)]
     tunnel: bool,
 }

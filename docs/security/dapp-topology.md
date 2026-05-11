@@ -151,3 +151,22 @@ directly for `eth_getCode` and other reads (see
 
 Each step is independent and can land separately; the migration of
 reads onto the wallet provider is the largest behavioural change.
+
+---
+
+## Out-of-scope: `smoke-test --tunnel`
+
+The `smoke-test --tunnel` flag is **explicitly not** part of this
+topology. It bakes hoster-controlled `https://*.trycloudflare.com`
+URLs into `VITE_FORK_RPC_URL` and `VITE_EXPLORER_API_URL` at build
+time so a hosted devnet is reachable from a remote browser. Each
+invocation produces a different bundle (the tunnel URLs are random
+per session), so it cannot be reproducible, content-addressed, or
+free of hoster-controlled network endpoints — i.e. it violates §1,
+§2, §4, and §7 by design.
+
+It exists as a developer affordance for demos, recorded walkthroughs,
+and reviewer access. It is not a production hosting pattern and the
+topology above remains the canonical target. The migration of reads
+onto the wallet provider (§2) is what eventually retires the need
+for any hoster-owned RPC URL, including the tunnel one.
