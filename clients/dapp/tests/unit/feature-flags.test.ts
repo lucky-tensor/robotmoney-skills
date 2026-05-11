@@ -19,7 +19,11 @@ describe("featureFlags", () => {
   });
 
   it("does not expose a browserGeneratedCredential field", () => {
-    expect((DEFAULT_FLAGS as unknown as Record<string, unknown>).browserGeneratedCredential).toBeUndefined();
-    expect((resolveFlags({}) as unknown as Record<string, unknown>).browserGeneratedCredential).toBeUndefined();
+    expect(
+      (DEFAULT_FLAGS as unknown as Record<string, unknown>).browserGeneratedCredential,
+    ).toBeUndefined();
+    expect(
+      (resolveFlags({}) as unknown as Record<string, unknown>).browserGeneratedCredential,
+    ).toBeUndefined();
   });
 });
