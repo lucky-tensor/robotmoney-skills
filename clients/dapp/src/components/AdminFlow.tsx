@@ -28,6 +28,7 @@ import { resolveFlags } from "../lib/featureFlags";
 import { resolveExplorerApiUrl } from "../lib/explorerApi";
 import { composeRotationPreview } from "../rotation";
 import type { VerificationState } from "../lib/useGatewayVerifier";
+import { markRegistered } from "../lib/useVaultRegistration";
 
 interface AdminFlowProps {
   gatewayAddress: Address;
@@ -38,6 +39,12 @@ interface AdminFlowProps {
   gatewayVerificationState: VerificationState;
   envClass: PreviewContext["envClass"];
   flagEnv: Record<string, string | undefined>;
+  /**
+   * When true the user hasn't authorized any agent yet — render only
+   * the Authorize tab so the registration step is the focused next
+   * action. AgentsPanel sets this from useAgentRegistration.
+   */
+  registrationMode?: boolean;
 }
 
 export function AdminFlow(props: AdminFlowProps) {
@@ -226,6 +233,7 @@ export function AdminFlow(props: AdminFlowProps) {
         },
       ],
     });
+    if (address) markRegistered(address);
   };
 
   const onRevoke = () => {
@@ -277,7 +285,13 @@ export function AdminFlow(props: AdminFlowProps) {
 
   return (
     <main className="admin-flow">
-      <h1>RobotMoney admin dapp</h1>
+      <h1>{props.registrationMode ? "Authorize your first agent" : "Agents"}</h1>
+      {props.registrationMode && (
+        <p className="hint" data-testid="registration-hint">
+          Authorize an agent to unlock the full agents panel (revoke, rotation, roles, history,
+          export).
+        </p>
+      )}
 
       <section data-testid="gateway-verification-status">
         {gatewayVerificationState.status === "pending" && (
@@ -409,6 +423,7 @@ export function AdminFlow(props: AdminFlowProps) {
           {
             id: "pause",
             label: "Pause",
+            hidden: props.registrationMode,
             content: (
               <PauseFlow
                 gatewayAddress={props.gatewayAddress}
@@ -420,6 +435,7 @@ export function AdminFlow(props: AdminFlowProps) {
           {
             id: "revoke",
             label: "Revoke",
+            hidden: props.registrationMode,
             content: (
 
       <section data-testid="revoke-form">
@@ -439,6 +455,7 @@ export function AdminFlow(props: AdminFlowProps) {
           {
             id: "rotation",
             label: "Rotation",
+            hidden: props.registrationMode,
             content: (
       <section data-testid="rotation-form">
         <h2>Agent rotation (revoke old → authorize new)</h2>
@@ -552,6 +569,7 @@ export function AdminFlow(props: AdminFlowProps) {
           {
             id: "admin-role",
             label: "Admin Role",
+            hidden: props.registrationMode,
             content: (
       <section data-testid="admin-role-form">
         <h2>ADMIN_ROLE grant / revoke</h2>
@@ -607,6 +625,7 @@ export function AdminFlow(props: AdminFlowProps) {
           {
             id: "pauser-role",
             label: "Pauser Role",
+            hidden: props.registrationMode,
             content: (
       <section data-testid="pauser-role-form">
         <h2>PAUSER_ROLE grant / revoke</h2>
@@ -662,7 +681,7 @@ export function AdminFlow(props: AdminFlowProps) {
           {
             id: "history",
             label: "History",
-            hidden: !(flags.historyPane && validAgent),
+            hidden: props.registrationMode || !(flags.historyPane && validAgent),
             content: validAgent ? (
               <HistoryPane agent={agent as Address} apiUrl={resolveExplorerApiUrl(props.flagEnv)} />
             ) : null,
@@ -670,7 +689,7 @@ export function AdminFlow(props: AdminFlowProps) {
           {
             id: "export",
             label: "Export Config",
-            hidden: !(validAgent && validReceiver),
+            hidden: props.registrationMode || !(validAgent && validReceiver),
             content:
               validAgent && validReceiver ? (
                 <ConfigExportPanel

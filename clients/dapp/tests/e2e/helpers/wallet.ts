@@ -215,14 +215,15 @@ export async function openDapp(
     rpcUrl: endpoints.rpc_url,
     chainId: endpoints.chain_id,
   });
-  // All current e2e specs interact with the admin surface; navigate to
-  // /admin so the AdminFlow component mounts (PublicView is the new `/`).
-  const url = new URL(endpoints.dapp_url);
-  url.pathname = "/admin";
-  await page.goto(url.toString());
+  await page.goto(endpoints.dapp_url);
   if (opts.connect !== false) {
     await connectInjectedWallet(page);
   }
+  // All current e2e specs interact with the Agents surface; click the
+  // top-level Agents tab so the AdminFlow tree mounts. fork/devnet
+  // env classes bypass the registration gate (see useVaultRegistration).
+  await page.getByTestId("tab-agents").click();
+  await page.getByTestId("tabpanel-agents").waitFor({ state: "visible" });
 }
 
 /**
