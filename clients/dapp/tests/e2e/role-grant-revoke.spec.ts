@@ -26,7 +26,11 @@ let ADMIN_ACCOUNT: `0x${string}`;
 let PAUSER_ACCOUNT: `0x${string}`;
 test.beforeAll(() => {
   endpoints = loadEndpoints();
-  ADMIN_ACCOUNT = endpoints.agent_addr as `0x${string}`;
+  // ADMIN_ACCOUNT must be an address with no existing role on the gateway:
+  // AccessRoles._grantRole is mutex with AGENT_ROLE/PAUSER_ROLE, so simulating
+  // grantRole(ADMIN_ROLE, agent_addr) would revert (agent_addr already has
+  // AGENT_ROLE) and keep the submit button disabled. Use a fresh hex address.
+  ADMIN_ACCOUNT = "0x1111111111111111111111111111111111111111";
   PAUSER_ACCOUNT = endpoints.share_receiver_addr as `0x${string}`;
 });
 
