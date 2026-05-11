@@ -12,12 +12,57 @@ import {
   useAccount,
   useConnect,
   useDisconnect,
-  useSwitchChain,
   useWriteContract,
   useChainId,
   useReadContract,
 } from "wagmi";
-import { targetChainId } from "../lib/wagmi";
+import { targetChainId, targetRpcUrl } from "../lib/wagmi";
+
+interface Eip1193Provider {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+}
+
+/**
+ * Force the wallet's stored RPC URL for `targetChainId` to match the
+ * one this bundle was built with. Calling `wallet_addEthereumChain`
+ * unconditionally is the only reliable way to do this: when the wallet
+ * already has the chain but with a different (stale) RPC URL, the
+ * standard `wallet_switchEthereumChain` is a no-op for the URL, so the
+ * wallet keeps using whatever it had — typically the previous
+ * smoke-test session's now-dead tunnel URL.
+ *
+ * If the URL is unchanged, most wallets dedupe and the user sees no
+ * prompt; if it differs, the user sees a single confirmation and the
+ * wallet adopts the new URL. Then we switch into the chain.
+ */
+async function syncDevnetChain(provider: Eip1193Provider) {
+  if (targetChainId === undefined || !targetRpcUrl) return;
+  const chainIdHex = `0x${targetChainId.toString(16)}`;
+  try {
+    await provider.request({
+      method: "wallet_addEthereumChain",
+      params: [
+        {
+          chainId: chainIdHex,
+          chainName: "Robot Money devnet",
+          rpcUrls: [targetRpcUrl],
+          nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+        },
+      ],
+    });
+  } catch {
+    // User may dismiss the prompt; fall through to a plain switch.
+  }
+  await provider.request({
+    method: "wallet_switchEthereumChain",
+    params: [{ chainId: chainIdHex }],
+  });
+}
+
+function getInjectedProvider(): Eip1193Provider | undefined {
+  if (typeof window === "undefined") return undefined;
+  return (window as unknown as { ethereum?: Eip1193Provider }).ethereum;
+}
 import { isAddress, type Address } from "viem";
 import { gatewayAbi, ROLE_HASH, type RoleName } from "../lib/abi";
 import { buildPreview, type AdminAction, type PreviewContext } from "../lib/preview";
@@ -46,27 +91,27 @@ export function AdminFlow(props: AdminFlowProps) {
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
-  const { switchChain } = useSwitchChain();
   const chainId = useChainId();
 
-  // When the build was parameterised for a specific operator chain
-  // (`targetChainId` set), Connect Wallet does the network bookkeeping
-  // for the user: triggers `wallet_switchEthereumChain`, which in turn
-  // falls back to `wallet_addEthereumChain` using the chain's
-  // `rpcUrls.default.http` if the wallet hasn't seen it before. This
-  // is the only place the suggested RPC URL leaves the bundle, and the
-  // wallet always asks the user to confirm before storing it.
+  // Connect Wallet handles the full devnet network bookkeeping: connect
+  // accounts → push the current RPC URL into the wallet via
+  // `wallet_addEthereumChain` (overwrites any stale URL from a previous
+  // smoke-test session) → switch into the chain. See `syncDevnetChain`.
   const handleConnect = (connector: (typeof connectors)[number]) => {
     connect(
       { connector },
       {
         onSuccess: () => {
-          if (targetChainId !== undefined && chainId !== targetChainId) {
-            switchChain({ chainId: targetChainId });
-          }
+          const provider = getInjectedProvider();
+          if (provider) void syncDevnetChain(provider);
         },
       },
     );
+  };
+
+  const handleSwitchChain = () => {
+    const provider = getInjectedProvider();
+    if (provider) void syncDevnetChain(provider);
   };
 
   const { data: pausedData } = useReadContract({
@@ -347,10 +392,7 @@ export function AdminFlow(props: AdminFlowProps) {
               <code data-testid="gateway-paused">{String(paused)}</code>
             </p>
             {targetChainId !== undefined && chainId !== targetChainId && (
-              <button
-                data-testid="switch-chain"
-                onClick={() => switchChain({ chainId: targetChainId as number })}
-              >
+              <button data-testid="switch-chain" onClick={handleSwitchChain}>
                 Switch to Robot Money devnet
               </button>
             )}

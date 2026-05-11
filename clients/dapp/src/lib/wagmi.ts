@@ -37,6 +37,16 @@ const devnet = defineChain({
  */
 export const targetChainId: number | undefined = devnetRpcUrl ? devnet.id : undefined;
 
+/**
+ * RPC URL the dapp asks the user's wallet to associate with
+ * `targetChainId`. Used by the Connect Wallet flow to call
+ * `wallet_addEthereumChain` every time, which is the only way to keep
+ * the wallet's stored RPC URL in sync with ephemeral tunnel URLs that
+ * rotate across smoke-test sessions. The dapp never fetches from this
+ * URL itself — the wallet does, after the user accepts the prompt.
+ */
+export const targetRpcUrl: string | undefined = devnetRpcUrl || undefined;
+
 export function makeConfig(_env: Record<string, string | undefined>) {
   return createConfig({
     chains: [devnet, foundry, sepolia, mainnet],
