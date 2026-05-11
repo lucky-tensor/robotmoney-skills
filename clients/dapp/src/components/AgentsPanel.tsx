@@ -21,6 +21,7 @@ interface AgentsPanelProps {
   gatewayVerificationState: VerificationState;
   envClass: "fork" | "devnet" | "testnet" | "mainnet";
   flagEnv: Record<string, string | undefined>;
+  now: number;
 }
 
 export function AgentsPanel(props: AgentsPanelProps) {
@@ -59,6 +60,7 @@ export function AgentsPanel(props: AgentsPanelProps) {
       gatewayVerificationState={props.gatewayVerificationState}
       envClass={props.envClass}
       flagEnv={props.flagEnv}
+      now={props.now}
       registrationMode={status === "unregistered"}
     />
   );

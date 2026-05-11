@@ -14,6 +14,7 @@ type Props = Readonly<{
   setAgent: Dispatch<SetStateAction<string>>;
   shareReceiver: string;
   setShareReceiver: Dispatch<SetStateAction<string>>;
+  now: number;
 }>;
 
 export function AuthorizeTab(props: Props) {
@@ -21,8 +22,7 @@ export function AuthorizeTab(props: Props) {
   const { writeContract, isPending } = useWriteContract();
 
   const [validUntil, setValidUntil] = useState(() =>
-    // eslint-disable-next-line no-restricted-syntax -- lazy init, runs once at mount.
-    Math.floor(Date.now() / 1000 + 86400).toString(),
+    Math.floor(props.now / 1000 + 86400).toString(),
   );
   const [maxPerPayment, setMaxPerPayment] = useState("100000000");
   const [maxPerWindow, setMaxPerWindow] = useState("1000000000");

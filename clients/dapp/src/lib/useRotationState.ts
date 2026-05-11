@@ -47,15 +47,13 @@ export interface RotationStateHandle {
 export function useRotationState(
   gatewayAddress: Address,
   ctx: PreviewContext,
+  now: number,
 ): RotationStateHandle {
   const { writeContract, isPending } = useWriteContract();
 
   const [oldAgentRaw, setOldAgentRaw] = useState("");
   const [newAgentRaw, setNewAgentRaw] = useState("");
-  const [validUntil, setValidUntil] = useState(() =>
-    // eslint-disable-next-line no-restricted-syntax -- lazy init, runs once at mount.
-    Math.floor(Date.now() / 1000 + 86400).toString(),
-  );
+  const [validUntil, setValidUntil] = useState(() => Math.floor(now / 1000 + 86400).toString());
   const [maxPerPayment, setMaxPerPayment] = useState("100000000");
   const [maxPerWindow, setMaxPerWindow] = useState("1000000000");
   const [shareReceiver, setShareReceiver] = useState("");

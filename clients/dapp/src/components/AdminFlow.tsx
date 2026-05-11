@@ -20,6 +20,8 @@ type Props = Readonly<{
   gatewayVerificationState: VerificationState;
   envClass: PreviewContext["envClass"];
   flagEnv: Record<string, string | undefined>;
+  /** Wall-clock ms at mount, injected so render stays deterministic. */
+  now: number;
   /**
    * When true the user hasn't authorized any agent yet — render only
    * the Authorize tab so the registration step is the focused next
@@ -67,6 +69,7 @@ export function AdminFlow(props: Props) {
     setAgent,
     shareReceiver,
     setShareReceiver,
+    now: props.now,
   });
 
   return (

@@ -8,11 +8,12 @@ import { PolicyFields } from "./PolicyFields";
 type Props = Readonly<{
   gatewayAddress: Address;
   ctx: PreviewContext;
+  now: number;
 }>;
 
 export function RotationTab(props: Props) {
   const { isConnected } = useAccount();
-  const r = useRotationState(props.gatewayAddress, props.ctx);
+  const r = useRotationState(props.gatewayAddress, props.ctx, props.now);
 
   const disableRevoke = !isConnected || !r.previewsOk || r.step !== "idle" || r.isPending;
   const disableAuthorize = !isConnected || !r.previewsOk || r.step !== "revoke-sent" || r.isPending;

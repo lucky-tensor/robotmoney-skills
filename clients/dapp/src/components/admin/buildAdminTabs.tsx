@@ -29,6 +29,7 @@ export type BuildAdminTabsArgs = Readonly<{
   setAgent: Dispatch<SetStateAction<string>>;
   shareReceiver: string;
   setShareReceiver: Dispatch<SetStateAction<string>>;
+  now: number;
 }>;
 
 export function buildAdminTabs(a: BuildAdminTabsArgs): TabDef[] {
@@ -47,6 +48,7 @@ export function buildAdminTabs(a: BuildAdminTabsArgs): TabDef[] {
           setAgent={a.setAgent}
           shareReceiver={a.shareReceiver}
           setShareReceiver={a.setShareReceiver}
+          now={a.now}
         />
       ),
     },
@@ -75,7 +77,7 @@ export function buildAdminTabs(a: BuildAdminTabsArgs): TabDef[] {
     {
       id: "rotation",
       label: "Rotation",
-      content: <RotationTab gatewayAddress={a.gatewayAddress} ctx={a.ctx} />,
+      content: <RotationTab gatewayAddress={a.gatewayAddress} ctx={a.ctx} now={a.now} />,
     },
     {
       id: "admin-role",

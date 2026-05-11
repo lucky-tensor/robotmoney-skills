@@ -46,6 +46,8 @@ function App() {
         gatewayVerificationState={verificationState}
         envClass={envClass}
         flagEnv={env}
+        // eslint-disable-next-line no-restricted-syntax -- boundary: real clock injected here.
+        now={Date.now()}
       />
     </>
   );
