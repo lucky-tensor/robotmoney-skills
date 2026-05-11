@@ -238,6 +238,7 @@ impl Fixture {
             .arg("docker-compose.yaml")
             .arg("up")
             .arg("-d")
+            .arg("--build")
             .env("GETH_RPC_PORT", chain_ports.rpc_port.to_string())
             .env("GETH_WS_PORT", chain_ports.ws_port.to_string())
             .env("GETH_AUTHRPC_PORT", chain_ports.authrpc_port.to_string())
