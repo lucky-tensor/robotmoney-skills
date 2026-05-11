@@ -827,10 +827,17 @@ impl Drop for Tunnels {
 }
 
 fn spawn_tunnel(port: u16) -> Result<(Child, String), HarnessError> {
+    // `--config /dev/null` is load-bearing: without it cloudflared loads
+    // `/etc/cloudflared/config.yml` if it exists on the host and conflates
+    // the quick-tunnel URL with the host's named-tunnel credentials, which
+    // makes the announced URL return CF 404. Forcing an empty config keeps
+    // every invocation a true ephemeral quick tunnel.
     let mut child = Command::new("cloudflared")
         .args([
             "tunnel",
             "--no-autoupdate",
+            "--config",
+            "/dev/null",
             "--url",
             &format!("http://127.0.0.1:{port}"),
         ])
