@@ -231,6 +231,19 @@ impl Fixture {
         let compose_dir = repo_root.join("testing/ethereum-testnet/config");
         let chain_ports = ChainPorts::allocate()?;
         let rpc_url = chain_ports.rpc_url();
+        let cleanup = || {
+            let _ = Command::new("docker")
+                .args([
+                    "compose",
+                    "-f",
+                    "docker-compose.yaml",
+                    "down",
+                    "-v",
+                    "--remove-orphans",
+                ])
+                .current_dir(&compose_dir)
+                .status();
+        };
 
         let status = Command::new("docker")
             .arg("compose")
@@ -247,6 +260,7 @@ impl Fixture {
             .status()
             .map_err(HarnessError::from)?;
         if !status.success() {
+            cleanup();
             return Err(HarnessError::Docker(format!(
                 "compose up devnet failed: {status:?}"
             )));
@@ -649,6 +663,19 @@ impl DappStack {
         let gateway_hex = fixture.gateway_hex();
         let vault_hex = fixture.vault_hex();
         let ports = DappPorts::allocate(dapp_port, &fixture.occupied_ports())?;
+        let cleanup = || {
+            let _ = Command::new("docker")
+                .args([
+                    "compose",
+                    "-f",
+                    "docker-compose.dapp.yaml",
+                    "down",
+                    "-v",
+                    "--remove-orphans",
+                ])
+                .current_dir(&compose_dir)
+                .status();
+        };
 
         let dapp_url = ports.dapp_url();
         let explorer_api_url = ports.explorer_api_url();
@@ -686,6 +713,7 @@ impl DappStack {
             .map_err(HarnessError::from)?;
 
         if !status.success() {
+            cleanup();
             return Err(HarnessError::Docker(
                 "compose up dapp stack failed".to_string(),
             ));
@@ -695,9 +723,10 @@ impl DappStack {
         wait_for_http_ok(
             &format!("{explorer_api_url}/health"),
             Duration::from_secs(300),
-        )?;
+        )
+        .inspect_err(|_| cleanup())?;
         // Wait for dapp frontend
-        wait_for_http_ok(&dapp_url, Duration::from_secs(300))?;
+        wait_for_http_ok(&dapp_url, Duration::from_secs(300)).inspect_err(|_| cleanup())?;
 
         Ok(DappStack {
             compose_dir,

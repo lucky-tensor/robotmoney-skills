@@ -13,6 +13,10 @@
 //! Canonical: docs/implementation-plan.md §10.5 — Phase 4.5.
 
 use clap::Parser;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 #[derive(Parser, Debug)]
 #[command(name = "smoke-test", about = "Robot Money devnet smoke test harness")]
@@ -31,6 +35,14 @@ struct Cli {
 
 fn main() {
     let cli = Cli::parse();
+    let interrupted = Arc::new(AtomicBool::new(false));
+    {
+        let interrupted = Arc::clone(&interrupted);
+        ctrlc::set_handler(move || {
+            interrupted.store(true, Ordering::SeqCst);
+        })
+        .expect("set Ctrl-C handler");
+    }
 
     if !smoke_test::prerequisites_available() {
         eprintln!(
@@ -42,6 +54,10 @@ fn main() {
 
     eprintln!("smoke-test: booting devnet (this takes 60-120 seconds)...");
     let fixture = smoke_test::Fixture::new().expect("devnet boot failed");
+    if interrupted.load(Ordering::SeqCst) {
+        eprintln!("smoke-test: interrupted during devnet startup.");
+        return;
+    }
 
     println!("rpc_url={}", fixture.rpc_url());
     println!("chain_id={}", fixture.chain_id());
@@ -57,6 +73,10 @@ fn main() {
         eprintln!("smoke-test: starting full-stack (dapp + explorer-api + indexer + postgres)...");
         let stack =
             smoke_test::DappStack::boot(&fixture, cli.dapp_port).expect("dapp stack boot failed");
+        if interrupted.load(Ordering::SeqCst) {
+            eprintln!("smoke-test: interrupted during full-stack startup.");
+            return;
+        }
 
         // Structured endpoint summary — printed after all health checks pass.
         println!("--- endpoint summary ---");
@@ -70,18 +90,14 @@ fn main() {
         None
     };
 
-    let (tx, rx) = std::sync::mpsc::channel::<()>();
-    ctrlc::set_handler(move || {
-        let _ = tx.send(());
-    })
-    .expect("set Ctrl-C handler");
-
     if cli.full_stack {
         eprintln!("smoke-test: full stack ready. Stop with Ctrl-C.");
     } else {
         eprintln!("smoke-test: network ready. Stop with Ctrl-C.");
     }
-    let _ = rx.recv();
+    while !interrupted.load(Ordering::SeqCst) {
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
     eprintln!("smoke-test: stopping...");
     // _dapp_stack drops here first → docker compose down dapp stack
     // fixture drops next → docker compose down chain stack
