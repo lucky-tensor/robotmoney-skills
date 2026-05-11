@@ -9,7 +9,7 @@
  * the user clicks Authorize — see useAgentRegistration.ts for the
  * placeholder rationale and the on-chain follow-up.
  */
-import { useAccount } from "wagmi";
+import { useAccount, useConnect } from "wagmi";
 import type { Address } from "viem";
 import { AdminFlow } from "./AdminFlow";
 import { useAgentRegistration } from "../lib/useVaultRegistration";
@@ -26,14 +26,27 @@ interface AgentsPanelProps {
 
 export function AgentsPanel(props: AgentsPanelProps) {
   const { isConnected } = useAccount();
+  const { connect, connectors } = useConnect();
   const status = useAgentRegistration(props.envClass);
 
   if (!isConnected) {
     return (
       <main className="agents-gate" data-testid="agents-gate-connect">
         <section>
-          <h2>Wallet required</h2>
-          <p>Connect a wallet (above) to authorize your first agent and manage your policies.</p>
+          <h2>Connect wallet</h2>
+          <p>Connect a wallet to authorize your first agent and manage your policies.</p>
+          {connectors[0] ? (
+            <button
+              data-testid="connect-wallet"
+              onClick={() => connect({ connector: connectors[0] })}
+            >
+              Connect wallet
+            </button>
+          ) : (
+            <p data-testid="no-connectors" className="hint">
+              No browser wallet detected. Install a wallet extension to continue.
+            </p>
+          )}
         </section>
       </main>
     );
