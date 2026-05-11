@@ -31,9 +31,9 @@ contract DeployTest is Test {
         Deploy.Deployed memory d = script.runInProcessWith(admin, pauser, agent, shareReceiver);
 
         // Gateway pins the right token + vault.
-        assertEq(d.gateway.usdc(), address(d.usdc), "usdc mismatch");
+        assertEq(d.gateway.usdc(), d.usdc, "usdc mismatch");
         assertEq(d.gateway.vault(), address(d.vault), "vault mismatch");
-        assertEq(address(d.vault.assetToken()), address(d.usdc), "vault.asset mismatch");
+        assertEq(address(d.vault.assetToken()), d.usdc, "vault.asset mismatch");
 
         // Admin + Pauser hold their roles.
         assertTrue(d.gateway.hasRole(d.gateway.ADMIN_ROLE(), admin), "admin role");
@@ -67,7 +67,11 @@ contract DeployTest is Test {
 
     function test_deploy_mintsTestUsdcToAgent() public {
         Deploy.Deployed memory d = script.runInProcessWith(admin, pauser, agent, shareReceiver);
-        assertEq(d.usdc.balanceOf(agent), script.DEFAULT_AGENT_USDC_MINT(), "agent mint amount");
+        assertEq(
+            MockUSDC(d.usdc).balanceOf(agent),
+            script.DEFAULT_AGENT_USDC_MINT(),
+            "agent mint amount"
+        );
     }
 
     // --- Role-separation invariant (issue #10's headline test) ----------

@@ -32,18 +32,34 @@ import {IGateway} from "../gateway/interfaces/IGateway.sol";
 ///        SHARE_RECEIVER_ADDRESS — recipient of minted rmUSDC shares
 ///
 ///      Optional env vars (with safe defaults):
+///        USDC_ADDRESS           — address of an *existing* USDC token to bind
+///                                  the gateway to. When set, the script
+///                                  skips deploying MockUSDC and skips the
+///                                  agent test-USDC mint (funding the agent
+///                                  is the harness's job — see
+///                                  `Fixture::fund_usdc` in the smoke-test
+///                                  crate). When unset, the script deploys
+///                                  a MockUSDC (legacy + forge unit-test
+///                                  path).
 ///        AGENT_VALID_UNTIL      — uint64, default = block.timestamp + 30 days
 ///        AGENT_MAX_PER_PAYMENT  — uint256, default = 10_000 * 1e6 (USDC, 6dp)
 ///        AGENT_MAX_PER_WINDOW   — uint256, default = 100_000 * 1e6
-///        AGENT_USDC_MINT        — uint256, default = 1_000_000 * 1e6
+///        AGENT_USDC_MINT        — uint256, default = 1_000_000 * 1e6 (only
+///                                  honored when USDC_ADDRESS is unset)
 ///        DEPLOYMENT_OUT         — output JSON path,
 ///                                 default = "deployments/<chain_id>.json"
 contract Deploy is Script {
     using stdJson for string;
 
     /// @notice Result struct returned to in-process callers (e.g. forge tests).
+    /// @dev `usdc` is the *address* of the USDC token bound to the gateway.
+    ///      When the script deploys a MockUSDC, this points at it. When the
+    ///      script is run against canonical Base USDC (USDC_ADDRESS env var
+    ///      set, or `runInProcessWithUsdc`), this points at the canonical
+    ///      proxy. Callers that need MockUSDC-specific methods (mint, burn)
+    ///      must cast and ensure the code actually deployed a MockUSDC.
     struct Deployed {
-        MockUSDC usdc;
+        address usdc;
         MockVault vault;
         RobotMoneyGateway gateway;
         address admin;
@@ -52,6 +68,11 @@ contract Deploy is Script {
         address shareReceiver;
         bytes32 gatewayRuntimeHash;
     }
+
+    /// @notice Canonical Base mainnet USDC (FiatTokenProxy). The smoke-test
+    ///         devnet seeds this address with real proxy storage + the
+    ///         FiatTokenV2_2 implementation in genesis alloc.
+    address public constant CANONICAL_BASE_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
 
     /// @notice Default per-payment cap if `AGENT_MAX_PER_PAYMENT` is unset.
     uint256 public constant DEFAULT_MAX_PER_PAYMENT = 10_000 * 1e6;
@@ -115,6 +136,11 @@ contract Deploy is Script {
         uint256 maxPerPayment;
         uint256 maxPerWindow;
         uint256 usdcMint;
+        /// @dev When non-zero, the deploy binds the gateway to this existing
+        ///      USDC token and skips both the MockUSDC deploy and the agent
+        ///      test-USDC mint. The smoke-test devnet sets this to the
+        ///      canonical Base USDC ([`CANONICAL_BASE_USDC`]).
+        address usdcAddress;
     }
 
     function _readEnvParams() internal view returns (Params memory p) {
@@ -128,6 +154,19 @@ contract Deploy is Script {
         p.maxPerPayment = _envOrDefault("AGENT_MAX_PER_PAYMENT", DEFAULT_MAX_PER_PAYMENT);
         p.maxPerWindow = _envOrDefault("AGENT_MAX_PER_WINDOW", DEFAULT_MAX_PER_WINDOW);
         p.usdcMint = _envOrDefault("AGENT_USDC_MINT", DEFAULT_AGENT_USDC_MINT);
+        p.usdcAddress = _envAddressOr("USDC_ADDRESS", address(0));
+    }
+
+    function _envAddressOr(string memory key, address fallbackValue)
+        internal
+        view
+        returns (address)
+    {
+        try vm.envAddress(key) returns (address v) {
+            return v;
+        } catch {
+            return fallbackValue;
+        }
     }
 
     function _doDeploy(Params memory p) internal returns (Deployed memory d) {
@@ -149,10 +188,18 @@ contract Deploy is Script {
         require(d.pauser != d.agent, "PAUSER==AGENT");
 
         // 1. Token + vault + gateway.
-        d.usdc = new MockUSDC();
-        d.vault = new MockVault(address(d.usdc));
+        //    If the operator pre-supplied a USDC address (smoke-test devnet
+        //    forks Base mainnet — see issue #255), bind to it; otherwise
+        //    deploy MockUSDC for the legacy / forge-unit-test path.
+        if (p.usdcAddress != address(0)) {
+            require(p.usdcAddress.code.length > 0, "USDC_ADDRESS has no code");
+            d.usdc = p.usdcAddress;
+        } else {
+            d.usdc = address(new MockUSDC());
+        }
+        d.vault = new MockVault(d.usdc);
         d.gateway = new RobotMoneyGateway(
-            IERC20(address(d.usdc)), IERC4626(address(d.vault)), d.admin, d.pauser
+            IERC20(d.usdc), IERC4626(address(d.vault)), d.admin, d.pauser
         );
 
         // 2. Authorize agent under a sane initial policy. The gateway's
@@ -194,20 +241,26 @@ contract Deploy is Script {
         require(d.gateway.hasRole(d.gateway.PAUSER_ROLE(), d.pauser), "pauser missing PAUSER_ROLE");
 
         // 4. Mint test USDC to agent so it can deposit on the devnet.
-        d.usdc.mint(d.agent, p.usdcMint);
+        //    Only when we deployed MockUSDC ourselves — the canonical Base
+        //    USDC's mint is permissioned, and the smoke-test harness funds
+        //    the agent via `Fixture::fund_usdc` (a real transfer from the
+        //    genesis-allocated HARNESS_USDC_HOLDER, not a mint).
+        if (p.usdcAddress == address(0)) {
+            MockUSDC(d.usdc).mint(d.agent, p.usdcMint);
+        }
 
         // 5. Pin gateway runtime hash.
         d.gatewayRuntimeHash = keccak256(address(d.gateway).code);
 
         console2.log("RobotMoneyGateway deployed");
-        console2.log("  usdc           :", address(d.usdc));
+        console2.log("  usdc           :", d.usdc);
         console2.log("  vault          :", address(d.vault));
         console2.log("  gateway        :", address(d.gateway));
         console2.log("  admin          :", d.admin);
         console2.log("  pauser         :", d.pauser);
         console2.log("  agent          :", d.agent);
         console2.log("  shareReceiver  :", d.shareReceiver);
-        console2.log("  agent USDC bal :", d.usdc.balanceOf(d.agent));
+        console2.log("  agent USDC bal :", IERC20(d.usdc).balanceOf(d.agent));
     }
 
     function _envOrDefault(string memory key, uint256 fallbackValue)
@@ -232,7 +285,7 @@ contract Deploy is Script {
 
         string memory obj = "deployment";
         vm.serializeUint(obj, "chain_id", block.chainid);
-        vm.serializeAddress(obj, "usdc", address(d.usdc));
+        vm.serializeAddress(obj, "usdc", d.usdc);
         vm.serializeAddress(obj, "vault", address(d.vault));
         vm.serializeAddress(obj, "gateway", address(d.gateway));
         vm.serializeAddress(obj, "admin", d.admin);

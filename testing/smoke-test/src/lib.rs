@@ -715,6 +715,12 @@ fn run_forge_deploy_with_env(
         .env("PAUSER_ADDRESS", pauser_address_hex)
         .env("AGENT_ADDRESS", agent_address_hex)
         .env("SHARE_RECEIVER_ADDRESS", SHARE_RECEIVER_ADDRESS_HEX)
+        // Bind the gateway to the canonical Base USDC seeded into genesis
+        // (issue #255). Tells Deploy.s.sol to skip MockUSDC + the
+        // permissioned post-deploy mint. The harness funds the agent via
+        // `Fixture::fund_usdc` (real ERC-20 transfer from
+        // HARNESS_USDC_HOLDER) instead.
+        .env("USDC_ADDRESS", genesis_alloc::BASE_USDC_ADDR)
         .env("DEPLOYMENT_OUT", dep_out)
         .current_dir(repo_root);
     for (k, v) in extra_env {
