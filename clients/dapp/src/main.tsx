@@ -9,6 +9,7 @@
  *   the expected runtime bytecode. Missing or mismatched values render
  *   refusal previews and disable every admin write button.
  */
+import "./styles.css";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
