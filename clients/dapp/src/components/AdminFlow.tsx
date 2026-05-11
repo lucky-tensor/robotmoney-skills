@@ -406,11 +406,7 @@ export function AdminFlow(props: AdminFlowProps) {
           <>
             <p>Connect a wallet to begin.</p>
             {connectors.map((c) => (
-              <button
-                key={c.uid}
-                data-testid={`connect-${c.id}`}
-                onClick={() => handleConnect(c)}
-              >
+              <button key={c.uid} data-testid={`connect-${c.id}`} onClick={() => handleConnect(c)}>
                 Connect {c.name}
               </button>
             ))}

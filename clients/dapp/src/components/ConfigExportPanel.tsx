@@ -61,11 +61,7 @@ export function ConfigExportPanel(props: Props) {
       <h2>Export rmpc config</h2>
       <label>
         rmpc RPC URL
-        <input
-          data-testid="rpc-url"
-          value={rpcUrl}
-          onChange={(e) => setRpcUrl(e.target.value)}
-        />
+        <input data-testid="rpc-url" value={rpcUrl} onChange={(e) => setRpcUrl(e.target.value)} />
       </label>
       <label>
         Signer kind
