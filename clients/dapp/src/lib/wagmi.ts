@@ -14,16 +14,28 @@ import { injected } from "wagmi/connectors";
 import { defineChain } from "viem";
 
 // Robot Money devnet (Geth+Lighthouse fork). Real prod-shaped chain id;
-// not the same as foundry/anvil (31337). Used by the smoke-test stack
-// and any hosted devnet. RPC URL is intentionally empty here — the
-// dapp never builds an HTTP transport for this chain, see §2 of
-// docs/security/dapp-topology.md.
+// not the same as foundry/anvil (31337). The dapp never makes its own
+// HTTP requests to this URL — reads dispatch through the wallet
+// provider per §2 of docs/security/dapp-topology.md. The URL only
+// exists so `wallet_addEthereumChain` (triggered by Connect Wallet)
+// can prefill the network entry in the user's wallet. The user can
+// always override before accepting.
+const devnetRpcUrl = (import.meta.env.VITE_DEVNET_RPC_URL ?? "") as string;
 const devnet = defineChain({
   id: 32382,
   name: "Robot Money devnet",
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-  rpcUrls: { default: { http: [] } },
+  rpcUrls: { default: { http: devnetRpcUrl ? [devnetRpcUrl] : [] } },
 });
+
+/**
+ * Chain ID the dapp will ask the user's wallet to switch to after
+ * Connect. `undefined` in builds where no `VITE_DEVNET_RPC_URL` was
+ * baked in (i.e. mainnet / Base operator builds) — in those, the user
+ * is expected to already be on the right chain and Connect does no
+ * automatic switching.
+ */
+export const targetChainId: number | undefined = devnetRpcUrl ? devnet.id : undefined;
 
 export function makeConfig(_env: Record<string, string | undefined>) {
   return createConfig({

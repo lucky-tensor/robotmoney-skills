@@ -12,10 +12,12 @@ import {
   useAccount,
   useConnect,
   useDisconnect,
+  useSwitchChain,
   useWriteContract,
   useChainId,
   useReadContract,
 } from "wagmi";
+import { targetChainId } from "../lib/wagmi";
 import { isAddress, type Address } from "viem";
 import { gatewayAbi, ROLE_HASH, type RoleName } from "../lib/abi";
 import { buildPreview, type AdminAction, type PreviewContext } from "../lib/preview";
@@ -44,7 +46,28 @@ export function AdminFlow(props: AdminFlowProps) {
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
+  const { switchChain } = useSwitchChain();
   const chainId = useChainId();
+
+  // When the build was parameterised for a specific operator chain
+  // (`targetChainId` set), Connect Wallet does the network bookkeeping
+  // for the user: triggers `wallet_switchEthereumChain`, which in turn
+  // falls back to `wallet_addEthereumChain` using the chain's
+  // `rpcUrls.default.http` if the wallet hasn't seen it before. This
+  // is the only place the suggested RPC URL leaves the bundle, and the
+  // wallet always asks the user to confirm before storing it.
+  const handleConnect = (connector: (typeof connectors)[number]) => {
+    connect(
+      { connector },
+      {
+        onSuccess: () => {
+          if (targetChainId !== undefined && chainId !== targetChainId) {
+            switchChain({ chainId: targetChainId });
+          }
+        },
+      },
+    );
+  };
 
   const { data: pausedData } = useReadContract({
     address: props.gatewayAddress,
@@ -305,7 +328,7 @@ export function AdminFlow(props: AdminFlowProps) {
               <button
                 key={c.uid}
                 data-testid={`connect-${c.id}`}
-                onClick={() => connect({ connector: c })}
+                onClick={() => handleConnect(c)}
               >
                 Connect {c.name}
               </button>
@@ -323,6 +346,14 @@ export function AdminFlow(props: AdminFlowProps) {
               <code data-testid="connected-chain">{chainId}</code> · paused{" "}
               <code data-testid="gateway-paused">{String(paused)}</code>
             </p>
+            {targetChainId !== undefined && chainId !== targetChainId && (
+              <button
+                data-testid="switch-chain"
+                onClick={() => switchChain({ chainId: targetChainId as number })}
+              >
+                Switch to Robot Money devnet
+              </button>
+            )}
             <button data-testid="disconnect" onClick={() => disconnect()}>
               Disconnect
             </button>

@@ -18,6 +18,10 @@ ARG VITE_GATEWAY_CODE_HASH_VERIFIED=false
 ARG VITE_ENV_CLASS=fork
 ARG VITE_BROWSER_KEYGEN=false
 ARG VITE_HISTORY_PANE=false
+# Optional: only set for hosted-devnet builds. URL the dapp suggests to
+# `wallet_addEthereumChain`; never used as a read transport. Empty for
+# prod operator builds (mainnet / Base — wallet already has the chain).
+ARG VITE_DEVNET_RPC_URL=
 
 ENV VITE_EXPLORER_API_URL=$VITE_EXPLORER_API_URL \
     VITE_GATEWAY_ADDRESS=$VITE_GATEWAY_ADDRESS \
@@ -26,7 +30,8 @@ ENV VITE_EXPLORER_API_URL=$VITE_EXPLORER_API_URL \
     VITE_GATEWAY_CODE_HASH_VERIFIED=$VITE_GATEWAY_CODE_HASH_VERIFIED \
     VITE_ENV_CLASS=$VITE_ENV_CLASS \
     VITE_BROWSER_KEYGEN=$VITE_BROWSER_KEYGEN \
-    VITE_HISTORY_PANE=$VITE_HISTORY_PANE
+    VITE_HISTORY_PANE=$VITE_HISTORY_PANE \
+    VITE_DEVNET_RPC_URL=$VITE_DEVNET_RPC_URL
 
 COPY clients/dapp/package.json clients/dapp/pnpm-lock.yaml ./
 RUN bun install --frozen-lockfile

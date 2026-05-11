@@ -751,9 +751,12 @@ impl DappStack {
             )
             // VITE_FORK_RPC_URL intentionally NOT set: the dapp routes all
             // chain reads through the user's wallet RPC (see
-            // docs/security/dapp-topology.md §2). The RPC tunnel URL is
-            // still printed in the endpoint summary so demo users can
-            // paste it into MetaMask's custom-network configuration.
+            // docs/security/dapp-topology.md §2). VITE_DEVNET_RPC_URL is
+            // passed as a *UX hint*: the dapp's Connect Wallet button uses
+            // it to call `wallet_addEthereumChain` so MetaMask prefills the
+            // RPC URL when prompting the user to add chain 32382. The
+            // dapp never fetches from this URL itself.
+            .env("VITE_DEVNET_RPC_URL", &vite_rpc_url)
             .env("VITE_EXPLORER_API_URL", &vite_explorer_api_url)
             .env("VITE_DAPP_URL", &vite_dapp_url)
             .env("INDEXER_CHAIN_ID", "32382")
