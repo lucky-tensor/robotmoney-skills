@@ -1,96 +1,21 @@
-import { useState } from "react";
-import { useAccount, useWriteContract } from "wagmi";
-import { isAddress, type Address } from "viem";
-import { gatewayAbi } from "../../lib/abi";
-import { buildPreview, type AdminAction, type PreviewContext } from "../../lib/preview";
-import { composeRotationPreview } from "../../lib/rotation";
+import { useAccount } from "wagmi";
+import type { Address } from "viem";
+import type { PreviewContext } from "../../lib/preview";
+import { useRotationState } from "../../lib/useRotationState";
 import { TxPreview } from "../TxPreview";
 import { PolicyFields } from "./PolicyFields";
 
-interface RotationTabProps {
+type Props = Readonly<{
   gatewayAddress: Address;
   ctx: PreviewContext;
-}
+}>;
 
-export function RotationTab(props: RotationTabProps) {
+export function RotationTab(props: Props) {
   const { isConnected } = useAccount();
-  const { writeContract, isPending } = useWriteContract();
+  const r = useRotationState(props.gatewayAddress, props.ctx);
 
-  const [oldAgent, setOldAgent] = useState("");
-  const [newAgent, setNewAgent] = useState("");
-  const [validUntil, setValidUntil] = useState(() =>
-    // eslint-disable-next-line no-restricted-syntax -- lazy init, runs once at mount.
-    Math.floor(Date.now() / 1000 + 86400).toString(),
-  );
-  const [maxPerPayment, setMaxPerPayment] = useState("100000000");
-  const [maxPerWindow, setMaxPerWindow] = useState("1000000000");
-  const [shareReceiver, setShareReceiver] = useState("");
-  const [step, setStep] = useState<"idle" | "revoke-sent" | "done">("idle");
-
-  const validOld = isAddress(oldAgent);
-  const validNew = isAddress(newAgent);
-  const validReceiver = isAddress(shareReceiver);
-
-  let rotationPreview: ReturnType<typeof composeRotationPreview> | null = null;
-  let rotationPreviewError: string | null = null;
-  if (validOld && validNew && validReceiver) {
-    try {
-      rotationPreview = composeRotationPreview(oldAgent, newAgent, {
-        shareReceiver,
-        validUntil: Number(validUntil),
-        maxPerDeposit: BigInt(maxPerPayment),
-        maxPerWindow: BigInt(maxPerWindow),
-      });
-    } catch (err) {
-      rotationPreviewError = (err as Error).message;
-    }
-  }
-
-  const revokeAction: AdminAction | null = validOld
-    ? { kind: "revokeAgent", agent: oldAgent as Address }
-    : null;
-  const authorizeAction: AdminAction | null =
-    validNew && validReceiver
-      ? {
-          kind: "authorizeAgent",
-          agent: newAgent as Address,
-          policy: {
-            active: true,
-            validUntil: BigInt(validUntil),
-            maxPerPayment: BigInt(maxPerPayment),
-            maxPerWindow: BigInt(maxPerWindow),
-            shareReceiver: shareReceiver as Address,
-          },
-        }
-      : null;
-
-  const revokePrev = revokeAction ? buildPreview(revokeAction, props.ctx) : null;
-  const authorizePrev = authorizeAction ? buildPreview(authorizeAction, props.ctx) : null;
-
-  const previewsOk =
-    rotationPreview !== null && revokePrev?.ok === true && authorizePrev?.ok === true;
-
-  const onRevoke = () => {
-    if (!revokeAction || !revokePrev?.ok) return;
-    writeContract({
-      address: props.gatewayAddress,
-      abi: gatewayAbi,
-      functionName: "revokeAgent",
-      args: [revokeAction.agent],
-    });
-    setStep("revoke-sent");
-  };
-
-  const onAuthorize = () => {
-    if (!authorizeAction || !authorizePrev?.ok) return;
-    writeContract({
-      address: props.gatewayAddress,
-      abi: gatewayAbi,
-      functionName: "authorizeAgent",
-      args: [authorizeAction.agent, authorizeAction.policy],
-    });
-    setStep("done");
-  };
+  const disableRevoke = !isConnected || !r.previewsOk || r.step !== "idle" || r.isPending;
+  const disableAuthorize = !isConnected || !r.previewsOk || r.step !== "revoke-sent" || r.isPending;
 
   return (
     <section data-testid="rotation-form">
@@ -100,14 +25,14 @@ export function RotationTab(props: RotationTabProps) {
         between transactions.
       </p>
 
-      {rotationPreview && (
+      {r.combinedRiskAnnotation && (
         <p data-testid="rotation-combined-risk" className="rotation-risk-banner">
-          {rotationPreview.combinedRiskAnnotation}
+          {r.combinedRiskAnnotation}
         </p>
       )}
-      {rotationPreviewError && (
+      {r.combinedError && (
         <p data-testid="rotation-preview-error" className="error">
-          {rotationPreviewError}
+          {r.combinedError}
         </p>
       )}
 
@@ -115,11 +40,8 @@ export function RotationTab(props: RotationTabProps) {
         Old agent address (to revoke)
         <input
           data-testid="rotation-old-agent-input"
-          value={oldAgent}
-          onChange={(e) => {
-            setOldAgent(e.target.value);
-            setStep("idle");
-          }}
+          value={r.oldAgent}
+          onChange={(e) => r.setOldAgent(e.target.value)}
           placeholder="0x..."
         />
       </label>
@@ -127,34 +49,31 @@ export function RotationTab(props: RotationTabProps) {
         New agent address (to authorize)
         <input
           data-testid="rotation-new-agent-input"
-          value={newAgent}
-          onChange={(e) => {
-            setNewAgent(e.target.value);
-            setStep("idle");
-          }}
+          value={r.newAgent}
+          onChange={(e) => r.setNewAgent(e.target.value)}
           placeholder="0x..."
         />
       </label>
       <PolicyFields
         testIdPrefix="rotation-"
-        validUntil={validUntil}
-        setValidUntil={setValidUntil}
-        maxPerPayment={maxPerPayment}
-        setMaxPerPayment={setMaxPerPayment}
-        maxPerWindow={maxPerWindow}
-        setMaxPerWindow={setMaxPerWindow}
-        shareReceiver={shareReceiver}
-        setShareReceiver={setShareReceiver}
+        validUntil={r.validUntil}
+        setValidUntil={r.setValidUntil}
+        maxPerPayment={r.maxPerPayment}
+        setMaxPerPayment={r.setMaxPerPayment}
+        maxPerWindow={r.maxPerWindow}
+        setMaxPerWindow={r.setMaxPerWindow}
+        shareReceiver={r.shareReceiver}
+        setShareReceiver={r.setShareReceiver}
       />
 
       <div data-testid="rotation-step1">
         <h3>Step 1: revoke old agent</h3>
-        {revokePrev && <TxPreview preview={revokePrev} />}
+        {r.revokePreview && <TxPreview preview={r.revokePreview} />}
         <button
           type="button"
           data-testid="rotation-revoke-submit"
-          disabled={!isConnected || !previewsOk || step !== "idle" || isPending}
-          onClick={onRevoke}
+          disabled={disableRevoke}
+          onClick={r.onRevoke}
         >
           Step 1 — Sign revokeAgent(old) with wallet
         </button>
@@ -162,18 +81,18 @@ export function RotationTab(props: RotationTabProps) {
 
       <div data-testid="rotation-step2">
         <h3>Step 2: authorize new agent</h3>
-        {authorizePrev && <TxPreview preview={authorizePrev} />}
+        {r.authorizePreview && <TxPreview preview={r.authorizePreview} />}
         <button
           type="button"
           data-testid="rotation-authorize-submit"
-          disabled={!isConnected || !previewsOk || step !== "revoke-sent" || isPending}
-          onClick={onAuthorize}
+          disabled={disableAuthorize}
+          onClick={r.onAuthorize}
         >
           Step 2 — Sign authorizeAgent(new) with wallet
         </button>
       </div>
 
-      {step === "done" && (
+      {r.step === "done" && (
         <p data-testid="rotation-complete">Rotation complete. Verify on-chain state.</p>
       )}
     </section>

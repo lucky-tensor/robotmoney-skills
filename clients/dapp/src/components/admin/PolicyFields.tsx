@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 
-export interface PolicyFieldsState {
+type Props = Readonly<{
   validUntil: string;
   setValidUntil: Dispatch<SetStateAction<string>>;
   maxPerPayment: string;
@@ -9,13 +9,10 @@ export interface PolicyFieldsState {
   setMaxPerWindow: Dispatch<SetStateAction<string>>;
   shareReceiver: string;
   setShareReceiver: Dispatch<SetStateAction<string>>;
-}
-
-interface PolicyFieldsProps extends PolicyFieldsState {
   testIdPrefix?: string;
-}
+}>;
 
-export function PolicyFields(props: PolicyFieldsProps) {
+export function PolicyFields(props: Props) {
   const p = props.testIdPrefix ?? "";
   return (
     <>
