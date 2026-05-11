@@ -123,8 +123,19 @@ devnet instance is reproducible.
 Concretely, `testing/ethereum-testnet/config/genesis/generate.sh` must
 produce a `genesis.json` whose `alloc` is seeded from Base state at the
 pinned block, not an empty allocation. The pinned block is recorded in
-a versioned file under `testing/ethereum-testnet/config/` and changing
-it is a deliberate, reviewed action.
+`testing/ethereum-testnet/config/fork-block.json` (versioned, schema-
+validated by `smoke_test::fork_manifest`) and changing it is a
+deliberate, reviewed action.
+
+**Single fork point across harnesses.** The smoke-test devnet and the
+Anvil fork-e2e fixture (`testing/fixtures/fork-state/CURRENT.json`)
+MUST pin the same Base block. Both harnesses ingest the same captured
+state file (`testing/fixtures/fork-state/CURRENT.anvil-state`), so a
+scenario that reproduces on one harness reproduces on the other. The
+manifest validator unit test
+`smoke_test::fork_manifest::tests::fork_block_aligns_with_anvil_fixture_current`
+enforces this alignment in CI; refreshing the pin is a single
+`scripts/devnet/snapshot-fork.sh` invocation that updates both.
 
 ### USDC faucet via genesis-time balance grant
 

@@ -14,6 +14,10 @@
 //! - Address accessors: [`Fixture::rpc_url`], [`Fixture::gateway`], etc.
 //! - On-chain poke helpers: [`Fixture::pause_gateway`], [`Fixture::fund_usdc`], etc.
 //! - [`prerequisites_available`] — check for docker/forge/cast on PATH.
+//! - [`fork_manifest::ForkManifest`] — typed view over
+//!   `testing/ethereum-testnet/config/fork-block.json` (issue #255).
+
+pub mod fork_manifest;
 
 use std::collections::HashSet;
 use std::io::{BufRead, BufReader};
@@ -43,6 +47,24 @@ pub const PAUSER_ADDRESS_HEX: &str = "0x614561D2d143621E126e87831AEF287678B442b8
 
 /// Genesis-funded EOA registered as the vault share receiver.
 pub const SHARE_RECEIVER_ADDRESS_HEX: &str = "0x1CBd3b2770909D4e10f157cABC84C7264073C9Ec";
+
+/// Harness USDC holder — the clean-history EOA that receives a genesis-time
+/// USDC balance grant on the smoke-test devnet. See
+/// `docs/testing/smoke-test-design.md` (USDC faucet section) and issue #255.
+///
+/// This key MUST NOT be used on any real chain. It is test-only by
+/// construction. The genesis ingester writes
+/// `usdc.balances[HARNESS_USDC_HOLDER_ADDRESS_HEX] = grant_units` into the
+/// devnet's `genesis.json` alloc, and `Fixture::fund_usdc` signs a plain
+/// `transfer(address,uint256)` from this key against the canonical Base USDC
+/// proxy.
+pub const HARNESS_USDC_HOLDER_PRIVATE_KEY_HEX: &str =
+    "0xd2dffaf3c3c5e3e2f5cb5cef1a3a2e0e0a8b9d4ae2f6c1d3e8a5b7c9e0f1a2b3";
+/// Address derived from [`HARNESS_USDC_HOLDER_PRIVATE_KEY_HEX`]. Verified
+/// against `cast wallet address` at definition time. Used by the genesis
+/// ingester (for the USDC balance grant + ETH-for-gas alloc) and by
+/// `Fixture::fund_usdc` (as the transfer sender).
+pub const HARNESS_USDC_HOLDER_ADDRESS_HEX: &str = "0xaE67A1B2A267a124Cf762098E3Cbf6B03329E6d5";
 
 /// 32-byte secp256k1 private key for the test agent EOA. Test-only —
 /// never use on a real chain.
