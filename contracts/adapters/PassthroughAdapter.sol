@@ -52,7 +52,12 @@ contract PassthroughAdapter is IStrategyAdapter {
     /// @inheritdoc IStrategyAdapter
     /// @dev USDC is already transferred to this contract by the vault before
     ///      `deploy` is called — nothing further is needed.
-    function deploy(uint256 /* amount */ ) external onlyVault {
+    function deploy(
+        uint256 /* amount */
+    )
+        external
+        onlyVault
+    {
         // No external protocol — USDC stays in this contract.
     }
 

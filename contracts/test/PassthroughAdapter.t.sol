@@ -40,10 +40,10 @@ contract PassthroughAdapterTest is Test {
         vault = new RobotMoneyVault(
             IERC20(address(usdc)),
             10_000_000 * ONE_USDC, // tvlCap
-            1_000_000 * ONE_USDC,  // perDepositCap
-            0,                     // exitFeeBps
-            admin,                 // feeRecipient
-            admin                  // ADMIN_ROLE
+            1_000_000 * ONE_USDC, // perDepositCap
+            0, // exitFeeBps
+            admin, // feeRecipient
+            admin // ADMIN_ROLE
         );
         // Deploy adapter and wire into vault
         adapter = new PassthroughAdapter(address(usdc), address(vault));
@@ -176,6 +176,8 @@ contract PassthroughAdapterTest is Test {
         uint256 assetsOut = vault.redeem(rawShares, user, user);
         assertGe(assetsOut, 999_000, "redeem should return >= 999_000 USDC");
         assertEq(vault.balanceOf(user), 0, "user shares should be 0 after full redeem");
-        assertGe(usdc.balanceOf(user), 999_000 * ONE_USDC - ONE_USDC, "user USDC balance after redeem");
+        assertGe(
+            usdc.balanceOf(user), 999_000 * ONE_USDC - ONE_USDC, "user USDC balance after redeem"
+        );
     }
 }

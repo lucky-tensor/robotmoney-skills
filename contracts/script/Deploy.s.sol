@@ -207,15 +207,15 @@ contract Deploy is Script {
         require(p.usdcAddress != address(0), "USDC_ADDRESS=0");
         require(p.usdcAddress.code.length > 0, "USDC_ADDRESS has no code");
         d.usdc = p.usdcAddress;
-        uint256 tvlCap = 10_000_000 * 1e6;      // 10M USDC
+        uint256 tvlCap = 10_000_000 * 1e6; // 10M USDC
         uint256 perDepositCap = 1_000_000 * 1e6; // 1M USDC
         d.vault = new RobotMoneyVault(
             IERC20(d.usdc),
             tvlCap,
             perDepositCap,
-            0,       // exitFeeBps = 0
+            0, // exitFeeBps = 0
             d.admin, // feeRecipient (fees are 0, any non-zero addr)
-            d.admin  // vaultAdmin — receives ADMIN_ROLE
+            d.admin // vaultAdmin — receives ADMIN_ROLE
         );
         // Deploy PassthroughAdapter and register it with the vault.
         // capBps = 10_000 (100%) — single adapter gets full allocation.
