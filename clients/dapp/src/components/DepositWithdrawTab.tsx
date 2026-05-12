@@ -124,13 +124,15 @@ export function DepositWithdrawTab(props: Props) {
   const allowanceOk =
     depositAssets !== null && typeof allowance === "bigint" && allowance >= depositAssets;
 
-  const { data: depositSim } = useSimulateContract({
+  const { data: depositSim, error: depositSimError } = useSimulateContract({
+    account: address,
     address: props.vaultAddress,
     abi: vaultAbi,
     functionName: "deposit",
     args: depositAction ? [depositAction.assets, depositAction.receiver] : undefined,
     query: {
       enabled: isConnected && depositPreview?.ok === true && allowanceOk === true,
+      retry: 5,
     },
   });
 
@@ -138,12 +140,13 @@ export function DepositWithdrawTab(props: Props) {
   const approveNeeded =
     depositAssets !== null &&
     (allowance === undefined || (typeof allowance === "bigint" && allowance < depositAssets));
-  const { data: approveSim } = useSimulateContract({
+  const { data: approveSim, error: approveSimError } = useSimulateContract({
+    account: address,
     address: props.usdcAddress,
     abi: erc20Abi,
     functionName: "approve",
     args: depositAssets !== null ? [props.vaultAddress, depositAssets] : undefined,
-    query: { enabled: isConnected && approveNeeded === true },
+    query: { enabled: isConnected && approveNeeded === true, retry: 5 },
   });
 
   // -------- redeem preview + simulation --------
@@ -158,15 +161,39 @@ export function DepositWithdrawTab(props: Props) {
       : null;
   const redeemPreview = redeemAction ? buildVaultPreview(redeemAction, props.ctx) : null;
 
-  const { data: redeemSim } = useSimulateContract({
+  const { data: redeemSim, error: redeemSimError } = useSimulateContract({
+    account: address,
     address: props.vaultAddress,
     abi: vaultAbi,
     functionName: "redeem",
     args: redeemAction
       ? [redeemAction.shares, redeemAction.receiver, redeemAction.owner]
       : undefined,
-    query: { enabled: isConnected && redeemPreview?.ok === true },
+    query: { enabled: isConnected && redeemPreview?.ok === true, retry: 5 },
   });
+
+  // Surface simulate failures to the console so the e2e test (which
+  // forwards `page.on('console')` to test output) can diagnose why a
+  // submit button stayed disabled. Without this, a silent simulate
+  // failure looks identical to a still-loading simulation.
+  useEffect(() => {
+    if (depositSimError) {
+      // eslint-disable-next-line no-console
+      console.error("[DepositWithdrawTab] deposit simulate error:", depositSimError);
+    }
+  }, [depositSimError]);
+  useEffect(() => {
+    if (approveSimError) {
+      // eslint-disable-next-line no-console
+      console.error("[DepositWithdrawTab] approve simulate error:", approveSimError);
+    }
+  }, [approveSimError]);
+  useEffect(() => {
+    if (redeemSimError) {
+      // eslint-disable-next-line no-console
+      console.error("[DepositWithdrawTab] redeem simulate error:", redeemSimError);
+    }
+  }, [redeemSimError]);
 
   const onApprove = () => {
     if (!approveSim) return;
@@ -241,6 +268,16 @@ export function DepositWithdrawTab(props: Props) {
         <p className="hint" data-testid="deposit-share-balance">
           rmUSDC balance: {typeof shareBalance === "bigint" ? shareBalance.toString() : "—"}
         </p>
+        {approveSimError && (
+          <p className="hint" data-testid="approve-sim-error">
+            approve simulate failed: {approveSimError.message}
+          </p>
+        )}
+        {depositSimError && (
+          <p className="hint" data-testid="deposit-sim-error">
+            deposit simulate failed: {depositSimError.message}
+          </p>
+        )}
       </section>
 
       <section data-testid="withdraw-form">
@@ -265,6 +302,11 @@ export function DepositWithdrawTab(props: Props) {
         >
           Sign withdraw with wallet
         </button>
+        {redeemSimError && (
+          <p className="hint" data-testid="redeem-sim-error">
+            redeem simulate failed: {redeemSimError.message}
+          </p>
+        )}
       </section>
     </div>
   );
