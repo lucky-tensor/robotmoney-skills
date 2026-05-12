@@ -18,9 +18,15 @@
  * matches the production rmpc deposit flow (the gateway pulls USDC
  * from the agent's caller and forwards into the same vault).
  */
-import { useState } from "react";
-import { useAccount, useReadContract, useSimulateContract, useWriteContract } from "wagmi";
-import type { Address } from "viem";
+import { useEffect, useState } from "react";
+import {
+  useAccount,
+  useReadContract,
+  useSimulateContract,
+  useWaitForTransactionReceipt,
+  useWriteContract,
+} from "wagmi";
+import type { Address, Hash } from "viem";
 import { erc20Abi, vaultAbi } from "../lib/abi";
 import { buildVaultPreview, type VaultPreviewContext } from "../lib/vaultPreview";
 import { TxPreview } from "./TxPreview";
@@ -53,7 +59,36 @@ export function parseUsdcAmount(input: string): bigint | null {
 
 export function DepositWithdrawTab(props: Props) {
   const { address, isConnected } = useAccount();
-  const { writeContract, isPending } = useWriteContract();
+  // Three independent write hooks so each action exposes its own
+  // `data` (tx hash) and `isPending`. We then wait for each receipt
+  // before refetching downstream reads — without this gate the
+  // `writeContract` callback fires when the hash is returned, not when
+  // the tx is mined, so allowance/share-balance reads race past the
+  // pending state and the deposit/withdraw submit never enables.
+  const approveWrite = useWriteContract();
+  const depositWrite = useWriteContract();
+  const withdrawWrite = useWriteContract();
+
+  const approveReceipt = useWaitForTransactionReceipt({
+    hash: approveWrite.data as Hash | undefined,
+    query: { enabled: Boolean(approveWrite.data) },
+  });
+  const depositReceipt = useWaitForTransactionReceipt({
+    hash: depositWrite.data as Hash | undefined,
+    query: { enabled: Boolean(depositWrite.data) },
+  });
+  const withdrawReceipt = useWaitForTransactionReceipt({
+    hash: withdrawWrite.data as Hash | undefined,
+    query: { enabled: Boolean(withdrawWrite.data) },
+  });
+
+  const isPending =
+    approveWrite.isPending ||
+    depositWrite.isPending ||
+    withdrawWrite.isPending ||
+    approveReceipt.isFetching ||
+    depositReceipt.isFetching ||
+    withdrawReceipt.isFetching;
 
   const [depositInput, setDepositInput] = useState("");
   const [withdrawInput, setWithdrawInput] = useState("");
@@ -135,31 +170,37 @@ export function DepositWithdrawTab(props: Props) {
 
   const onApprove = () => {
     if (!approveSim) return;
-    writeContract(approveSim.request, {
-      onSuccess: () => {
-        void refetchAllowance();
-      },
-    });
+    approveWrite.writeContract(approveSim.request);
   };
 
   const onDeposit = () => {
     if (!depositSim) return;
-    writeContract(depositSim.request, {
-      onSuccess: () => {
-        void refetchShareBalance();
-        void refetchAllowance();
-      },
-    });
+    depositWrite.writeContract(depositSim.request);
   };
 
   const onWithdraw = () => {
     if (!redeemSim) return;
-    writeContract(redeemSim.request, {
-      onSuccess: () => {
-        void refetchShareBalance();
-      },
-    });
+    withdrawWrite.writeContract(redeemSim.request);
   };
+
+  // Refetch on-chain state once each tx is mined. `isSuccess` flips
+  // exactly once per receipt so the effect runs at most once per write.
+  useEffect(() => {
+    if (approveReceipt.isSuccess) {
+      void refetchAllowance();
+    }
+  }, [approveReceipt.isSuccess, refetchAllowance]);
+  useEffect(() => {
+    if (depositReceipt.isSuccess) {
+      void refetchAllowance();
+      void refetchShareBalance();
+    }
+  }, [depositReceipt.isSuccess, refetchAllowance, refetchShareBalance]);
+  useEffect(() => {
+    if (withdrawReceipt.isSuccess) {
+      void refetchShareBalance();
+    }
+  }, [withdrawReceipt.isSuccess, refetchShareBalance]);
 
   return (
     <div className="form-grid">
