@@ -71,8 +71,11 @@ export function OnboardingWizard(props: Props) {
   const [maxPerPayment, setMaxPerPayment] = useState("100000000");
   const [maxPerWindow, setMaxPerWindow] = useState("1000000000");
 
-  const validAgent = isAddress(agent);
-  const validReceiver = isAddress(shareReceiver);
+  // strict: false — some wallets and rmpc print lowercase addresses without
+  // EIP-55 checksum casing. The default strict check rejected those and left
+  // "Next: review & sign" silently disabled.
+  const validAgent = isAddress(agent, { strict: false });
+  const validReceiver = isAddress(shareReceiver, { strict: false });
 
   const action: AdminAction | null =
     validAgent && validReceiver
