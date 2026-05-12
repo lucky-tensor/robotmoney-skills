@@ -133,9 +133,9 @@ export function OnboardingWizard(props: Props) {
               data-testid="wizard-dismiss"
               className="wizard-dismiss"
               onClick={props.onDismiss}
-              aria-label="Skip onboarding and open admin"
+              aria-label="Dismiss onboarding and open admin"
             >
-              Skip → Admin
+              Dismiss Onboarding
             </button>
           )}
         </div>
