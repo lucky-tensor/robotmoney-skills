@@ -6,6 +6,17 @@ Paste the prompt below into a fresh session of your agent runtime, then come bac
 
 The agent should perform all of the steps below itself. Vendor-specific nuances are called out inline.
 
+### Before you start — set the keystore passphrase
+
+`rmpc` needs a passphrase to decrypt the agent's keystore (created in step 4). The human operator must export it once in their terminal **before** launching the agent runtime so the agent process inherits it:
+
+```bash
+read -s -p "Agent keystore passphrase: " RMPC_KEYSTORE_PASSPHRASE
+export RMPC_KEYSTORE_PASSPHRASE
+```
+
+This uses `read -s` so the passphrase is never echoed, never written to shell history, and never appears on the command line. The agent inherits `RMPC_KEYSTORE_PASSPHRASE` from the process environment automatically.
+
 ## 1. Install `rmpc`
 
 Either install a release binary or build from source — both are supported.
@@ -49,14 +60,6 @@ Update `chain_id` in `rmpc-fork.toml` with the result.
 OpenClaw-only: place the config at `/etc/openclaw/rmpc.toml` instead, then export `RMPC_CONFIG=/etc/openclaw/rmpc.toml` and `RMPC_NETWORK=fork`. Start the bounded monitor with `bash testing/openclaw-config/openclaw_harness.sh` and confirm it exits 0.
 
 ## 4. Create a keystore and run self-check
-
-The keystore passphrase is supplied via `RMPC_KEYSTORE_PASSPHRASE`. The operator should set it once before starting the agent runtime — the agent process inherits the variable and passes it to every `rmpc` invocation automatically. Use `read -s` to avoid leaking the passphrase into shell history:
-
-```bash
-read -s -p "Agent keystore passphrase: " RMPC_KEYSTORE_PASSPHRASE
-export RMPC_KEYSTORE_PASSPHRASE
-opencode  # or whichever agent runtime
-```
 
 If you don't have a key pair yet, create one:
 
