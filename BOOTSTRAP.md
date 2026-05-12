@@ -50,10 +50,11 @@ OpenClaw-only: place the config at `/etc/openclaw/rmpc.toml` instead, then expor
 
 ## 4. Create a keystore and run self-check
 
-The keystore passphrase is supplied via `RMPC_KEYSTORE_PASSPHRASE`. For production use, the operator should export it once before starting the agent runtime — the agent process inherits the variable and passes it to every `rmpc` invocation automatically:
+The keystore passphrase is supplied via `RMPC_KEYSTORE_PASSPHRASE`. The operator should set it once before starting the agent runtime — the agent process inherits the variable and passes it to every `rmpc` invocation automatically. Use `read -s` to avoid leaking the passphrase into shell history:
 
 ```bash
-export RMPC_KEYSTORE_PASSPHRASE="your-passphrase"
+read -s -p "Agent keystore passphrase: " RMPC_KEYSTORE_PASSPHRASE
+export RMPC_KEYSTORE_PASSPHRASE
 opencode  # or whichever agent runtime
 ```
 
