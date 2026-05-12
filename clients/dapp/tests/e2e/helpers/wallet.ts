@@ -217,9 +217,20 @@ export async function openDapp(
   await page.goto(endpoints.dapp_url);
   if (opts.connect !== false) {
     await connectInjectedWallet(page);
+    // A fresh wallet on smoke-test devnet has neither authorized an
+    // agent nor holds vault shares, so AgentsPanel mounts the
+    // OnboardingWizard rather than AdminFlow. Wait for whichever
+    // surface lands, and click the wizard's Skip → Admin button if
+    // the wizard wins the race.
+    const { expect } = await import("@playwright/test");
+    const wizard = page.getByTestId("onboarding-wizard");
+    const adminTabs = page.getByTestId("admin-tabs");
+    await expect(wizard.or(adminTabs)).toBeVisible({ timeout: 30_000 });
+    if (await wizard.isVisible().catch(() => false)) {
+      await page.getByTestId("wizard-dismiss").click();
+      await expect(adminTabs).toBeVisible({ timeout: 30_000 });
+    }
   }
-  // fork/devnet env classes bypass the registration gate
-  // (see useVaultRegistration.ts), so AdminFlow mounts directly.
 }
 
 /**
