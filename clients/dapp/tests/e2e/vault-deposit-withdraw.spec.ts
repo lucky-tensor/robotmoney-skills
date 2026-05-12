@@ -18,7 +18,14 @@
  */
 import { test, expect } from "@playwright/test";
 import { setTimeout as sleep } from "node:timers/promises";
-import { createWalletClient, encodeFunctionData, http, type Address, type Hex } from "viem";
+import {
+  createPublicClient,
+  createWalletClient,
+  encodeFunctionData,
+  http,
+  type Address,
+  type Hex,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { loadEndpoints, type DevnetEndpoints } from "./helpers/devnet";
 import { openDapp, openTab } from "./helpers/wallet";
@@ -78,6 +85,12 @@ async function exitFeeBps(rpc: string, vault: string): Promise<bigint> {
  * Top up `recipient` with `amount` USDC by signing an ERC-20 transfer
  * from the harness USDC holder. Mirrors the Rust fork-e2e fixture's
  * `Fixture::fund_usdc` path.
+ *
+ * IMPORTANT: this awaits the transaction *receipt*, not just the
+ * broadcast. Without that, subsequent `usdcBalanceOf` reads race past
+ * the unmined fund tx and the deposit assertion observes a phantom
+ * USDC credit when the fund tx finally lands (admin's balance goes
+ * UP by `amount - DEPOSIT_USDC` instead of DOWN by DEPOSIT_USDC).
  */
 async function fundUsdc(
   endpoints: DevnetEndpoints,
@@ -86,16 +99,18 @@ async function fundUsdc(
 ): Promise<void> {
   const account = privateKeyToAccount(endpoints.harness_usdc_holder_private_key as Hex);
   const wallet = createWalletClient({ account, transport: http(endpoints.rpc_url) });
+  const publicClient = createPublicClient({ transport: http(endpoints.rpc_url) });
   const data = encodeFunctionData({
     abi: erc20Abi,
     functionName: "transfer",
     args: [recipient, amount],
   });
-  await wallet.sendTransaction({
+  const hash = await wallet.sendTransaction({
     chain: null,
     to: endpoints.usdc_addr as Address,
     data,
   });
+  await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
 }
 
 async function waitUntil<T>(predicate: () => Promise<T | null>, description: string): Promise<T> {
