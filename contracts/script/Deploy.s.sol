@@ -17,15 +17,15 @@ import {IGateway} from "../gateway/interfaces/IGateway.sol";
 
 /// @title Deploy
 /// @notice Foundry deploy script for the Robot Money gateway stack.
-///         Deploys RobotMoneyVault + PassthroughAdapter (smoke-test devnet) or
-///         MockVault (gateway unit tests), wires a RobotMoneyGateway to the
-///         vault, grants AGENT_ROLE to a distinct EOA via `authorizeAgent`,
-///         asserts role-separation, and writes a deployment JSON.
+///         Deploys RobotMoneyVault + PassthroughAdapter as the primary vault,
+///         wires a RobotMoneyGateway to the vault, grants AGENT_ROLE to a
+///         distinct EOA via `authorizeAgent`, asserts role-separation, and
+///         writes a deployment JSON.
 ///
-///         The primary vault for the smoke-test devnet is now RobotMoneyVault
-///         with a single PassthroughAdapter (exitFeeBps=0, no external calls).
-///         MockVault is retained for gateway deposit-routing unit tests only.
-///         See issue #277.
+///         MockVault is NOT deployed by this script; it is only used by
+///         gateway deposit-routing unit tests directly. See issue #277.
+///         The vault deploys with exitFeeBps=0 and a single PassthroughAdapter
+///         (no external calls) suitable for the smoke-test devnet.
 /// @dev Implements `docs/implementation-plan.md` §5 step 1–2 and
 ///      satisfies issue #10. Inputs are env-driven so the same script works
 ///      on Anvil, the docker devnet, and (with care) any throwaway L1.
