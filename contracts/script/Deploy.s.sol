@@ -10,16 +10,23 @@ import {console2} from "forge-std/console2.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
+import {RobotMoneyVault} from "../RobotMoneyVault.sol";
+import {PassthroughAdapter} from "../adapters/PassthroughAdapter.sol";
 import {MockVault} from "../gateway/MockVault.sol";
 import {RobotMoneyGateway} from "../gateway/RobotMoneyGateway.sol";
 import {IGateway} from "../gateway/interfaces/IGateway.sol";
 
 /// @title Deploy
-/// @notice Foundry deploy script for the MVP RobotMoney gateway stack.
-///         Binds a `MockVault` + `RobotMoneyGateway` to an externally
-///         supplied USDC token, grants AGENT_ROLE to a distinct EOA via
-///         `authorizeAgent`, asserts role-separation, and writes a
-///         deployment JSON.
+/// @notice Foundry deploy script for the Robot Money gateway stack.
+///         Deploys RobotMoneyVault + PassthroughAdapter (smoke-test devnet) or
+///         MockVault (gateway unit tests), wires a RobotMoneyGateway to the
+///         vault, grants AGENT_ROLE to a distinct EOA via `authorizeAgent`,
+///         asserts role-separation, and writes a deployment JSON.
+///
+///         The primary vault for the smoke-test devnet is now RobotMoneyVault
+///         with a single PassthroughAdapter (exitFeeBps=0, no external calls).
+///         MockVault is retained for gateway deposit-routing unit tests only.
+///         See issue #277.
 /// @dev Implements `docs/implementation-plan.md` §5 step 1–2 and
 ///      satisfies issue #10. Inputs are env-driven so the same script works
 ///      on Anvil, the docker devnet, and (with care) any throwaway L1.
@@ -52,9 +59,14 @@ contract Deploy is Script {
     ///      bound to the gateway. On the smoke-test devnet this is the
     ///      canonical Base USDC proxy seeded into genesis alloc; in forge
     ///      unit tests it is a `TestERC20` deployed by the caller.
+    ///      `vault` is the deployed RobotMoneyVault (smoke-test devnet and
+    ///      integration tests). For gateway unit tests that still need MockVault,
+    ///      use the separate `MockVault` import directly.
+    ///      `adapter` is the PassthroughAdapter wired into vault at deploy time.
     struct Deployed {
         address usdc;
-        MockVault vault;
+        RobotMoneyVault vault;
+        PassthroughAdapter adapter;
         RobotMoneyGateway gateway;
         address admin;
         address pauser;
@@ -168,15 +180,50 @@ contract Deploy is Script {
         require(d.admin != d.agent, "ADMIN==AGENT");
         require(d.pauser != d.agent, "PAUSER==AGENT");
 
-        // 1. Token + vault + gateway.
+        // 1. Token + vault + adapter + gateway.
         //    USDC is always externally supplied: the smoke-test devnet seeds
         //    the canonical Base USDC proxy into genesis alloc (issue #255),
         //    and forge unit tests deploy a `TestERC20` helper and pass its
         //    address via `runInProcessWithUsdc`.
+        //
+        //    RobotMoneyVault (issue #277): replaces MockVault as the primary
+        //    vault. Deployed with exitFeeBps=0 and a PassthroughAdapter that
+        //    holds USDC with no external protocol calls — suitable for the
+        //    smoke-test devnet. MockVault is retained in the codebase only for
+        //    gateway deposit-routing unit tests.
+        //
+        //    Vault constructor parameters:
+        //      tvlCap        = 10M USDC (generous for devnet, no real risk)
+        //      perDepositCap = 1M USDC  (generous for devnet)
+        //      exitFeeBps    = 0        (no exit fee in test environment)
+        //      feeRecipient  = admin    (any non-zero address, fees are 0)
+        //      vaultAdmin    = d.admin  (receives ADMIN_ROLE for vault management)
+        //
+        //    addAdapter requires ADMIN_ROLE. We use vm.prank(d.admin) so the
+        //    call originates from the address that holds ADMIN_ROLE, regardless
+        //    of whether we're in a forge test (runInProcessWith) or a broadcast
+        //    script (run). In a broadcast context, vm.prank(d.admin) broadcasts
+        //    the addAdapter transaction as d.admin, which is correct.
         require(p.usdcAddress != address(0), "USDC_ADDRESS=0");
         require(p.usdcAddress.code.length > 0, "USDC_ADDRESS has no code");
         d.usdc = p.usdcAddress;
-        d.vault = new MockVault(d.usdc);
+        uint256 tvlCap = 10_000_000 * 1e6;      // 10M USDC
+        uint256 perDepositCap = 1_000_000 * 1e6; // 1M USDC
+        d.vault = new RobotMoneyVault(
+            IERC20(d.usdc),
+            tvlCap,
+            perDepositCap,
+            0,       // exitFeeBps = 0
+            d.admin, // feeRecipient (fees are 0, any non-zero addr)
+            d.admin  // vaultAdmin — receives ADMIN_ROLE
+        );
+        // Deploy PassthroughAdapter and register it with the vault.
+        // capBps = 10_000 (100%) — single adapter gets full allocation.
+        // vm.prank(d.admin) is used because addAdapter requires ADMIN_ROLE,
+        // and d.admin holds that role after vault deployment above.
+        d.adapter = new PassthroughAdapter(d.usdc, address(d.vault));
+        vm.prank(d.admin);
+        d.vault.addAdapter(address(d.adapter), 10_000);
         d.gateway =
             new RobotMoneyGateway(IERC20(d.usdc), IERC4626(address(d.vault)), d.admin, d.pauser);
 
@@ -213,9 +260,10 @@ contract Deploy is Script {
         //    forge unit tests mint via the `TestERC20` helper directly.
         d.gatewayRuntimeHash = keccak256(address(d.gateway).code);
 
-        console2.log("RobotMoneyGateway deployed");
+        console2.log("RobotMoneyVault + PassthroughAdapter + RobotMoneyGateway deployed");
         console2.log("  usdc           :", d.usdc);
         console2.log("  vault          :", address(d.vault));
+        console2.log("  adapter        :", address(d.adapter));
         console2.log("  gateway        :", address(d.gateway));
         console2.log("  admin          :", d.admin);
         console2.log("  pauser         :", d.pauser);
@@ -248,6 +296,7 @@ contract Deploy is Script {
         vm.serializeUint(obj, "chain_id", block.chainid);
         vm.serializeAddress(obj, "usdc", d.usdc);
         vm.serializeAddress(obj, "vault", address(d.vault));
+        vm.serializeAddress(obj, "adapter", address(d.adapter));
         vm.serializeAddress(obj, "gateway", address(d.gateway));
         vm.serializeAddress(obj, "admin", d.admin);
         vm.serializeAddress(obj, "pauser", d.pauser);
