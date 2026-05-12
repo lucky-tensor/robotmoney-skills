@@ -1,17 +1,16 @@
 /**
  * AgentsPanel — gates the full per-user agent management surface.
  *
- *   no wallet            → connect prompt
- *   wallet, no agent     → OnboardingWizard (bootstrap → address → authorize)
- *   wallet, has agent    → full AdminFlow (all management tabs)
+ *   no wallet                     → connect prompt
+ *   wallet, no agent + no shares  → OnboardingWizard
+ *   wallet, has agent or shares   → AdminFlow (all management tabs)
  *
  * Setting `VITE_FORCE_ONBOARDING=1` makes the wizard the post-connect view
  * regardless of registration status — for local layout review without infra.
  * The wallet-connect gate is unaffected.
  *
- * "Has agent" today reads a localStorage flag set optimistically when the
- * user signs Authorize — see useAgentRegistration.ts for the placeholder
- * rationale and the on-chain follow-up.
+ * Registration is decided by useAgentRegistration — see that file for the
+ * agent-authorized localStorage flag and the vault-share-balance check.
  */
 import { useState } from "react";
 import { useAccount, useConnect } from "wagmi";
@@ -35,7 +34,7 @@ type Props = Readonly<{
 export function AgentsPanel(props: Props) {
   const { isConnected } = useAccount();
   const { connect, connectors } = useConnect();
-  const status = useAgentRegistration(props.envClass);
+  const status = useAgentRegistration(props.vaultAddress);
   const [networkSyncError, setNetworkSyncError] = useState<string | undefined>(undefined);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   // `VITE_FORCE_ONBOARDING=1` (build-time) is the documented operator
