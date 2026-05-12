@@ -116,6 +116,28 @@ fn cli_uses_shared_formatter() {
     }
 }
 
+/// Every long-running service must keep a bootstrap-failure stderr
+/// path so an operator can see *why* the process is dying when
+/// `init_service` itself fails (e.g. another subscriber already
+/// installed). The architecture §14 contract permits direct stderr
+/// only for bootstrap-only paths — this is one of them.
+#[test]
+fn services_keep_bootstrap_stderr_fallback() {
+    for rel in REQUIRED_SERVICES {
+        let body = read_repo(rel);
+        assert!(
+            body.contains("logging init failed"),
+            "{rel} must print `<service>: logging init failed: <err>` to stderr when \
+             `rmpc_logging::init_service` returns Err (issue #247 bootstrap clause)."
+        );
+        assert!(
+            body.contains("eprintln!"),
+            "{rel} must use `eprintln!` for the bootstrap-failure path so the message \
+             reaches stderr before any subscriber is installed."
+        );
+    }
+}
+
 /// Exempt binaries must actually exist; stale entries hide real
 /// violations.
 #[test]
