@@ -35,27 +35,45 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Git tag to create and publish (e.g. v0.3.1)"
-        required: true
+        description: "Git tag to create and publish (e.g. v0.3.1). Ignored when dry_run=true."
+        required: false
         type: string
       commit_hash:
-        description: "Commit SHA to tag and release from"
-        required: true
+        description: "Commit SHA to build from. Defaults to the workflow ref's HEAD."
+        required: false
         type: string
+      dry_run:
+        description: "Build all targets and upload as workflow artifacts only — no tag, no GitHub Release. Use to validate the workflow from any branch."
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 jobs:
+  validate-inputs:
+    name: validate-inputs
+    if: github.event_name == 'workflow_dispatch' && !inputs.dry_run
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require tag for non-dry-run dispatch
+        run: |
+          if [ -z "${{ inputs.tag }}" ]; then
+            echo "::error::tag input is required when dry_run is false"
+            exit 1
+          fi
+
   create-tag:
     name: create-and-push-tag
-    if: github.event_name == 'workflow_dispatch'
+    needs: [validate-inputs]
+    if: github.event_name == 'workflow_dispatch' && !inputs.dry_run
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.commit_hash }}
+          ref: ${{ inputs.commit_hash || github.sha }}
 
       - name: Create and push git tag
         run: |
@@ -156,7 +174,13 @@ jobs:
 
       - name: Package tar.gz
         run: |
-          VERSION="${{ inputs.tag || github.ref_name }}"
+          if [ -n "${{ inputs.tag }}" ]; then
+            VERSION="${{ inputs.tag }}"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="dryrun-$(echo '${{ github.sha }}' | cut -c1-7)"
+          fi
           ARCHIVE="rmpc-${VERSION}-${{ matrix.os_label }}.tar.gz"
           tar -czf "${ARCHIVE}" \
             -C target/${{ matrix.target }}/release \
@@ -168,7 +192,17 @@ jobs:
         run: |
           ./target/${{ matrix.target }}/release/rmpc --version
 
+      - name: Upload workflow artifact (dry-run only)
+        if: inputs.dry_run
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARCHIVE }}
+          path: ${{ env.ARCHIVE }}
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Upload release asset
+        if: ${{ !inputs.dry_run }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
