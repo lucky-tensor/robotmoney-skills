@@ -153,5 +153,7 @@ interface IGateway {
 
     /// @notice Recorded owner (depositor EOA) for `agent`, or `address(0)`
     ///         if no policy is recorded.
+    /// @param agent The agent address whose recorded owner to look up.
+    /// @return The depositor EOA that authorized `agent`, or zero if none.
     function agentOwner(address agent) external view returns (address);
 }
