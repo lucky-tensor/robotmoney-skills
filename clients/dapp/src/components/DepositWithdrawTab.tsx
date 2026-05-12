@@ -1,45 +1,229 @@
+/**
+ * DepositWithdrawTab — wires the ERC-4626 vault entrypoints into the
+ * dapp (issue #257). Two symmetric sub-flows:
+ *
+ *   Deposit:  USDC.approve(vault, assets) → vault.deposit(assets, receiver)
+ *   Withdraw: vault.redeem(shares, receiver, owner)
+ *
+ * Both flows follow the same "simulate before write" gate used by
+ * AuthorizeTab and RotationTab — `useSimulateContract` must return a
+ * valid request before the submit button enables, and the TxPreview
+ * block renders the decoded calldata first. If the user's current
+ * USDC allowance is below the entered amount, the deposit submit
+ * stays disabled and a separate `Approve USDC` button is rendered.
+ *
+ * Note: the issue body refers to `gateway.depositToken`, but the
+ * deployed gateway only exposes an AGENT_ROLE-gated `deposit` entry
+ * point. Depositors interact directly with the ERC-4626 vault — this
+ * matches the production rmpc deposit flow (the gateway pulls USDC
+ * from the agent's caller and forwards into the same vault).
+ */
 import { useState } from "react";
+import { useAccount, useReadContract, useSimulateContract, useWriteContract } from "wagmi";
+import type { Address } from "viem";
+import { erc20Abi, vaultAbi } from "../lib/abi";
+import { buildVaultPreview, type VaultPreviewContext } from "../lib/vaultPreview";
+import { TxPreview } from "./TxPreview";
 
-export function DepositWithdrawTab() {
-  const [depositAmount, setDepositAmount] = useState("");
-  const [withdrawAmount, setWithdrawAmount] = useState("");
+type Props = Readonly<{
+  vaultAddress: Address;
+  usdcAddress: Address;
+  ctx: VaultPreviewContext;
+}>;
+
+/**
+ * Parse a human-typed amount (e.g. "1.5") into a 6-decimal bigint, the
+ * unit RobotMoneyVault and USDC use. Returns `null` on any input the
+ * user could not have intended as a positive USDC amount (empty,
+ * non-numeric, negative, more than 6 fractional digits).
+ *
+ * Kept pure and exported so the vitest can exercise the amount logic
+ * without rendering the component (see test plan).
+ */
+export function parseUsdcAmount(input: string): bigint | null {
+  const trimmed = input.trim();
+  if (trimmed === "") return null;
+  if (!/^\d+(\.\d{1,6})?$/.test(trimmed)) return null;
+  const [whole, frac = ""] = trimmed.split(".");
+  const padded = (frac + "000000").slice(0, 6);
+  const value = BigInt(whole) * 1_000_000n + BigInt(padded || "0");
+  if (value === 0n) return null;
+  return value;
+}
+
+export function DepositWithdrawTab(props: Props) {
+  const { address, isConnected } = useAccount();
+  const { writeContract, isPending } = useWriteContract();
+
+  const [depositInput, setDepositInput] = useState("");
+  const [withdrawInput, setWithdrawInput] = useState("");
+
+  const depositAssets = parseUsdcAmount(depositInput);
+  const withdrawShares = parseUsdcAmount(withdrawInput);
+
+  // -------- allowance read --------
+  const { data: allowance, refetch: refetchAllowance } = useReadContract({
+    address: props.usdcAddress,
+    abi: erc20Abi,
+    functionName: "allowance",
+    args: address ? [address, props.vaultAddress] : undefined,
+    query: { enabled: isConnected && Boolean(address) },
+  });
+
+  // -------- share balance read-back --------
+  const { data: shareBalance, refetch: refetchShareBalance } = useReadContract({
+    address: props.vaultAddress,
+    abi: vaultAbi,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    query: { enabled: isConnected && Boolean(address) },
+  });
+
+  // -------- deposit preview + simulation --------
+  const depositAction =
+    depositAssets !== null && address
+      ? ({ kind: "vaultDeposit", assets: depositAssets, receiver: address } as const)
+      : null;
+  const depositPreview = depositAction ? buildVaultPreview(depositAction, props.ctx) : null;
+
+  const allowanceOk =
+    depositAssets !== null && typeof allowance === "bigint" && allowance >= depositAssets;
+
+  const { data: depositSim } = useSimulateContract({
+    address: props.vaultAddress,
+    abi: vaultAbi,
+    functionName: "deposit",
+    args: depositAction ? [depositAction.assets, depositAction.receiver] : undefined,
+    query: {
+      enabled: isConnected && depositPreview?.ok === true && allowanceOk === true,
+    },
+  });
+
+  // -------- approve simulation (only when needed) --------
+  const approveNeeded =
+    depositAssets !== null &&
+    (allowance === undefined || (typeof allowance === "bigint" && allowance < depositAssets));
+  const { data: approveSim } = useSimulateContract({
+    address: props.usdcAddress,
+    abi: erc20Abi,
+    functionName: "approve",
+    args: depositAssets !== null ? [props.vaultAddress, depositAssets] : undefined,
+    query: { enabled: isConnected && approveNeeded === true },
+  });
+
+  // -------- redeem preview + simulation --------
+  const redeemAction =
+    withdrawShares !== null && address
+      ? ({
+          kind: "vaultRedeem",
+          shares: withdrawShares,
+          receiver: address,
+          owner: address,
+        } as const)
+      : null;
+  const redeemPreview = redeemAction ? buildVaultPreview(redeemAction, props.ctx) : null;
+
+  const { data: redeemSim } = useSimulateContract({
+    address: props.vaultAddress,
+    abi: vaultAbi,
+    functionName: "redeem",
+    args: redeemAction
+      ? [redeemAction.shares, redeemAction.receiver, redeemAction.owner]
+      : undefined,
+    query: { enabled: isConnected && redeemPreview?.ok === true },
+  });
+
+  const onApprove = () => {
+    if (!approveSim) return;
+    writeContract(approveSim.request, {
+      onSuccess: () => {
+        void refetchAllowance();
+      },
+    });
+  };
+
+  const onDeposit = () => {
+    if (!depositSim) return;
+    writeContract(depositSim.request, {
+      onSuccess: () => {
+        void refetchShareBalance();
+        void refetchAllowance();
+      },
+    });
+  };
+
+  const onWithdraw = () => {
+    if (!redeemSim) return;
+    writeContract(redeemSim.request, {
+      onSuccess: () => {
+        void refetchShareBalance();
+      },
+    });
+  };
 
   return (
     <div className="form-grid">
       <section data-testid="deposit-form">
         <h2>Deposit USDC</h2>
-        <p>Send USDC to the gateway. Receive vault shares.</p>
+        <p>Approve USDC, then deposit into the vault to receive rmUSDC shares.</p>
         <label>
           Amount (USDC)
           <input
             data-testid="deposit-amount"
-            value={depositAmount}
-            onChange={(e) => setDepositAmount(e.target.value)}
+            value={depositInput}
+            onChange={(e) => setDepositInput(e.target.value)}
             placeholder="0.00"
+            inputMode="decimal"
           />
         </label>
-        {/* TODO: vault ABI not yet wired — see src/lib/abi.ts */}
-        <button type="button" data-testid="deposit-submit" disabled>
+        {depositPreview && <TxPreview preview={depositPreview} />}
+        {approveNeeded && (
+          <button
+            type="button"
+            data-testid="deposit-approve"
+            onClick={onApprove}
+            disabled={!isConnected || !approveSim || isPending}
+          >
+            Approve USDC for vault
+          </button>
+        )}
+        <button
+          type="button"
+          data-testid="deposit-submit"
+          onClick={onDeposit}
+          disabled={
+            !isConnected || !depositSim || !allowanceOk || isPending || depositPreview?.ok !== true
+          }
+        >
           Sign deposit with wallet
         </button>
-        <p className="hint">Vault integration pending.</p>
+        <p className="hint" data-testid="deposit-share-balance">
+          rmUSDC balance: {typeof shareBalance === "bigint" ? shareBalance.toString() : "—"}
+        </p>
       </section>
+
       <section data-testid="withdraw-form">
         <h2>Withdraw</h2>
-        <p>Burn vault shares. Receive USDC.</p>
+        <p>Burn rmUSDC shares to redeem USDC (net of exitFeeBps).</p>
         <label>
-          Shares
+          Shares (rmUSDC)
           <input
             data-testid="withdraw-amount"
-            value={withdrawAmount}
-            onChange={(e) => setWithdrawAmount(e.target.value)}
+            value={withdrawInput}
+            onChange={(e) => setWithdrawInput(e.target.value)}
             placeholder="0.00"
+            inputMode="decimal"
           />
         </label>
-        <button type="button" data-testid="withdraw-submit" disabled>
+        {redeemPreview && <TxPreview preview={redeemPreview} />}
+        <button
+          type="button"
+          data-testid="withdraw-submit"
+          onClick={onWithdraw}
+          disabled={!isConnected || !redeemSim || isPending || redeemPreview?.ok !== true}
+        >
           Sign withdraw with wallet
         </button>
-        <p className="hint">Vault integration pending.</p>
       </section>
     </div>
   );
