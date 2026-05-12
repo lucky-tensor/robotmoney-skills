@@ -50,7 +50,14 @@ OpenClaw-only: place the config at `/etc/openclaw/rmpc.toml` instead, then expor
 
 ## 4. Create a keystore and run self-check
 
-`rmpc self-check` requires an encrypted keystore and passphrase. If you don't have a key pair yet:
+The keystore passphrase is supplied via `RMPC_KEYSTORE_PASSPHRASE`. For production use, the operator should export it once before starting the agent runtime — the agent process inherits the variable and passes it to every `rmpc` invocation automatically:
+
+```bash
+export RMPC_KEYSTORE_PASSPHRASE="your-passphrase"
+opencode  # or whichever agent runtime
+```
+
+If you don't have a key pair yet, create one:
 
 ```bash
 # Generate a random private key
