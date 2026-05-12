@@ -110,11 +110,13 @@ contract MockVault is ERC20 {
     }
 
     /// @notice Maximum shares redeemable for `owner` (their full balance).
+    /// @param  owner Address to query.
     function maxRedeem(address owner) external view returns (uint256) {
         return balanceOf(owner);
     }
 
     /// @notice Preview assets returned for redeeming `shares` (1:1, no exit fee).
+    /// @param  shares Amount of `rmUSDC` shares to preview.
     function previewRedeem(uint256 shares) external pure returns (uint256) {
         return shares;
     }
