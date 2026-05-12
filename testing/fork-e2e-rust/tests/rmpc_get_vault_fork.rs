@@ -150,12 +150,11 @@ fn run_rmpc(cfg: &Path, args: &[&str]) -> Value {
     v
 }
 
-// TODO(#249): vault address in the fork fixture resolves through a
-// transparent proxy whose admin slot collides with the default `from`
-// used by `eth_call`, reverting `asset()`/`decimals()` before reaching
-// the implementation. Skipped until the fixture-side fix in #249 lands.
+// Fixed in #249: fork-fixture-side repair of the USDC proxy admin slot.
+// The vault itself is a non-proxy deployment per
+// `docs/technical/smart-contracts.md`; sub-reads against it were never
+// blocked, but this test exercised allowance/balance through USDC too.
 #[test]
-#[ignore = "blocked on #249: fork fixture proxy-admin collision"]
 fn rmpc_get_vault_fork_base_mainnet() {
     skip_if_no_fork!();
     let fx = ForkFixture::new().expect("boot fork");

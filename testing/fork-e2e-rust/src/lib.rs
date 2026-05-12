@@ -172,6 +172,16 @@ const LOCAL_LAG_BLOCKS: u64 = 50;
 /// per §3.1 of the ADR.
 pub const BASE_CHAIN_ID: u64 = 8453;
 
+/// Storage slot used by the Base USDC `FiatTokenProxy` to record
+/// the proxy admin. Equal to `keccak256("org.zeppelinos.proxy.admin")`
+/// (see Centre's `AdminUpgradeabilityProxy` source). Used by
+/// [`ForkFixture::repair_usdc_proxy_admin`] to break the
+/// `address(0)` admin / `address(0)` caller collision documented
+/// in issue #249.
+pub const USDC_PROXY_ADMIN_SLOT: B256 = alloy_primitives::b256!(
+    "10d6a54a4754c8869d6886b5f5d7fbfa5b4522237ea5c60d11bc4e7a1ff9390b"
+);
+
 /// Effective fork pin resolved from environment.
 #[derive(Debug, Clone)]
 pub struct ForkPin {
@@ -296,14 +306,64 @@ impl ForkFixture {
             )));
         }
 
-        Ok(ForkFixture {
+        let fx = ForkFixture {
             backend,
             rpc_url,
             rpc_label,
             pin,
             rpc,
             tx_hashes: Mutex::new(Vec::new()),
-        })
+        };
+        fx.repair_usdc_proxy_admin()?;
+        Ok(fx)
+    }
+
+    /// Repair the Base USDC transparent-proxy admin slot if it
+    /// resolves to `address(0)` on the forked state.
+    ///
+    /// Background (issue #249): Base USDC (`FiatTokenProxy`) is a
+    /// zeppelinos `AdminUpgradeabilityProxy`. Its `ifAdmin` modifier
+    /// dispatches the call to the admin path when
+    /// `msg.sender == _admin()`. When the proxy is reached via
+    /// `eth_call` with the default `from` of `address(0)` and the
+    /// admin slot is also `address(0)`, the equality holds and the
+    /// proxy reverts on any non-admin selector (`balanceOf`,
+    /// `allowance`, ...) before reaching the implementation. rmpc is
+    /// the production client and must never spoof `from` to dodge
+    /// this — so the fixture repairs the admin slot instead.
+    ///
+    /// The admin storage slot is `keccak256("org.zeppelinos.proxy.admin")`
+    /// = `0x10d6a54a4754c8869d6886b5f5d7fbfa5b4522237ea5c60d11bc4e7a1ff9390b`.
+    /// We write the canonical `ADMIN_SAFE` sentinel into it — any
+    /// non-zero address would do; using `ADMIN_SAFE` keeps the fork
+    /// surface aligned with the documented address set.
+    ///
+    /// Idempotent: if the slot is already non-zero (e.g. live fork
+    /// from an upstream archive where the real admin is set), this
+    /// is a no-op aside from the read.
+    fn repair_usdc_proxy_admin(&self) -> Result<(), HarnessError> {
+        let admin_slot = USDC_PROXY_ADMIN_SLOT;
+        let current = self.rpc.get_storage_at(addresses::USDC, admin_slot)?;
+        if current != B256::ZERO {
+            return Ok(());
+        }
+        // Pack the 20-byte sentinel into the low bytes of a 32-byte word.
+        let mut word = [0u8; 32];
+        word[12..].copy_from_slice(addresses::ADMIN_SAFE.as_slice());
+        let value = B256::from(word);
+        self.rpc.set_storage_at(addresses::USDC, admin_slot, value)?;
+
+        // Regression guard: the slot must read back as non-zero. If
+        // it doesn't, the proxy admin collision will silently come
+        // back — fail loudly here instead.
+        let after = self.rpc.get_storage_at(addresses::USDC, admin_slot)?;
+        if after == B256::ZERO {
+            return Err(HarnessError::Rpc(format!(
+                "USDC proxy admin slot at {:?} still resolves to address(0) after anvil_setStorageAt — fork-fixture repair failed (issue #249)",
+                admin_slot
+            )));
+        }
+        Ok(())
     }
 
     /// Build a fresh ephemeral account funded with ETH and (optionally)
@@ -639,6 +699,38 @@ impl Rpc {
             serde_json::json!([fmt_addr(addr), format!("0x{:x}", wei)]),
         )?;
         Ok(())
+    }
+
+    /// Write a 32-byte word into `addr`'s storage at `slot`.
+    /// Thin wrapper over `anvil_setStorageAt`. Used by the fixture
+    /// to repair transparent-proxy admin slots that resolve to
+    /// `address(0)` on the forked state (see #249).
+    pub fn set_storage_at(
+        &self,
+        addr: Address,
+        slot: B256,
+        value: B256,
+    ) -> Result<(), HarnessError> {
+        let _: serde_json::Value = self.rpc(
+            "anvil_setStorageAt",
+            serde_json::json!([
+                fmt_addr(addr),
+                format!("{:#x}", slot),
+                format!("{:#x}", value),
+            ]),
+        )?;
+        Ok(())
+    }
+
+    /// Read a 32-byte word from `addr`'s storage at `slot`.
+    /// Thin wrapper over `eth_getStorageAt`. Used by the fixture
+    /// to verify proxy-admin repair stuck (see #249).
+    pub fn get_storage_at(&self, addr: Address, slot: B256) -> Result<B256, HarnessError> {
+        let s: String = self.rpc(
+            "eth_getStorageAt",
+            serde_json::json!([fmt_addr(addr), format!("{:#x}", slot), "latest"]),
+        )?;
+        parse_b256(&s)
     }
 
     pub fn impersonate(&self, addr: Address) -> Result<(), HarnessError> {
