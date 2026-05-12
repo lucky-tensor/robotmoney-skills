@@ -147,34 +147,36 @@ export function OnboardingWizard(props: Props) {
       </header>
 
       {step === 1 && (
-        <section data-testid="wizard-step-1">
-          <h2>Bootstrap your agent</h2>
-          <p>
-            Paste the prompt below into a fresh session of any supported agent runtime. The agent
-            will follow <a href={BOOTSTRAP_DOC_URL}>BOOTSTRAP.md</a> to install <code>rmpc</code>,
-            write its operator config, and print its public address — copy that address; you&apos;ll
-            paste it on the next step.
-          </p>
+        <>
+          <section data-testid="wizard-step-1">
+            <h2>Bootstrap your agent</h2>
+            <p>
+              Paste the prompt below into a fresh session of any supported agent runtime. The agent
+              will follow <a href={BOOTSTRAP_DOC_URL}>BOOTSTRAP.md</a> to install <code>rmpc</code>,
+              write its operator config, and print its public address — copy that address;
+              you&apos;ll paste it on the next step.
+            </p>
+            <pre data-testid="bootstrap-prompt" className="bootstrap-prompt">
+              {BOOTSTRAP_PROMPT}
+            </pre>
+            <button
+              type="button"
+              data-testid="copy-prompt"
+              onClick={() => navigator.clipboard?.writeText(BOOTSTRAP_PROMPT)}
+            >
+              Copy prompt
+            </button>
+            <div className="wizard-nav">
+              <button type="button" data-testid="step-1-next" onClick={() => setStep(2)}>
+                I&apos;ve started the agent — next
+              </button>
+            </div>
+          </section>
           <p className="hint">
             We never generate or hold private keys in the dapp. Any vendor-specific nuances are
             documented inline in <code>BOOTSTRAP.md</code>.
           </p>
-          <pre data-testid="bootstrap-prompt" className="bootstrap-prompt">
-            {BOOTSTRAP_PROMPT}
-          </pre>
-          <button
-            type="button"
-            data-testid="copy-prompt"
-            onClick={() => navigator.clipboard?.writeText(BOOTSTRAP_PROMPT)}
-          >
-            Copy prompt
-          </button>
-          <div className="wizard-nav">
-            <button type="button" data-testid="step-1-next" onClick={() => setStep(2)}>
-              I&apos;ve started the agent — next
-            </button>
-          </div>
-        </section>
+        </>
       )}
 
       {step === 2 && (
