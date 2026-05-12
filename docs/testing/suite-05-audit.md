@@ -118,11 +118,10 @@ is a documented cost (~20 s in CI cache) that is dwarfed by the
 
 ## Follow-up issues
 
-- **Slim duplicates.** A separate issue should migrate
+- **#275** — slim duplicates: migrate
   `rmpc_get_vault_rejects_malformed_address` and
   `rmpc_get_deposit_unknown_id_against_fork` into suite 6, deleting
-  them from suite 5. (Not yet filed — to be opened after this audit
-  lands; tracked on the Plan.)
+  them from suite 5.
 - **#249** — unblock the four `#[ignore]`d `rmpc_get_*_fork` tests by
   fixing the USDC transparent-proxy admin collision in the fork
   fixture. Already on the Plan.
