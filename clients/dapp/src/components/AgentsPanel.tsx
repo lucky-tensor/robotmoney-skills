@@ -37,6 +37,7 @@ export function AgentsPanel(props: Props) {
   const { connect, connectors } = useConnect();
   const status = useAgentRegistration(props.envClass);
   const [networkSyncError, setNetworkSyncError] = useState<string | undefined>(undefined);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   // `VITE_FORCE_ONBOARDING=1` (build-time) is the documented operator
   // override; `?force-onboarding=1` (URL query) is the dapp-side hook
   // the issue-#261 Playwright e2e suite uses to drive the onboarding
@@ -95,7 +96,7 @@ export function AgentsPanel(props: Props) {
     );
   }
 
-  if (status === "unregistered" || forceOnboarding) {
+  if ((status === "unregistered" || forceOnboarding) && !onboardingDismissed) {
     const ctx: PreviewContext = {
       gateway: props.gatewayAddress,
       gatewayCodeHashVerified: props.gatewayVerificationState.status === "verified",
@@ -107,6 +108,7 @@ export function AgentsPanel(props: Props) {
         ctx={ctx}
         env={props.flagEnv}
         now={props.now}
+        onDismiss={() => setOnboardingDismissed(true)}
       />
     );
   }

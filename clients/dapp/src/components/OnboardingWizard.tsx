@@ -40,6 +40,7 @@ type Props = Readonly<{
   /** Vite build env. Read here only to look up VITE_FAUCET_HARNESS_PRIVATE_KEY for the testnet seed step. */
   env: Record<string, string | undefined>;
   now: number;
+  onDismiss?: () => void;
 }>;
 
 type Step = 1 | 2 | 3;
@@ -124,7 +125,20 @@ export function OnboardingWizard(props: Props) {
   return (
     <main className="onboarding-wizard" data-testid="onboarding-wizard">
       <header>
-        <h1>Set up your first agent</h1>
+        <div className="wizard-header-row">
+          <h1>Set up your first agent</h1>
+          {props.onDismiss && (
+            <button
+              type="button"
+              data-testid="wizard-dismiss"
+              className="wizard-dismiss"
+              onClick={props.onDismiss}
+              aria-label="Skip onboarding and open admin"
+            >
+              Skip → Admin
+            </button>
+          )}
+        </div>
         <ol className="wizard-steps" data-testid="wizard-steps" aria-label="Onboarding progress">
           <li data-active={step === 1}>1. Bootstrap agent</li>
           <li data-active={step === 2}>2. Agent address &amp; policy</li>
