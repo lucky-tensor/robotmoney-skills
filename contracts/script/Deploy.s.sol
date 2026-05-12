@@ -92,6 +92,11 @@ contract Deploy is Script {
         Params memory p = _readEnvParams();
         vm.startBroadcast();
         d = _doDeploy(p);
+        // In broadcast mode the broadcaster IS d.admin (the smoke-test devnet
+        // runs the deploy script with the admin private key), so msg.sender on
+        // the addAdapter call is d.admin which holds ADMIN_ROLE.  No vm.prank
+        // is required — and vm.prank is prohibited inside startBroadcast.
+        d.vault.addAdapter(address(d.adapter), 10_000);
         vm.stopBroadcast();
 
         _writeDeploymentJson(d);
@@ -101,7 +106,12 @@ contract Deploy is Script {
     ///         or test-account context. No JSON is written.
     /// @return d Struct containing all deployed contract addresses and key parameters.
     function runInProcess() external returns (Deployed memory d) {
-        d = _doDeploy(_readEnvParams());
+        Params memory p = _readEnvParams();
+        d = _doDeploy(p);
+        // In-process (no broadcast): addAdapter requires ADMIN_ROLE which is
+        // held by d.admin. Use vm.prank to call it as d.admin.
+        vm.prank(d.admin);
+        d.vault.addAdapter(address(d.adapter), 10_000);
     }
 
     /// @notice Direct-parameter variant for forge tests. Skips env-var
@@ -131,6 +141,10 @@ contract Deploy is Script {
         p.maxPerWindow = DEFAULT_MAX_PER_WINDOW;
         p.usdcAddress = usdc_;
         d = _doDeploy(p);
+        // In-process (no broadcast): addAdapter requires ADMIN_ROLE which is
+        // held by d.admin. Use vm.prank to call it as d.admin.
+        vm.prank(d.admin);
+        d.vault.addAdapter(address(d.adapter), 10_000);
     }
 
     struct Params {
@@ -198,11 +212,11 @@ contract Deploy is Script {
         //      feeRecipient  = admin    (any non-zero address, fees are 0)
         //      vaultAdmin    = d.admin  (receives ADMIN_ROLE for vault management)
         //
-        //    addAdapter requires ADMIN_ROLE. We use vm.prank(d.admin) so the
-        //    call originates from the address that holds ADMIN_ROLE, regardless
-        //    of whether we're in a forge test (runInProcessWith) or a broadcast
-        //    script (run). In a broadcast context, vm.prank(d.admin) broadcasts
-        //    the addAdapter transaction as d.admin, which is correct.
+        //    addAdapter requires ADMIN_ROLE.  In `run()` (broadcast) the
+        //    broadcaster IS d.admin (smoke-test devnet deploys from the admin
+        //    key), so the call succeeds without any cheatcode.  In the test
+        //    helpers (runInProcessWith / runInProcess) the caller wraps
+        //    _wireAdapter with vm.prank(d.admin) — see those callers.
         require(p.usdcAddress != address(0), "USDC_ADDRESS=0");
         require(p.usdcAddress.code.length > 0, "USDC_ADDRESS has no code");
         d.usdc = p.usdcAddress;
@@ -216,13 +230,11 @@ contract Deploy is Script {
             d.admin, // feeRecipient (fees are 0, any non-zero addr)
             d.admin // vaultAdmin — receives ADMIN_ROLE
         );
-        // Deploy PassthroughAdapter and register it with the vault.
-        // capBps = 10_000 (100%) — single adapter gets full allocation.
-        // vm.prank(d.admin) is used because addAdapter requires ADMIN_ROLE,
-        // and d.admin holds that role after vault deployment above.
+        // Deploy PassthroughAdapter.  Registration (addAdapter) is done by
+        // the callers of _doDeploy — see run(), runInProcess(), and
+        // runInProcessWith() — because the caller context differs between
+        // broadcast and in-process test modes.
         d.adapter = new PassthroughAdapter(d.usdc, address(d.vault));
-        vm.prank(d.admin);
-        d.vault.addAdapter(address(d.adapter), 10_000);
         d.gateway =
             new RobotMoneyGateway(IERC20(d.usdc), IERC4626(address(d.vault)), d.admin, d.pauser);
 
