@@ -322,8 +322,40 @@ impl Fixture {
         };
         let compose_files_owned: Vec<String> =
             compose_files.iter().map(|s| s.to_string()).collect();
+        let mut compose_log_env = vec![
+            ("GETH_RPC_PORT", chain_ports.rpc_port.to_string()),
+            ("GETH_WS_PORT", chain_ports.ws_port.to_string()),
+            ("GETH_AUTHRPC_PORT", chain_ports.authrpc_port.to_string()),
+            ("BEACON_PORT", chain_ports.beacon_port.to_string()),
+        ];
+        if let Some(ref p) = alloc_overlay_path {
+            compose_log_env.push(("SMOKE_GENESIS_ALLOC_FILE", p.to_string_lossy().to_string()));
+            std::env::set_var("SMOKE_GENESIS_ALLOC_FILE", p);
+        }
+        let compose_project = "ethereum-testnet";
+        let genesis_timestamp =
+            std::env::var("GENESIS_TIMESTAMP").unwrap_or_else(|_| "unset".to_string());
+        let overlay_mode = if alloc_overlay_path.is_some() {
+            "alloc-overlay"
+        } else {
+            "clean-room"
+        };
+        logging::info(
+            "smoke-test",
+            format!(
+                "chain startup config: project={compose_project} mode={overlay_mode} genesis_timestamp={genesis_timestamp} rpc_port={} ws_port={} authrpc_port={} beacon_port={} compose_files={}",
+                chain_ports.rpc_port,
+                chain_ports.ws_port,
+                chain_ports.authrpc_port,
+                chain_ports.beacon_port,
+                compose_files_owned.join(" "),
+            ),
+        );
         let cleanup_compose_files = compose_files_owned.clone();
         let cleanup_compose_dir = compose_dir.clone();
+        let cleanup_alloc_overlay_path = alloc_overlay_path
+            .as_ref()
+            .map(|p| p.to_string_lossy().to_string());
         let cleanup = move || {
             let mut c = Command::new("docker");
             c.arg("compose");
@@ -331,6 +363,9 @@ impl Fixture {
                 c.arg(f);
             }
             c.args(["down", "-v", "--remove-orphans"]);
+            if let Some(ref p) = cleanup_alloc_overlay_path {
+                c.env("SMOKE_GENESIS_ALLOC_FILE", p);
+            }
             c.current_dir(&cleanup_compose_dir);
             let _ = c.status();
         };
@@ -356,6 +391,14 @@ impl Fixture {
         let up_out = up_cmd.output().map_err(HarnessError::from)?;
         logging::log_command_output("compose", &up_out);
         if !up_out.status.success() {
+            log_compose_state(
+                &compose_dir,
+                &compose_files_owned,
+                &compose_log_env,
+                "chain-compose",
+                "compose up failed",
+                200,
+            );
             cleanup();
             return Err(HarnessError::Docker(format!(
                 "compose up devnet failed: {:?}",
@@ -364,37 +407,84 @@ impl Fixture {
         }
 
         let mut compose_log_followers = Vec::new();
-        let mut compose_log_env = vec![
-            ("GETH_RPC_PORT", chain_ports.rpc_port.to_string()),
-            ("GETH_WS_PORT", chain_ports.ws_port.to_string()),
-            ("GETH_AUTHRPC_PORT", chain_ports.authrpc_port.to_string()),
-            ("BEACON_PORT", chain_ports.beacon_port.to_string()),
-        ];
-        if let Some(ref p) = alloc_overlay_path {
-            compose_log_env.push(("SMOKE_GENESIS_ALLOC_FILE", p.to_string_lossy().to_string()));
-        }
         let chain_log_follower = start_compose_log_follower(
             &compose_dir,
             &compose_files_owned,
             &compose_log_env,
             "chain-compose",
         )
-        .inspect_err(|_| {
+        .inspect_err(|err| {
+            logging::error(
+                "smoke-test",
+                format!("chain compose log follower failed: {err}"),
+            );
+            log_compose_state(
+                &compose_dir,
+                &compose_files_owned,
+                &compose_log_env,
+                "chain-compose",
+                "log follower startup failure",
+                200,
+            );
             cleanup();
         })?;
         compose_log_followers.push(chain_log_follower);
 
         eprintln!("smoke-test: waiting for chain containers to become ready...");
         logging::info("smoke-test", "waiting for chain containers to become ready");
-        wait_for_rpc(&rpc_url, Duration::from_secs(180))?;
+        wait_for_rpc(&rpc_url, Duration::from_secs(180)).inspect_err(|err| {
+            logging::error("smoke-test", format!("chain RPC readiness failed: {err}"));
+            log_compose_state(
+                &compose_dir,
+                &compose_files_owned,
+                &compose_log_env,
+                "chain-compose",
+                "RPC readiness timeout",
+                200,
+            );
+            cleanup();
+        })?;
+        logging::info(
+            "smoke-test",
+            "chain RPC ready; waiting for EL/CL block production",
+        );
 
         // Wait for real block production: RPC up != consensus up.
-        wait_for_block_height(&rpc_url, 1, Duration::from_secs(240)).inspect_err(|_| {
-            let _ = Command::new("docker")
-                .args(["compose", "down", "-v", "--remove-orphans"])
-                .current_dir(&compose_dir)
-                .status();
+        wait_for_block_height(&rpc_url, 1, Duration::from_secs(240)).inspect_err(|err| {
+            logging::error(
+                "smoke-test",
+                format!("chain block-production readiness failed: {err}"),
+            );
+            log_compose_state(
+                &compose_dir,
+                &compose_files_owned,
+                &compose_log_env,
+                "chain-compose",
+                "block-production timeout",
+                200,
+            );
+            cleanup();
         })?;
+        logging::info("smoke-test", "chain EL/CL stack ready");
+        wait_for_rpc(&rpc_url, Duration::from_secs(60)).inspect_err(|err| {
+            logging::error(
+                "smoke-test",
+                format!("post-readiness RPC stability check failed: {err}"),
+            );
+            log_compose_state(
+                &compose_dir,
+                &compose_files_owned,
+                &compose_log_env,
+                "chain-compose",
+                "post-readiness RPC stability failure",
+                200,
+            );
+            cleanup();
+        })?;
+        logging::info(
+            "smoke-test",
+            "post-readiness chain RPC stable; starting deployment",
+        );
 
         let dep_out = tmp.path().join("deployment.json");
         let agent_hex = format!("{:#x}", agent_address());
@@ -406,18 +496,48 @@ impl Fixture {
             PAUSER_ADDRESS_HEX,
             extra_deploy_env,
         )
-        .inspect_err(|_| {
-            let _ = Command::new("docker")
-                .args(["compose", "down", "-v", "--remove-orphans"])
-                .current_dir(&compose_dir)
-                .status();
+        .inspect_err(|err| {
+            logging::error("smoke-test", format!("forge deploy failed: {err}"));
+            log_compose_state(
+                &compose_dir,
+                &compose_files_owned,
+                &compose_log_env,
+                "chain-compose",
+                "deployment failure",
+                200,
+            );
+            cleanup();
         })?;
 
         let deployment = read_deployment(&dep_out)?;
         let chain_id = deployment.chain_id;
 
-        fund_eth_from_deployer(&rpc_url, &agent_hex, "1000000000000000000")?;
-        fund_eth_from_deployer(&rpc_url, PAUSER_ADDRESS_HEX, "1000000000000000000")?;
+        fund_eth_from_deployer(&rpc_url, &agent_hex, "1000000000000000000").inspect_err(|err| {
+            logging::error("smoke-test", format!("funding agent failed: {err}"));
+            log_compose_state(
+                &compose_dir,
+                &compose_files_owned,
+                &compose_log_env,
+                "chain-compose",
+                "agent funding failure",
+                200,
+            );
+            cleanup();
+        })?;
+        fund_eth_from_deployer(&rpc_url, PAUSER_ADDRESS_HEX, "1000000000000000000").inspect_err(
+            |err| {
+                logging::error("smoke-test", format!("funding pauser failed: {err}"));
+                log_compose_state(
+                    &compose_dir,
+                    &compose_files_owned,
+                    &compose_log_env,
+                    "chain-compose",
+                    "funding failure",
+                    200,
+                );
+                cleanup();
+            },
+        )?;
 
         let fx = Fixture {
             compose_dir,
@@ -440,11 +560,17 @@ impl Fixture {
         // genesis grant (1M USDC by default in fork-block.json).
         const AGENT_USDC_GRANT: u128 = 500_000 * 1_000_000; // 500k USDC, 6dp
         fx.fund_usdc(fx.agent(), AGENT_USDC_GRANT)
-            .inspect_err(|_| {
-                let _ = Command::new("docker")
-                    .args(["compose", "down", "-v", "--remove-orphans"])
-                    .current_dir(&fx.compose_dir)
-                    .status();
+            .inspect_err(|err| {
+                logging::error("smoke-test", format!("funding USDC failed: {err}"));
+                log_compose_state(
+                    &fx.compose_dir,
+                    &compose_files_owned,
+                    &compose_log_env,
+                    "chain-compose",
+                    "USDC funding failure",
+                    200,
+                );
+                cleanup();
             })?;
 
         Ok(fx)
@@ -635,6 +761,7 @@ impl Fixture {
 
 impl Drop for Fixture {
     fn drop(&mut self) {
+        logging::info("chain-compose", "tearing down chain compose stack");
         for child in &mut self.compose_log_followers {
             let _ = child.kill();
             let _ = child.wait();
@@ -650,6 +777,7 @@ impl Drop for Fixture {
             ])
             .current_dir(&self.compose_dir)
             .status();
+        logging::info("chain-compose", "chain compose teardown complete");
     }
 }
 
@@ -716,7 +844,84 @@ fn parse_addr(s: &str) -> Address {
 
 fn wait_for_rpc(url: &str, timeout: Duration) -> Result<(), HarnessError> {
     logging::debug("rpc", format!("polling {url} for chain RPC health"));
-    test_utils::wait_for_rpc(url, timeout).map_err(|_| HarnessError::RpcTimeout {
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .map_err(|e| HarnessError::other(format!("reqwest builder: {e}")))?;
+    let body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_chainId",
+        "params": []
+    });
+    let deadline = std::time::Instant::now() + timeout;
+    #[allow(unused_assignments)]
+    let mut last_error: Option<String> = None;
+    let mut unreachable_since: Option<std::time::Instant> = None;
+    while std::time::Instant::now() < deadline {
+        match client.post(url).json(&body).send() {
+            Ok(resp) if resp.status().is_success() => {
+                if let Ok(json) = resp.json::<serde_json::Value>() {
+                    if json.get("result").is_some() {
+                        if let Some(since) = unreachable_since.take() {
+                            logging::info(
+                                "rpc",
+                                format!(
+                                    "RPC recovered after {}s: {url}",
+                                    since.elapsed().as_secs()
+                                ),
+                            );
+                        }
+                        logging::debug("rpc", format!("{url} returned chainId"));
+                        return Ok(());
+                    }
+                    last_error = Some("missing result field".to_string());
+                } else {
+                    last_error = Some("invalid JSON-RPC response".to_string());
+                }
+            }
+            Ok(resp) => {
+                last_error = Some(format!("HTTP {}", resp.status()));
+                if unreachable_since.is_none() {
+                    unreachable_since = Some(std::time::Instant::now());
+                    logging::warn(
+                        "rpc",
+                        format!(
+                            "RPC unreachable at {url}: {}",
+                            last_error.as_deref().unwrap_or("unknown error")
+                        ),
+                    );
+                }
+            }
+            Err(err) => {
+                last_error = Some(err.to_string());
+                if unreachable_since.is_none() {
+                    unreachable_since = Some(std::time::Instant::now());
+                    logging::warn(
+                        "rpc",
+                        format!(
+                            "RPC unreachable at {url}: {}",
+                            last_error.as_deref().unwrap_or("unknown error")
+                        ),
+                    );
+                }
+            }
+        }
+        if let Some(since) = unreachable_since {
+            if since.elapsed() >= Duration::from_secs(30) {
+                logging::warn(
+                    "rpc",
+                    format!(
+                        "RPC still unreachable at {url} after {}s: {}",
+                        since.elapsed().as_secs(),
+                        last_error.as_deref().unwrap_or("unknown error")
+                    ),
+                );
+            }
+        }
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    Err(HarnessError::RpcTimeout {
         url: url.to_string(),
         timeout,
     })
@@ -727,7 +932,130 @@ fn wait_for_block_height(url: &str, target: u64, timeout: Duration) -> Result<()
         "rpc",
         format!("polling {url} for block height {target} readiness"),
     );
-    test_utils::wait_for_block_height(url, target, timeout).map_err(|_| HarnessError::RpcTimeout {
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .map_err(|e| HarnessError::other(format!("reqwest builder: {e}")))?;
+    let body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_blockNumber",
+        "params": []
+    });
+    let deadline = std::time::Instant::now() + timeout;
+    let mut last_error: Option<String> = None;
+    let mut last_block: Option<u64> = None;
+    let mut last_progress = std::time::Instant::now();
+    let mut first_success_logged = false;
+    let mut stall_warned = false;
+    let mut unreachable_since: Option<std::time::Instant> = None;
+    while std::time::Instant::now() < deadline {
+        match client.post(url).json(&body).send() {
+            Ok(resp) if resp.status().is_success() => {
+                if let Ok(json) = resp.json::<serde_json::Value>() {
+                    if let Some(block_hex) = json.get("result").and_then(|v| v.as_str()) {
+                        if let Ok(block) =
+                            u64::from_str_radix(block_hex.trim_start_matches("0x"), 16)
+                        {
+                            let now = chrono::Utc::now()
+                                .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+                            if !first_success_logged {
+                                logging::info(
+                                    "rpc",
+                                    format!(
+                                        "first eth_blockNumber response at {now}: block={block} url={url}"
+                                    ),
+                                );
+                                first_success_logged = true;
+                            }
+                            if let Some(since) = unreachable_since.take() {
+                                logging::info(
+                                    "rpc",
+                                    format!(
+                                        "RPC recovered after {}s: block={block} url={url}",
+                                        since.elapsed().as_secs()
+                                    ),
+                                );
+                            }
+                            if last_block.map_or(true, |prev| block > prev) {
+                                last_block = Some(block);
+                                last_progress = std::time::Instant::now();
+                                stall_warned = false;
+                            } else if !stall_warned
+                                && last_block.is_some()
+                                && last_progress.elapsed() >= Duration::from_secs(30)
+                            {
+                                logging::warn(
+                                    "rpc",
+                                    format!(
+                                        "block production stalled at block={} for {}s on {url}",
+                                        last_block.unwrap_or(block),
+                                        last_progress.elapsed().as_secs()
+                                    ),
+                                );
+                                stall_warned = true;
+                            }
+                            if block >= target {
+                                logging::info(
+                                    "rpc",
+                                    format!(
+                                        "block target reached: block={block} target={target} url={url}"
+                                    ),
+                                );
+                                return Ok(());
+                            }
+                        } else {
+                            last_error = Some(format!("invalid block hex {block_hex}"));
+                        }
+                    } else {
+                        last_error = Some("missing result field".to_string());
+                    }
+                } else {
+                    last_error = Some("invalid JSON-RPC response".to_string());
+                }
+            }
+            Ok(resp) => {
+                last_error = Some(format!("HTTP {}", resp.status()));
+                if unreachable_since.is_none() {
+                    unreachable_since = Some(std::time::Instant::now());
+                    logging::warn(
+                        "rpc",
+                        format!(
+                            "RPC unreachable at {url}: {}",
+                            last_error.as_deref().unwrap_or("unknown error")
+                        ),
+                    );
+                }
+            }
+            Err(err) => {
+                last_error = Some(err.to_string());
+                if unreachable_since.is_none() {
+                    unreachable_since = Some(std::time::Instant::now());
+                    logging::warn(
+                        "rpc",
+                        format!(
+                            "RPC unreachable at {url}: {}",
+                            last_error.as_deref().unwrap_or("unknown error")
+                        ),
+                    );
+                }
+            }
+        }
+        if let Some(since) = unreachable_since {
+            if since.elapsed() >= Duration::from_secs(30) {
+                logging::warn(
+                    "rpc",
+                    format!(
+                        "RPC still unreachable at {url} after {}s: {}",
+                        since.elapsed().as_secs(),
+                        last_error.as_deref().unwrap_or("unknown error")
+                    ),
+                );
+            }
+        }
+        std::thread::sleep(Duration::from_millis(1000));
+    }
+    Err(HarnessError::RpcTimeout {
         url: url.to_string(),
         timeout,
     })
@@ -878,6 +1206,51 @@ fn start_compose_log_follower(
     Ok(child)
 }
 
+fn log_compose_state(
+    compose_dir: &Path,
+    compose_args: &[String],
+    compose_env: &[(&str, String)],
+    service_label: &'static str,
+    reason: &str,
+    tail_lines: u32,
+) {
+    logging::warn(
+        service_label,
+        format!("capturing compose state for {reason}; ps/logs follow"),
+    );
+
+    let mut ps = Command::new("docker");
+    ps.arg("compose");
+    for arg in compose_args {
+        ps.arg(arg);
+    }
+    for (key, value) in compose_env {
+        ps.env(key, value);
+    }
+    ps.args(["ps", "--all", "--no-trunc"])
+        .current_dir(compose_dir);
+    match ps.output() {
+        Ok(out) => logging::log_command_output(service_label, &out),
+        Err(err) => logging::error(service_label, format!("compose ps failed: {err}")),
+    }
+
+    let mut logs = Command::new("docker");
+    logs.arg("compose");
+    for arg in compose_args {
+        logs.arg(arg);
+    }
+    for (key, value) in compose_env {
+        logs.env(key, value);
+    }
+    let tail = tail_lines.to_string();
+    logs.args(["logs", "--no-color", "--timestamps", "--tail", &tail])
+        .current_dir(compose_dir);
+    match logs.output() {
+        Ok(out) => logging::log_command_output(service_label, &out),
+        Err(err) => logging::error(service_label, format!("compose logs failed: {err}")),
+    }
+}
+
 fn parse_compose_log_line(line: &str) -> Option<(String, String)> {
     let (service, message) = line.split_once('|')?;
     let service = service.trim();
@@ -886,6 +1259,14 @@ fn parse_compose_log_line(line: &str) -> Option<(String, String)> {
         return None;
     }
     Some((service.to_string(), message.to_string()))
+}
+
+fn public_endpoints_label(public_endpoints: &PublicEndpoints) -> &'static str {
+    match public_endpoints {
+        PublicEndpoints::Local => "local",
+        PublicEndpoints::EphemeralTunnel => "ephemeral-tunnel",
+        PublicEndpoints::Named { .. } => "named",
+    }
 }
 
 // -- DappStack --------------------------------------------------------
@@ -984,6 +1365,44 @@ impl DappStack {
         let local_dapp_url = ports.dapp_url();
         let local_explorer_api_url = ports.explorer_api_url();
         let local_rpc_url = fixture.rpc_url().to_string();
+        let dapp_compose_files = vec!["-f".to_string(), "docker-compose.dapp.yaml".to_string()];
+        let dapp_log_env = vec![
+            ("POSTGRES_PORT", ports.postgres_port.to_string()),
+            ("EXPLORER_API_PORT", ports.explorer_api_port.to_string()),
+            ("DAPP_PORT", ports.dapp_port.to_string()),
+            ("VITE_GATEWAY_ADDRESS", gateway_hex.to_string()),
+            ("VITE_VAULT_ADDRESS", vault_hex.to_string()),
+            (
+                "VITE_GATEWAY_EXPECTED_CODE_HASH",
+                gateway_runtime_hash.clone(),
+            ),
+            ("INDEXER_GATEWAY", gateway_hex.to_string()),
+            ("INDEXER_VAULT", vault_hex.to_string()),
+            (
+                "INDEXER_RPC_URL",
+                format!("http://host.docker.internal:{}", fixture.rpc_port()),
+            ),
+            ("VITE_DEVNET_RPC_URL", "".to_string()),
+            ("VITE_EXPLORER_API_URL", "".to_string()),
+            ("VITE_DAPP_URL", "".to_string()),
+            (
+                "VITE_FAUCET_HARNESS_PRIVATE_KEY",
+                HARNESS_USDC_HOLDER_PRIVATE_KEY_HEX.to_string(),
+            ),
+            ("INDEXER_CHAIN_ID", "918453".to_string()),
+            ("INDEXER_CHAIN_NAME", "devnet".to_string()),
+            ("EXPLORER_API_CHAIN_ID", "918453".to_string()),
+        ];
+        logging::info(
+            "smoke-test",
+            format!(
+                "dapp startup config: project=robotmoney-dapp mode={} dapp_port={} explorer_api_port={} postgres_port={}",
+                public_endpoints_label(&opts.public_endpoints),
+                ports.dapp_port,
+                ports.explorer_api_port,
+                ports.postgres_port,
+            ),
+        );
 
         let (tunnels, vite_rpc_url, vite_dapp_url, vite_explorer_api_url) = match opts
             .public_endpoints
@@ -1063,6 +1482,14 @@ impl DappStack {
         logging::log_command_output("compose", &up_out);
 
         if !up_out.status.success() {
+            log_compose_state(
+                &compose_dir,
+                &dapp_compose_files,
+                &dapp_log_env,
+                "dapp-compose",
+                "compose up failed",
+                200,
+            );
             cleanup();
             return Err(HarnessError::Docker(
                 "compose up dapp stack failed".to_string(),
@@ -1070,41 +1497,32 @@ impl DappStack {
         }
 
         let mut compose_log_followers = Vec::new();
-        let dapp_compose_files = vec!["-f".to_string(), "docker-compose.dapp.yaml".to_string()];
-        let dapp_log_env = vec![
-            ("POSTGRES_PORT", ports.postgres_port.to_string()),
-            ("EXPLORER_API_PORT", ports.explorer_api_port.to_string()),
-            ("DAPP_PORT", ports.dapp_port.to_string()),
-            ("VITE_GATEWAY_ADDRESS", gateway_hex.to_string()),
-            ("VITE_VAULT_ADDRESS", vault_hex.to_string()),
-            (
-                "VITE_GATEWAY_EXPECTED_CODE_HASH",
-                gateway_runtime_hash.clone(),
-            ),
-            ("INDEXER_GATEWAY", gateway_hex.to_string()),
-            ("INDEXER_VAULT", vault_hex.to_string()),
-            (
-                "INDEXER_RPC_URL",
-                format!("http://host.docker.internal:{}", fixture.rpc_port()),
-            ),
-            ("VITE_DEVNET_RPC_URL", vite_rpc_url.clone()),
-            ("VITE_EXPLORER_API_URL", vite_explorer_api_url.clone()),
-            ("VITE_DAPP_URL", vite_dapp_url.clone()),
-            (
-                "VITE_FAUCET_HARNESS_PRIVATE_KEY",
-                HARNESS_USDC_HOLDER_PRIVATE_KEY_HEX.to_string(),
-            ),
-            ("INDEXER_CHAIN_ID", "918453".to_string()),
-            ("INDEXER_CHAIN_NAME", "devnet".to_string()),
-            ("EXPLORER_API_CHAIN_ID", "918453".to_string()),
-        ];
+        let dapp_log_env = {
+            let mut env = dapp_log_env;
+            env[8] = ("VITE_DEVNET_RPC_URL", vite_rpc_url.clone());
+            env[9] = ("VITE_EXPLORER_API_URL", vite_explorer_api_url.clone());
+            env[10] = ("VITE_DAPP_URL", vite_dapp_url.clone());
+            env
+        };
         let dapp_log_follower = start_compose_log_follower(
             &compose_dir,
             &dapp_compose_files,
             &dapp_log_env,
             "dapp-compose",
         )
-        .inspect_err(|_| {
+        .inspect_err(|err| {
+            logging::error(
+                "smoke-test",
+                format!("dapp compose log follower failed: {err}"),
+            );
+            log_compose_state(
+                &compose_dir,
+                &dapp_compose_files,
+                &dapp_log_env,
+                "dapp-compose",
+                "log follower startup failure",
+                200,
+            );
             cleanup();
         })?;
         compose_log_followers.push(dapp_log_follower);
@@ -1117,8 +1535,33 @@ impl DappStack {
             &format!("{local_explorer_api_url}/health"),
             Duration::from_secs(300),
         )
-        .inspect_err(|_| cleanup())?;
-        wait_for_http_ok(&local_dapp_url, Duration::from_secs(300)).inspect_err(|_| cleanup())?;
+        .inspect_err(|err| {
+            logging::error(
+                "smoke-test",
+                format!("explorer-api readiness failed: {err}"),
+            );
+            log_compose_state(
+                &compose_dir,
+                &dapp_compose_files,
+                &dapp_log_env,
+                "dapp-compose",
+                "explorer-api readiness timeout",
+                200,
+            );
+            cleanup();
+        })?;
+        wait_for_http_ok(&local_dapp_url, Duration::from_secs(300)).inspect_err(|err| {
+            logging::error("smoke-test", format!("dapp readiness failed: {err}"));
+            log_compose_state(
+                &compose_dir,
+                &dapp_compose_files,
+                &dapp_log_env,
+                "dapp-compose",
+                "dapp readiness timeout",
+                200,
+            );
+            cleanup();
+        })?;
 
         Ok(DappStack {
             compose_dir,
@@ -1236,6 +1679,7 @@ fn extract_trycloudflare_url(line: &str) -> Option<String> {
 
 impl Drop for DappStack {
     fn drop(&mut self) {
+        logging::info("dapp-compose", "tearing down dapp compose stack");
         for child in &mut self.compose_log_followers {
             let _ = child.kill();
             let _ = child.wait();
@@ -1259,6 +1703,7 @@ impl Drop for DappStack {
             .env("INDEXER_VAULT", &self.vault_hex)
             .current_dir(&self.compose_dir)
             .status();
+        logging::info("dapp-compose", "dapp compose teardown complete");
     }
 }
 

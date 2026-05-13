@@ -78,6 +78,18 @@ fn full_stack_cli_boots_and_tears_down() {
     stderr_handle.join().expect("stderr reader thread");
 
     assert_log_file_present(&log_path);
+    assert_log_contains(
+        &log_path,
+        &[
+            "CLI starting",
+            "chain startup config:",
+            "chain RPC ready; waiting for EL/CL block production",
+            "chain EL/CL stack ready",
+            "dapp startup config:",
+            "full stack ready",
+            "shutdown reason=ctrl-c tearing down stacks",
+        ],
+    );
     assert_no_containers_with_prefix("eth-");
     assert_no_containers_with_prefix("dapp-");
 }
@@ -219,6 +231,21 @@ fn assert_log_file_present(log_path: &std::path::Path) {
         services.len() >= 2,
         "expected logs from at least two services, got {services:?}"
     );
+}
+
+fn assert_log_contains(log_path: &std::path::Path, needles: &[&str]) {
+    let raw = fs::read_to_string(log_path).unwrap_or_else(|err| {
+        panic!(
+            "smoke-test log file missing at {}: {err}",
+            log_path.display()
+        )
+    });
+    for needle in needles {
+        assert!(
+            raw.contains(needle),
+            "expected smoke-test log to contain `{needle}`, but it did not"
+        );
+    }
 }
 
 fn send_sigint(pid: u32) {
