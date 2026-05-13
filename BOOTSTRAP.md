@@ -51,6 +51,7 @@ provided below. Use the one that matches your RPC endpoint.
 The Robot Money devnet is a Geth+Lighthouse chain seeded from Base mainnet
 state (chain ID **918453**). It uses the canonical Base USDC address (the
 devnet genesis copies real Base contracts at their original addresses).
+The default RPC for the hosted devnet is `https://robotmoney-dev-rpc.superfield.co`.
 
 The gateway and vault are deployed fresh each time the devnet boots. After
 running `cargo run -p smoke-test` (or your operator's deploy script), the
@@ -71,7 +72,7 @@ Then write `./rmpc-devnet.toml`:
 # Gateway and vault addresses are set after deployment — see BOOTSTRAP.md §3.
 
 chain_id             = 918453
-rpc_url              = "http://127.0.0.1:8545"          # devnet RPC (or your operator's endpoint)
+rpc_url              = "https://robotmoney-dev-rpc.superfield.co"  # hosted devnet RPC; replace with your operator's endpoint if needed
 gateway_address      = "<GATEWAY from deployments/918453.json>"
 usdc_address         = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"   # canonical Base USDC (same address on devnet)
 vault_address        = "<VAULT from deployments/918453.json>"
@@ -83,10 +84,9 @@ allow_software_fallback = true
 keystore_path           = "./keystore.json"
 ```
 
-If your operator provides a hosted devnet endpoint (e.g.
-`https://robotmoney-dev-rpc.superfield.co`) replace `rpc_url` with that URL
-and update `gateway_address`, `vault_address`, and `gateway_runtime_hash` from
-the deployment manifest your operator supplies.
+If your operator provides a different hosted devnet endpoint, replace
+`rpc_url` with that URL and update `gateway_address`, `vault_address`, and
+`gateway_runtime_hash` from the deployment manifest your operator supplies.
 
 ### Profile B — Base mainnet anvil fork (chain ID 8453)
 
