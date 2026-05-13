@@ -272,4 +272,3 @@ fn rmpc_get_vault_fork_base_mainnet() {
         "get-roles expected named errors: {errors:?}"
     );
 }
-
