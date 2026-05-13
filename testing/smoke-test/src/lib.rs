@@ -977,7 +977,7 @@ fn wait_for_block_height(url: &str, target: u64, timeout: Duration) -> Result<()
                                     ),
                                 );
                             }
-                            if last_block.map_or(true, |prev| block > prev) {
+                            if last_block.is_none_or(|prev| block > prev) {
                                 last_block = Some(block);
                                 last_progress = std::time::Instant::now();
                                 stall_warned = false;
