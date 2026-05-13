@@ -290,7 +290,7 @@ fn ensure_genesis_timestamp() -> String {
     match std::env::var("GENESIS_TIMESTAMP") {
         Ok(value) => value,
         Err(_) => {
-            const GENESIS_LEAD_SECS: u64 = 180;
+            const GENESIS_LEAD_SECS: u64 = 15;
             let ts = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system time before UNIX_EPOCH")
