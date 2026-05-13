@@ -42,6 +42,9 @@ pub fn log(level: Level, service: impl AsRef<str>, message: impl AsRef<str>) {
     let logger = global_logger();
     let service = service.as_ref();
     for line in message.as_ref().split('\n') {
+        if line.trim().is_empty() {
+            continue;
+        }
         logger.write_record(level, service, line);
     }
 }

@@ -25,7 +25,9 @@ use std::collections::HashSet;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::mpsc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc, Mutex};
+use std::thread;
 use std::time::Duration;
 
 use alloy_primitives::{keccak256, Address};
@@ -145,7 +147,7 @@ pub struct Fixture {
     /// Exposed via [`Fixture::tempdir`] so callers can write
     /// additional files (keystores, configs) into the same directory.
     tmp: TempDir,
-    compose_log_followers: Vec<Child>,
+    compose_log_followers: Vec<MonitoredChild>,
     chain_ports: ChainPorts,
     rpc_port: u16,
     rpc_url: String,
@@ -167,6 +169,122 @@ struct DappPorts {
     postgres_port: u16,
     explorer_api_port: u16,
     dapp_port: u16,
+}
+
+struct ComposeContainerStatus {
+    id: String,
+    name: String,
+    service: Option<String>,
+    state: String,
+    health: Option<String>,
+    exit_code: Option<i64>,
+    oom_killed: bool,
+    error: Option<String>,
+}
+
+impl ComposeContainerStatus {
+    fn describe(&self) -> String {
+        let service = self.service.as_deref().unwrap_or("unknown");
+        let health = self.health.as_deref().unwrap_or("n/a");
+        let exit_code = self
+            .exit_code
+            .map(|code| code.to_string())
+            .unwrap_or_else(|| "n/a".to_string());
+        let error = self.error.as_deref().unwrap_or("");
+        format!(
+            "id={} container={} service={} state={} health={} exit_code={} oom_killed={} error={}",
+            self.id, self.name, service, self.state, health, exit_code, self.oom_killed, error
+        )
+    }
+
+    fn is_unhealthy(&self) -> bool {
+        self.oom_killed
+            || matches!(
+                self.state.as_str(),
+                "exited" | "dead" | "removing" | "restarting"
+            )
+            || self.exit_code.is_some_and(|code| code != 0)
+            || self.error.as_deref().is_some_and(|error| !error.is_empty())
+    }
+}
+
+struct MonitoredChild {
+    label: String,
+    child: Arc<Mutex<Child>>,
+    terminated: Arc<AtomicBool>,
+}
+
+impl MonitoredChild {
+    fn new(label: impl Into<String>, child: Child) -> Self {
+        let label = label.into();
+        let child = Arc::new(Mutex::new(child));
+        let terminated = Arc::new(AtomicBool::new(false));
+        let watcher_child = Arc::clone(&child);
+        let watcher_terminated = Arc::clone(&terminated);
+        let watcher_label = label.clone();
+        thread::spawn(move || loop {
+            if watcher_terminated.load(Ordering::SeqCst) {
+                return;
+            }
+            let status = match watcher_child.lock() {
+                Ok(mut child) => match child.try_wait() {
+                    Ok(Some(status)) => Some(Ok(status)),
+                    Ok(None) => None,
+                    Err(err) => Some(Err(err)),
+                },
+                Err(_) => return,
+            };
+            match status {
+                Some(Ok(status)) => {
+                    if !watcher_terminated.load(Ordering::SeqCst) {
+                        if status.success() {
+                            logging::info(
+                                &watcher_label,
+                                format!("process exited cleanly: {status}"),
+                            );
+                        } else {
+                            logging::error(
+                                &watcher_label,
+                                format!("process exited unexpectedly: {status}"),
+                            );
+                        }
+                    }
+                    return;
+                }
+                Some(Err(err)) => {
+                    logging::error(
+                        &watcher_label,
+                        format!("process status check failed: {err}"),
+                    );
+                    return;
+                }
+                None => thread::sleep(Duration::from_secs(5)),
+            }
+        });
+        Self {
+            label,
+            child,
+            terminated,
+        }
+    }
+
+    fn terminate(&self) {
+        if self.terminated.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        if let Ok(mut child) = self.child.lock() {
+            let _ = child.kill();
+            let _ = child.wait();
+        } else {
+            logging::warn(&self.label, "child lock poisoned during shutdown");
+        }
+    }
+}
+
+impl Drop for MonitoredChild {
+    fn drop(&mut self) {
+        self.terminate();
+    }
 }
 
 fn allocate_unique_port(used: &mut HashSet<u16>) -> Result<u16, HarnessError> {
@@ -432,7 +550,19 @@ impl Fixture {
 
         eprintln!("smoke-test: waiting for chain containers to become ready...");
         logging::info("smoke-test", "waiting for chain containers to become ready");
-        wait_for_rpc(&rpc_url, Duration::from_secs(180)).inspect_err(|err| {
+        let chain_probe_dir = compose_dir.clone();
+        let mut chain_health_probe = compose_health_probe(
+            &chain_probe_dir,
+            &compose_files_owned,
+            &compose_log_env,
+            "chain-compose",
+        );
+        wait_for_rpc_with_probe(
+            &rpc_url,
+            Duration::from_secs(180),
+            Some(&mut chain_health_probe),
+        )
+        .inspect_err(|err| {
             logging::error("smoke-test", format!("chain RPC readiness failed: {err}"));
             log_compose_state(
                 &compose_dir,
@@ -450,7 +580,13 @@ impl Fixture {
         );
 
         // Wait for real block production: RPC up != consensus up.
-        wait_for_block_height(&rpc_url, 1, Duration::from_secs(240)).inspect_err(|err| {
+        wait_for_block_height_with_probe(
+            &rpc_url,
+            1,
+            Duration::from_secs(240),
+            Some(&mut chain_health_probe),
+        )
+        .inspect_err(|err| {
             logging::error(
                 "smoke-test",
                 format!("chain block-production readiness failed: {err}"),
@@ -466,7 +602,12 @@ impl Fixture {
             cleanup();
         })?;
         logging::info("smoke-test", "chain EL/CL stack ready");
-        wait_for_rpc(&rpc_url, Duration::from_secs(60)).inspect_err(|err| {
+        wait_for_rpc_with_probe(
+            &rpc_url,
+            Duration::from_secs(60),
+            Some(&mut chain_health_probe),
+        )
+        .inspect_err(|err| {
             logging::error(
                 "smoke-test",
                 format!("post-readiness RPC stability check failed: {err}"),
@@ -763,8 +904,7 @@ impl Drop for Fixture {
     fn drop(&mut self) {
         logging::info("chain-compose", "tearing down chain compose stack");
         for child in &mut self.compose_log_followers {
-            let _ = child.kill();
-            let _ = child.wait();
+            child.terminate();
         }
         let _ = Command::new("docker")
             .args([
@@ -842,7 +982,16 @@ fn parse_addr(s: &str) -> Address {
     s.parse::<Address>().unwrap_or(Address::ZERO)
 }
 
+#[allow(dead_code)]
 fn wait_for_rpc(url: &str, timeout: Duration) -> Result<(), HarnessError> {
+    wait_for_rpc_with_probe(url, timeout, None)
+}
+
+fn wait_for_rpc_with_probe(
+    url: &str,
+    timeout: Duration,
+    mut health_probe: Option<&mut dyn FnMut() -> Result<(), HarnessError>>,
+) -> Result<(), HarnessError> {
     logging::debug("rpc", format!("polling {url} for chain RPC health"));
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(5))
@@ -859,6 +1008,9 @@ fn wait_for_rpc(url: &str, timeout: Duration) -> Result<(), HarnessError> {
     let mut last_error: Option<String> = None;
     let mut unreachable_since: Option<std::time::Instant> = None;
     while std::time::Instant::now() < deadline {
+        if let Some(probe) = health_probe.as_deref_mut() {
+            probe()?;
+        }
         match client.post(url).json(&body).send() {
             Ok(resp) if resp.status().is_success() => {
                 if let Ok(json) = resp.json::<serde_json::Value>() {
@@ -927,7 +1079,17 @@ fn wait_for_rpc(url: &str, timeout: Duration) -> Result<(), HarnessError> {
     })
 }
 
+#[allow(dead_code)]
 fn wait_for_block_height(url: &str, target: u64, timeout: Duration) -> Result<(), HarnessError> {
+    wait_for_block_height_with_probe(url, target, timeout, None)
+}
+
+fn wait_for_block_height_with_probe(
+    url: &str,
+    target: u64,
+    timeout: Duration,
+    mut health_probe: Option<&mut dyn FnMut() -> Result<(), HarnessError>>,
+) -> Result<(), HarnessError> {
     logging::debug(
         "rpc",
         format!("polling {url} for block height {target} readiness"),
@@ -950,6 +1112,9 @@ fn wait_for_block_height(url: &str, target: u64, timeout: Duration) -> Result<()
     let mut stall_warned = false;
     let mut unreachable_since: Option<std::time::Instant> = None;
     while std::time::Instant::now() < deadline {
+        if let Some(probe) = health_probe.as_deref_mut() {
+            probe()?;
+        }
         match client.post(url).json(&body).send() {
             Ok(resp) if resp.status().is_success() => {
                 if let Ok(json) = resp.json::<serde_json::Value>() {
@@ -1161,7 +1326,7 @@ fn start_compose_log_follower(
     compose_args: &[String],
     compose_env: &[(&str, String)],
     service_label: &'static str,
-) -> Result<Child, HarnessError> {
+) -> Result<MonitoredChild, HarnessError> {
     let mut cmd = Command::new("docker");
     cmd.arg("compose");
     for arg in compose_args {
@@ -1203,7 +1368,7 @@ fn start_compose_log_follower(
             logging::error(&stderr_label, line);
         }
     });
-    Ok(child)
+    Ok(MonitoredChild::new(service_label, child))
 }
 
 fn log_compose_state(
@@ -1233,6 +1398,18 @@ fn log_compose_state(
         Ok(out) => logging::log_command_output(service_label, &out),
         Err(err) => logging::error(service_label, format!("compose ps failed: {err}")),
     }
+    match compose_container_statuses(compose_dir, compose_args, compose_env) {
+        Ok(statuses) => {
+            if statuses.is_empty() {
+                logging::warn(service_label, "compose ps returned no containers");
+            } else {
+                for status in statuses {
+                    logging::info(service_label, status.describe());
+                }
+            }
+        }
+        Err(err) => logging::error(service_label, format!("compose inspect failed: {err}")),
+    }
 
     let mut logs = Command::new("docker");
     logs.arg("compose");
@@ -1249,6 +1426,139 @@ fn log_compose_state(
         Ok(out) => logging::log_command_output(service_label, &out),
         Err(err) => logging::error(service_label, format!("compose logs failed: {err}")),
     }
+}
+
+fn compose_health_probe<'a>(
+    compose_dir: &'a Path,
+    compose_args: &'a [String],
+    compose_env: &'a [(&str, String)],
+    service_label: &'static str,
+) -> impl FnMut() -> Result<(), HarnessError> + 'a {
+    move || {
+        let statuses = compose_container_statuses(compose_dir, compose_args, compose_env)?;
+        if statuses.is_empty() {
+            logging::error(
+                service_label,
+                "compose health probe found no containers for the stack",
+            );
+            return Err(HarnessError::Docker(format!(
+                "{service_label} container health probe found no running containers"
+            )));
+        }
+        let unhealthy = statuses
+            .into_iter()
+            .filter(|status| {
+                !(status.service.as_deref() == Some("setup") && status.exit_code == Some(0))
+                    && status.is_unhealthy()
+            })
+            .collect::<Vec<_>>();
+        if unhealthy.is_empty() {
+            return Ok(());
+        }
+        for status in &unhealthy {
+            logging::error(service_label, status.describe());
+        }
+        Err(HarnessError::Docker(format!(
+            "{service_label} container health probe detected {} unhealthy container(s)",
+            unhealthy.len()
+        )))
+    }
+}
+
+fn compose_container_statuses(
+    compose_dir: &Path,
+    compose_args: &[String],
+    compose_env: &[(&str, String)],
+) -> Result<Vec<ComposeContainerStatus>, HarnessError> {
+    let mut ps = Command::new("docker");
+    ps.arg("compose");
+    for arg in compose_args {
+        ps.arg(arg);
+    }
+    for (key, value) in compose_env {
+        ps.env(key, value);
+    }
+    ps.args(["ps", "-q", "--all"]).current_dir(compose_dir);
+    let out = ps.output().map_err(HarnessError::from)?;
+    if !out.status.success() {
+        return Err(HarnessError::Docker(format!(
+            "compose ps -q failed: stdout={} stderr={}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        )));
+    }
+
+    let ids = String::from_utf8_lossy(&out.stdout);
+    let mut statuses = Vec::new();
+    for id in ids.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        let inspect_out = Command::new("docker")
+            .args(["inspect", id])
+            .output()
+            .map_err(HarnessError::from)?;
+        if !inspect_out.status.success() {
+            let stderr = String::from_utf8_lossy(&inspect_out.stderr);
+            if stderr.contains("no such object")
+                || stderr.contains("No such object")
+                || stderr.contains("No such container")
+            {
+                logging::warn(
+                    "compose",
+                    format!("container {id} disappeared before inspect completed"),
+                );
+                continue;
+            }
+            return Err(HarnessError::Docker(format!(
+                "docker inspect {id} failed: stdout={} stderr={}",
+                String::from_utf8_lossy(&inspect_out.stdout),
+                String::from_utf8_lossy(&inspect_out.stderr)
+            )));
+        }
+        let payload: Vec<serde_json::Value> = serde_json::from_slice(&inspect_out.stdout)
+            .map_err(|e| HarnessError::Docker(format!("docker inspect {id} json: {e}")))?;
+        let Some(container) = payload.into_iter().next() else {
+            continue;
+        };
+        let Some(state) = container.get("State") else {
+            continue;
+        };
+        let name = container
+            .get("Name")
+            .and_then(|v| v.as_str())
+            .unwrap_or(id)
+            .trim_start_matches('/')
+            .to_string();
+        let service = container
+            .get("Config")
+            .and_then(|v| v.get("Labels"))
+            .and_then(|v| v.get("com.docker.compose.service"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        statuses.push(ComposeContainerStatus {
+            id: id.to_string(),
+            name,
+            service,
+            state: state
+                .get("Status")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown")
+                .to_string(),
+            health: state
+                .get("Health")
+                .and_then(|v| v.get("Status"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            exit_code: state.get("ExitCode").and_then(|v| v.as_i64()),
+            oom_killed: state
+                .get("OOMKilled")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            error: state
+                .get("Error")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+        });
+    }
+    Ok(statuses)
 }
 
 fn parse_compose_log_line(line: &str) -> Option<(String, String)> {
@@ -1291,7 +1601,7 @@ pub struct DappStack {
     gateway_hex: String,
     vault_hex: String,
     gateway_runtime_hash: String,
-    compose_log_followers: Vec<Child>,
+    compose_log_followers: Vec<MonitoredChild>,
     pub endpoints: DappEndpoints,
     _tunnels: Option<Tunnels>,
 }
@@ -1531,9 +1841,17 @@ impl DappStack {
         logging::info("smoke-test", "waiting for dapp containers to become ready");
         // Health checks go to the local host ports — the tunnels are
         // user-facing only and need not be up for readiness.
-        wait_for_http_ok(
+        let dapp_probe_dir = compose_dir.clone();
+        let mut dapp_health_probe = compose_health_probe(
+            &dapp_probe_dir,
+            &dapp_compose_files,
+            &dapp_log_env,
+            "dapp-compose",
+        );
+        wait_for_http_ok_with_probe(
             &format!("{local_explorer_api_url}/health"),
             Duration::from_secs(300),
+            Some(&mut dapp_health_probe),
         )
         .inspect_err(|err| {
             logging::error(
@@ -1550,7 +1868,12 @@ impl DappStack {
             );
             cleanup();
         })?;
-        wait_for_http_ok(&local_dapp_url, Duration::from_secs(300)).inspect_err(|err| {
+        wait_for_http_ok_with_probe(
+            &local_dapp_url,
+            Duration::from_secs(300),
+            Some(&mut dapp_health_probe),
+        )
+        .inspect_err(|err| {
             logging::error("smoke-test", format!("dapp readiness failed: {err}"));
             log_compose_state(
                 &compose_dir,
@@ -1585,7 +1908,7 @@ impl DappStack {
 /// stores the public `trycloudflare.com` URL each tunnel announced. Drop
 /// kills every child, which is how Cloudflare's ephemeral tunnels close.
 struct Tunnels {
-    children: Vec<Child>,
+    children: Vec<MonitoredChild>,
     rpc_url: String,
     dapp_url: String,
     explorer_api_url: String,
@@ -1608,13 +1931,12 @@ impl Tunnels {
 impl Drop for Tunnels {
     fn drop(&mut self) {
         for child in &mut self.children {
-            let _ = child.kill();
-            let _ = child.wait();
+            child.terminate();
         }
     }
 }
 
-fn spawn_tunnel(port: u16) -> Result<(Child, String), HarnessError> {
+fn spawn_tunnel(port: u16) -> Result<(MonitoredChild, String), HarnessError> {
     logging::debug(
         "cloudflared",
         format!("starting ephemeral tunnel for localhost:{port}"),
@@ -1658,7 +1980,10 @@ fn spawn_tunnel(port: u16) -> Result<(Child, String), HarnessError> {
         }
     });
     match rx.recv_timeout(Duration::from_secs(60)) {
-        Ok(url) => Ok((child, url)),
+        Ok(url) => Ok((
+            MonitoredChild::new(format!("cloudflared:{port}"), child),
+            url,
+        )),
         Err(e) => {
             let _ = child.kill();
             let _ = child.wait();
@@ -1681,8 +2006,7 @@ impl Drop for DappStack {
     fn drop(&mut self) {
         logging::info("dapp-compose", "tearing down dapp compose stack");
         for child in &mut self.compose_log_followers {
-            let _ = child.kill();
-            let _ = child.wait();
+            child.terminate();
         }
         let _ = Command::new("docker")
             .args([
@@ -1709,7 +2033,16 @@ impl Drop for DappStack {
 
 /// Poll `url` with HTTP GET until a 2xx response is received or
 /// `timeout` elapses. Used to wait for explorer-api and dapp health.
+#[allow(dead_code)]
 fn wait_for_http_ok(url: &str, timeout: Duration) -> Result<(), HarnessError> {
+    wait_for_http_ok_with_probe(url, timeout, None)
+}
+
+fn wait_for_http_ok_with_probe(
+    url: &str,
+    timeout: Duration,
+    mut health_probe: Option<&mut dyn FnMut() -> Result<(), HarnessError>>,
+) -> Result<(), HarnessError> {
     logging::debug("http", format!("polling {url} for HTTP health"));
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(5))
@@ -1718,6 +2051,9 @@ fn wait_for_http_ok(url: &str, timeout: Duration) -> Result<(), HarnessError> {
     let deadline = std::time::Instant::now() + timeout;
     let mut last = String::new();
     while std::time::Instant::now() < deadline {
+        if let Some(probe) = health_probe.as_deref_mut() {
+            probe()?;
+        }
         match client.get(url).send() {
             Ok(resp) if resp.status().is_success() => {
                 logging::debug("http", format!("{url} returned {}", resp.status()));
