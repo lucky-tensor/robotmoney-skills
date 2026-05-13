@@ -68,10 +68,7 @@ describe("AuthorizeTab — submit button gating", () => {
   });
 
   it("submit is disabled with a valid agent but invalid shareReceiver", () => {
-    renderTab(
-      "0x2222222222222222222222222222222222222222",
-      "bad-receiver",
-    );
+    renderTab("0x2222222222222222222222222222222222222222", "bad-receiver");
     expect(screen.getByTestId("authorize-submit")).toBeDisabled();
   });
 
