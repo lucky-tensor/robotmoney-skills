@@ -10,7 +10,7 @@
  * The component's own `isAddress` validation gate is exercised directly.
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { AuthorizeTab } from "../../../src/components/AuthorizeTab";
 import type { PreviewContext } from "../../../src/lib/preview";
 
@@ -29,7 +29,7 @@ const ctx: PreviewContext = {
   envClass: "fork",
 };
 
-const NOW = Date.now();
+const NOW = 1_893_456_000_000;
 
 function renderTab(agent = "", shareReceiver = "") {
   const setAgent = vi.fn();

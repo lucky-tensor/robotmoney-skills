@@ -30,7 +30,7 @@ const ctx: PreviewContext = {
   gatewayCodeHashVerified: true,
   envClass: "fork",
 };
-const NOW = Date.now();
+const NOW = 1_893_456_000_000;
 
 function renderTab() {
   return render(<RotationTab gatewayAddress={GATEWAY} ctx={ctx} now={NOW} />);
