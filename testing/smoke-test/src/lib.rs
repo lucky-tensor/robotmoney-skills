@@ -19,6 +19,7 @@
 
 pub mod fork_manifest;
 pub mod genesis_alloc;
+pub mod logging;
 
 use std::collections::HashSet;
 use std::io::{BufRead, BufReader};
@@ -144,6 +145,7 @@ pub struct Fixture {
     /// Exposed via [`Fixture::tempdir`] so callers can write
     /// additional files (keystores, configs) into the same directory.
     tmp: TempDir,
+    compose_log_followers: Vec<Child>,
     chain_ports: ChainPorts,
     rpc_port: u16,
     rpc_url: String,
@@ -350,15 +352,40 @@ impl Fixture {
         if let Some(ref p) = alloc_overlay_path {
             up_cmd.env("SMOKE_GENESIS_ALLOC_FILE", p);
         }
-        let status = up_cmd.status().map_err(HarnessError::from)?;
-        if !status.success() {
+        logging::info("smoke-test", "bringing up chain compose stack");
+        let up_out = up_cmd.output().map_err(HarnessError::from)?;
+        logging::log_command_output("compose", &up_out);
+        if !up_out.status.success() {
             cleanup();
             return Err(HarnessError::Docker(format!(
-                "compose up devnet failed: {status:?}"
+                "compose up devnet failed: {:?}",
+                up_out.status
             )));
         }
 
+        let mut compose_log_followers = Vec::new();
+        let mut compose_log_env = vec![
+            ("GETH_RPC_PORT", chain_ports.rpc_port.to_string()),
+            ("GETH_WS_PORT", chain_ports.ws_port.to_string()),
+            ("GETH_AUTHRPC_PORT", chain_ports.authrpc_port.to_string()),
+            ("BEACON_PORT", chain_ports.beacon_port.to_string()),
+        ];
+        if let Some(ref p) = alloc_overlay_path {
+            compose_log_env.push(("SMOKE_GENESIS_ALLOC_FILE", p.to_string_lossy().to_string()));
+        }
+        let chain_log_follower = start_compose_log_follower(
+            &compose_dir,
+            &compose_files_owned,
+            &compose_log_env,
+            "chain-compose",
+        )
+        .inspect_err(|_| {
+            cleanup();
+        })?;
+        compose_log_followers.push(chain_log_follower);
+
         eprintln!("smoke-test: waiting for chain containers to become ready...");
+        logging::info("smoke-test", "waiting for chain containers to become ready");
         wait_for_rpc(&rpc_url, Duration::from_secs(180))?;
 
         // Wait for real block production: RPC up != consensus up.
@@ -395,6 +422,7 @@ impl Fixture {
         let fx = Fixture {
             compose_dir,
             tmp,
+            compose_log_followers,
             chain_ports,
             rpc_port: chain_ports.rpc_port,
             rpc_url,
@@ -500,6 +528,10 @@ impl Fixture {
         args: &[&str],
     ) -> Result<String, HarnessError> {
         let to_hex = format!("{to:#x}");
+        logging::debug(
+            "rpc",
+            format!("eth_sendRawTransaction via cast send {sig} -> {to_hex}"),
+        );
         let mut cmd = Command::new("cast");
         cmd.args([
             "send",
@@ -515,6 +547,7 @@ impl Fixture {
         }
         cmd.arg("--json");
         let out = cmd.output()?;
+        logging::log_command_output("cast", &out);
         if !out.status.success() {
             return Err(HarnessError::other(format!(
                 "cast send {sig} failed: stdout={} stderr={}",
@@ -602,6 +635,10 @@ impl Fixture {
 
 impl Drop for Fixture {
     fn drop(&mut self) {
+        for child in &mut self.compose_log_followers {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
         let _ = Command::new("docker")
             .args([
                 "compose",
@@ -678,6 +715,7 @@ fn parse_addr(s: &str) -> Address {
 }
 
 fn wait_for_rpc(url: &str, timeout: Duration) -> Result<(), HarnessError> {
+    logging::debug("rpc", format!("polling {url} for chain RPC health"));
     test_utils::wait_for_rpc(url, timeout).map_err(|_| HarnessError::RpcTimeout {
         url: url.to_string(),
         timeout,
@@ -685,6 +723,10 @@ fn wait_for_rpc(url: &str, timeout: Duration) -> Result<(), HarnessError> {
 }
 
 fn wait_for_block_height(url: &str, target: u64, timeout: Duration) -> Result<(), HarnessError> {
+    logging::debug(
+        "rpc",
+        format!("polling {url} for block height {target} readiness"),
+    );
     test_utils::wait_for_block_height(url, target, timeout).map_err(|_| HarnessError::RpcTimeout {
         url: url.to_string(),
         timeout,
@@ -696,6 +738,10 @@ fn fund_eth_from_deployer(
     recipient_hex: &str,
     value_wei: &str,
 ) -> Result<String, HarnessError> {
+    logging::debug(
+        "rpc",
+        format!("eth_sendRawTransaction via cast send value={value_wei} -> {recipient_hex}"),
+    );
     let out = Command::new("cast")
         .args([
             "send",
@@ -709,6 +755,7 @@ fn fund_eth_from_deployer(
             "--json",
         ])
         .output()?;
+    logging::log_command_output("cast", &out);
     if !out.status.success() {
         return Err(HarnessError::other(format!(
             "fund eth failed: stdout={} stderr={}",
@@ -755,6 +802,7 @@ fn run_forge_deploy_with_env(
         cmd.env(k, v);
     }
     let out = cmd.output()?;
+    logging::log_command_output("forge", &out);
     if !out.status.success() {
         return Err(HarnessError::DeployFailed(format!(
             "forge script exited {:?}\nstdout:\n{}\nstderr:\n{}",
@@ -780,6 +828,66 @@ pub fn locate_repo_root() -> Result<PathBuf, HarnessError> {
         .ok_or_else(|| HarnessError::other("could not locate repo root from CARGO_MANIFEST_DIR"))
 }
 
+fn start_compose_log_follower(
+    compose_dir: &Path,
+    compose_args: &[String],
+    compose_env: &[(&str, String)],
+    service_label: &'static str,
+) -> Result<Child, HarnessError> {
+    let mut cmd = Command::new("docker");
+    cmd.arg("compose");
+    for arg in compose_args {
+        cmd.arg(arg);
+    }
+    for (key, value) in compose_env {
+        cmd.env(key, value);
+    }
+    cmd.args(["logs", "--follow", "--no-color", "--timestamps"])
+        .current_dir(compose_dir)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| HarnessError::other(format!("compose logs spawn: {e}")))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| HarnessError::other("compose logs stdout unavailable"))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| HarnessError::other("compose logs stderr unavailable"))?;
+    let stdout_label = service_label.to_string();
+    let stderr_label = service_label.to_string();
+    std::thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines().map_while(Result::ok) {
+            if let Some((service, message)) = parse_compose_log_line(&line) {
+                logging::info(&service, message);
+            } else {
+                logging::info(&stdout_label, line);
+            }
+        }
+    });
+    std::thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines().map_while(Result::ok) {
+            logging::error(&stderr_label, line);
+        }
+    });
+    Ok(child)
+}
+
+fn parse_compose_log_line(line: &str) -> Option<(String, String)> {
+    let (service, message) = line.split_once('|')?;
+    let service = service.trim();
+    let message = message.trim_start();
+    if service.is_empty() || message.is_empty() {
+        return None;
+    }
+    Some((service.to_string(), message.to_string()))
+}
+
 // -- DappStack --------------------------------------------------------
 
 /// URLs for the full dapp stack services, printed as the structured
@@ -802,6 +910,7 @@ pub struct DappStack {
     gateway_hex: String,
     vault_hex: String,
     gateway_runtime_hash: String,
+    compose_log_followers: Vec<Child>,
     pub endpoints: DappEndpoints,
     _tunnels: Option<Tunnels>,
 }
@@ -904,7 +1013,8 @@ impl DappStack {
 
         eprintln!("smoke-test: building and starting dapp stack (this may take several minutes for first build)...");
 
-        let status = Command::new("docker")
+        logging::info("smoke-test", "bringing up full-stack compose services");
+        let up_out = Command::new("docker")
             .arg("compose")
             .arg("-f")
             .arg("docker-compose.dapp.yaml")
@@ -948,17 +1058,59 @@ impl DappStack {
             .env("INDEXER_CHAIN_NAME", "devnet")
             .env("EXPLORER_API_CHAIN_ID", "918453")
             .current_dir(&compose_dir)
-            .status()
+            .output()
             .map_err(HarnessError::from)?;
+        logging::log_command_output("compose", &up_out);
 
-        if !status.success() {
+        if !up_out.status.success() {
             cleanup();
             return Err(HarnessError::Docker(
                 "compose up dapp stack failed".to_string(),
             ));
         }
 
+        let mut compose_log_followers = Vec::new();
+        let dapp_compose_files = vec!["-f".to_string(), "docker-compose.dapp.yaml".to_string()];
+        let dapp_log_env = vec![
+            ("POSTGRES_PORT", ports.postgres_port.to_string()),
+            ("EXPLORER_API_PORT", ports.explorer_api_port.to_string()),
+            ("DAPP_PORT", ports.dapp_port.to_string()),
+            ("VITE_GATEWAY_ADDRESS", gateway_hex.to_string()),
+            ("VITE_VAULT_ADDRESS", vault_hex.to_string()),
+            (
+                "VITE_GATEWAY_EXPECTED_CODE_HASH",
+                gateway_runtime_hash.clone(),
+            ),
+            ("INDEXER_GATEWAY", gateway_hex.to_string()),
+            ("INDEXER_VAULT", vault_hex.to_string()),
+            (
+                "INDEXER_RPC_URL",
+                format!("http://host.docker.internal:{}", fixture.rpc_port()),
+            ),
+            ("VITE_DEVNET_RPC_URL", vite_rpc_url.clone()),
+            ("VITE_EXPLORER_API_URL", vite_explorer_api_url.clone()),
+            ("VITE_DAPP_URL", vite_dapp_url.clone()),
+            (
+                "VITE_FAUCET_HARNESS_PRIVATE_KEY",
+                HARNESS_USDC_HOLDER_PRIVATE_KEY_HEX.to_string(),
+            ),
+            ("INDEXER_CHAIN_ID", "918453".to_string()),
+            ("INDEXER_CHAIN_NAME", "devnet".to_string()),
+            ("EXPLORER_API_CHAIN_ID", "918453".to_string()),
+        ];
+        let dapp_log_follower = start_compose_log_follower(
+            &compose_dir,
+            &dapp_compose_files,
+            &dapp_log_env,
+            "dapp-compose",
+        )
+        .inspect_err(|_| {
+            cleanup();
+        })?;
+        compose_log_followers.push(dapp_log_follower);
+
         eprintln!("smoke-test: waiting for dapp containers to become ready...");
+        logging::info("smoke-test", "waiting for dapp containers to become ready");
         // Health checks go to the local host ports — the tunnels are
         // user-facing only and need not be up for readiness.
         wait_for_http_ok(
@@ -973,6 +1125,7 @@ impl DappStack {
             gateway_hex: gateway_hex.to_string(),
             vault_hex: vault_hex.to_string(),
             gateway_runtime_hash,
+            compose_log_followers,
             endpoints: DappEndpoints {
                 rpc_url: vite_rpc_url,
                 dapp_url: vite_dapp_url,
@@ -1019,6 +1172,10 @@ impl Drop for Tunnels {
 }
 
 fn spawn_tunnel(port: u16) -> Result<(Child, String), HarnessError> {
+    logging::debug(
+        "cloudflared",
+        format!("starting ephemeral tunnel for localhost:{port}"),
+    );
     // `--config /dev/null` is load-bearing: without it cloudflared loads
     // `/etc/cloudflared/config.yml` if it exists on the host and conflates
     // the quick-tunnel URL with the host's named-tunnel credentials, which
@@ -1047,8 +1204,10 @@ fn spawn_tunnel(port: u16) -> Result<(Child, String), HarnessError> {
         let reader = BufReader::new(stderr);
         let mut sent = false;
         for line in reader.lines().map_while(Result::ok) {
+            logging::info("cloudflared", &line);
             if !sent {
                 if let Some(url) = extract_trycloudflare_url(&line) {
+                    logging::info("cloudflared", format!("announced public url {url}"));
                     let _ = tx.send(url);
                     sent = true;
                 }
@@ -1077,6 +1236,10 @@ fn extract_trycloudflare_url(line: &str) -> Option<String> {
 
 impl Drop for DappStack {
     fn drop(&mut self) {
+        for child in &mut self.compose_log_followers {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
         let _ = Command::new("docker")
             .args([
                 "compose",
@@ -1102,6 +1265,7 @@ impl Drop for DappStack {
 /// Poll `url` with HTTP GET until a 2xx response is received or
 /// `timeout` elapses. Used to wait for explorer-api and dapp health.
 fn wait_for_http_ok(url: &str, timeout: Duration) -> Result<(), HarnessError> {
+    logging::debug("http", format!("polling {url} for HTTP health"));
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(5))
         .build()
@@ -1110,7 +1274,10 @@ fn wait_for_http_ok(url: &str, timeout: Duration) -> Result<(), HarnessError> {
     let mut last = String::new();
     while std::time::Instant::now() < deadline {
         match client.get(url).send() {
-            Ok(resp) if resp.status().is_success() => return Ok(()),
+            Ok(resp) if resp.status().is_success() => {
+                logging::debug("http", format!("{url} returned {}", resp.status()));
+                return Ok(());
+            }
             Ok(resp) => last = format!("HTTP {}", resp.status()),
             Err(e) => last = format!("{e}"),
         }

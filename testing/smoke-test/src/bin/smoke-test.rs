@@ -13,6 +13,7 @@
 //! Canonical: docs/implementation-plan.md §10.5 — Phase 4.5.
 
 use clap::Parser;
+use std::path::PathBuf;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -71,6 +72,16 @@ struct Cli {
     /// (`VITE_EXPLORER_API_URL`). See --public-rpc-url.
     #[arg(long)]
     public_explorer_url: Option<String>,
+
+    /// Write harness logs to this file instead of the default
+    /// `smoke-test.log` in the current directory.
+    #[arg(long, value_name = "PATH")]
+    log_file: Option<PathBuf>,
+
+    /// Rotate the unified log file after it grows beyond this many bytes.
+    /// Defaults to 10 MiB.
+    #[arg(long, value_parser = clap::value_parser!(u64).range(1..))]
+    log_max_bytes: Option<u64>,
 }
 
 fn main() {
@@ -106,6 +117,14 @@ fn main() {
     if let Some(rpc_port) = cli.rpc_port {
         std::env::set_var("SMOKE_TEST_GETH_RPC_PORT", rpc_port.to_string());
     }
+    if let Some(path) = cli.log_file {
+        std::env::set_var("SMOKE_TEST_LOG_FILE", path);
+    }
+    if let Some(limit) = cli.log_max_bytes {
+        std::env::set_var("SMOKE_TEST_LOG_MAX_BYTES", limit.to_string());
+    }
+    let _ = smoke_test::logging::init();
+    smoke_test::logging::info("smoke-test", "CLI starting");
     let interrupted = Arc::new(AtomicBool::new(false));
     {
         let interrupted = Arc::clone(&interrupted);
@@ -124,6 +143,7 @@ fn main() {
     }
 
     eprintln!("smoke-test: booting devnet (this takes 60-120 seconds)...");
+    smoke_test::logging::info("smoke-test", "booting devnet");
     let fixture = smoke_test::Fixture::new().expect("devnet boot failed");
     if interrupted.load(Ordering::SeqCst) {
         eprintln!("smoke-test: interrupted during devnet startup.");
@@ -142,6 +162,7 @@ fn main() {
     // down the compose stack together with the chain fixture.
     let _dapp_stack: Option<smoke_test::DappStack> = if cli.full_stack {
         eprintln!("smoke-test: starting full-stack (dapp + explorer-api + indexer + postgres)...");
+        smoke_test::logging::info("smoke-test", "starting full-stack compose stack");
         let public_endpoints = if use_named {
             smoke_test::PublicEndpoints::Named {
                 rpc_url: cli.public_rpc_url.clone().unwrap(),
@@ -211,13 +232,16 @@ fn main() {
 
     if cli.full_stack {
         eprintln!("smoke-test: full stack ready. Stop with Ctrl-C.");
+        smoke_test::logging::info("smoke-test", "full stack ready");
     } else {
         eprintln!("smoke-test: network ready. Stop with Ctrl-C.");
+        smoke_test::logging::info("smoke-test", "network ready");
     }
     while !interrupted.load(Ordering::SeqCst) {
         std::thread::sleep(std::time::Duration::from_millis(200));
     }
     eprintln!("smoke-test: stopping...");
+    smoke_test::logging::info("smoke-test", "stopping");
     // _dapp_stack drops here first → docker compose down dapp stack
     // fixture drops next → docker compose down chain stack
 }
