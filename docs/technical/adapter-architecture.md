@@ -16,12 +16,27 @@ uses vault adapters for that internal strategy layer. An adapter
 connects one vault to one external venue or strategy and normalizes
 that venue behind a small interface.
 
+The reason this layer exists is that assets on Ethereum are
+operationally heterogeneous. A position might be a plain ERC-20
+balance, a rebasing token, an ERC-4626 share, a lending-account
+balance, or a venue-specific receipt. Deposit, withdrawal, valuation,
+holding, and reporting semantics vary by venue. Vaults homogenize those
+differences when they are designed correctly: they expose one product
+surface while internal adapters absorb the venue-specific mechanics.
+
 In product terms:
 
 - Portfolio Router allocates across vaults.
 - Vaults allocate internally through adapters.
 - Users and agents interact with vaults or the Portfolio Router.
 - Users and agents do not select or call adapters directly.
+- The Portfolio Router consumes normalized vault surfaces, not raw
+  DeFi venue integrations.
+
+Design principle:
+
+> A vault is successful when its external interface is boring and
+> predictable, even if its internal assets are not.
 
 ## 2. Interface
 

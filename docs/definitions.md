@@ -10,6 +10,13 @@ A Robot Money vault is an individual strategy container. It accepts a
 supported asset, deploys or manages that asset according to a specific
 mandate, and issues a receipt token for deposits.
 
+A vault is also a normalization layer. On-chain assets and venues have
+heterogeneous interfaces: deposit methods, withdrawal methods, receipt
+tokens, rebasing behavior, valuation math, liquidity constraints, and
+reporting conventions differ across protocols. A well-designed vault
+absorbs that heterogeneity and presents a predictable product surface:
+deposit, withdraw, receipt, NAV, risk state, and performance.
+
 Examples:
 
 - Stable-yield vault.
@@ -32,6 +39,10 @@ not selected directly by users or agents. They sit inside a vault's
 implementation and handle venue-specific operations such as deploying
 USDC, withdrawing USDC, and reporting the vault's live value in that
 venue.
+
+Adapters are the venue-normalization layer inside a vault. They let a
+vault speak to heterogeneous protocols without leaking those protocol
+differences to users, agents, or the Portfolio Router.
 
 Adding or changing a vault adapter is a privileged vault-management
 operation and expands that vault's security and audit surface.
