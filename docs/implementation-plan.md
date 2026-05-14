@@ -127,6 +127,8 @@ Goal: Fix indexer SQL injection surface, explorer-API CORS gap, and two dapp
 security gaps. Contract security findings and backend fixes are independent and
 can run concurrently after their respective scout gates.
 
+See also: `docs/technical/dapp-browser-keygen-review.md` (browser-keygen security ADR — in-browser keygen path withdrawn; see §3.1 of `docs/technical/dapp-credential-decisions.md`).
+
 - [ ] dev-scout: map backend hardening seams
 - [ ] Indexer: restrict or type-guard `db::count()` to prevent dynamic SQL expansion
 - [ ] Explorer API: add CORS configuration for cross-origin dapp access
