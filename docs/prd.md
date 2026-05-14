@@ -153,7 +153,7 @@ Common edge cases:
 - selected destination is paused, retired, full, or unavailable;
 - requested amount exceeds depositor, vault, allocation, or agent limits;
 - withdrawal path cannot meet synchronous settlement requirements;
-- an allocation leg is unavailable or partially fillable;
+- a Portfolio Router allocation leg is unavailable, causing the whole deposit to revert;
 - account balance or approval is insufficient;
 - agent permission is expired, revoked, or scoped to a different
   destination;
@@ -236,7 +236,8 @@ Common edge cases:
 - Vault and Portfolio Router fee structures are limited to three
   classes: management fee, swap-fee share, and exit fee. Each fee
   class, its rate, and its recipient must be disclosed before user
-  approval.
+  approval. In the current phase only exit fees are implemented;
+  management fee and swap-fee share are deferred to a future phase.
 - Vaults must disclose risk labels, fees, caps, availability, and
   retirement or pause state.
 - Accessibility expectations apply to human-facing flows, including
@@ -502,6 +503,38 @@ The product owner introduced existing portfolio-management providers (Veda named
 
 **Best current answer:** Build the application-completeness surfaces in-house: contracts, Portfolio Router, composite view, CLI, agent skills, and dapp UX. Build-vs-buy for specific vault strategies or providers remains **TBD**.
 
+### 3.15 Intra-vault rebalancing when the basket changes
+
+Basket vaults (protocol-asset and agent-token) allocate new deposits equally
+across active assets at deposit time. Existing positions are not touched when
+an asset is added or removed from the shortlist. This creates drift: a
+depositor who entered before a new token was added holds none of it, and a
+depositor who entered before a token was removed still holds it until they
+redeem.
+
+Three sub-questions are open:
+
+- **Who triggers rebalancing?** Admin-initiated (keeper calls a rebalance
+  function), keeper-automated on a cadence, or depositor-self-service (deposit
+  small amount to "refresh" allocation).
+- **What is the rebalancing target?** Equal weight across current active
+  assets, or a governed weight vector (which would require the basket to adopt
+  router-weight-style governance)?
+- **What are the cost and slippage constraints?** A full rebalance on a large
+  vault requires many swaps in sequence. Each swap incurs slippage and fee
+  cost that is borne by all shareholders. The product must disclose rebalancing
+  cost before it executes, or defer cost to depositors who trigger it
+  individually at redemption.
+
+Related: vault-level rebalancing is distinct from Portfolio Router weight
+updates (§3.12), which allocate across vaults rather than within one vault.
+
+**Best current answer:** **TBD.** The prototype implementation routes only new
+deposits into equal-weight positions; existing holdings are not rebalanced.
+A `rebalance()` admin function and its cost-disclosure model must be specified
+before the agent-token vault can meet the PRD's transparent-performance
+requirement (§2).
+
 ### 3.14 RWA vault feasibility
 
 The product owner mentioned an RWA vault built around a Hyperliquid SP500 perp position, possibly extended to commodities — primarily a "story telling" exposure. None of the source papers describe RWA, and the regulatory and execution mechanics are non-trivial: a perp position is not a spot RWA, and exposing depositors to perp funding/liquidation risk through a "vault" framing has user-protection implications.
@@ -528,9 +561,10 @@ Remaining TBD decisions should be sequenced as follows:
    directly and which use providers such as Veda, Giza, or Zyfai
    (§3.13).
 4. **Agent-token vault internals** — shortlist ownership, inclusion
-   rules, trading authority, position sizing, attack economics, and
-   whether tiers are needed (§1.3, §1.4, §1.5, §3.1, §3.2, §3.8,
-   §3.10).
+   rules, trading authority, position sizing, attack economics,
+   whether tiers are needed, and intra-vault rebalancing trigger,
+   target, and cost model (§1.3, §1.4, §1.5, §3.1, §3.2, §3.8,
+   §3.10, §3.15).
 5. **Launch controls and trust** — legal entity, launch cap amounts,
    multisig composition, challenge windows, upgrade/migration rules,
    and per-vault retirement policy (§2, §3.4, §3.5).
