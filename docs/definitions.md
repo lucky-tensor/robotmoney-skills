@@ -42,7 +42,10 @@ venue.
 
 Adapters are the venue-normalization layer inside a vault. They let a
 vault speak to heterogeneous protocols without leaking those protocol
-differences to users, agents, or the Portfolio Router.
+differences to users, agents, or the Portfolio Router. Adapters also
+expose a rescue path so the owning vault can recover tokens from the
+adapter in an emergency; the rescue function may not sweep USDC or
+protected vault receipts.
 
 Adding or changing a vault adapter is a privileged vault-management
 operation and expands that vault's security and audit surface.
@@ -108,8 +111,31 @@ In the current product scope, RM-token governance does not control:
 
 An agent policy is the depositor-owned permission set for an autonomous
 agent. It defines what the agent can do, including spend caps, expiry,
-share receiver, allowed vaults, and whether Portfolio Router deposits
-are allowed.
+share receiver, withdrawal recipient, and allowed destinations
+(individual vaults and/or the Portfolio Router path).
 
 The depositor who authorizes the agent owns the policy. The Robot Money
 team does not manage user agent policies at runtime.
+
+## Agent Permissions Gateway
+
+The Agent Permissions Gateway is the on-chain permission and safety
+layer for autonomous-agent writes.
+
+It is not a vault, not the Portfolio Router, and not a vault adapter. It
+sits between agent keys and product write surfaces, enforces the
+depositor-owned agent policy, and forwards only allowed actions to a
+vault or the Portfolio Router.
+
+For deposits, the gateway enforces policy and routes accepted USDC into
+an allowed vault or the Portfolio Router, with vault receipts minted to
+the policy-configured share receiver.
+
+For withdrawals, the gateway is the agent-callable redemption spender.
+It enforces policy, verifies receipt allowance and balance, and sends
+withdrawn assets only to the policy-configured withdrawal recipient.
+
+Agents cannot use the gateway to choose their own share receiver,
+choose their own withdrawal recipient, raise caps, expand destinations,
+change vault mandates, alter router weights, add adapters, or bypass a
+disabled vault or router path.
