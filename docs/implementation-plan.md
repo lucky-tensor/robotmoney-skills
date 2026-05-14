@@ -22,11 +22,11 @@
 > basket sidecar. Those require additional architecture work before
 > they move into `rmpc`.
 >
-> **Source-paper reconciliation.** Cross-document contradictions
-> between the three frozen source papers in `docs/papers/`
-> (whitepaper, plan v4, deprecated PRD) are resolved in
-> `docs/technical/source-doc-reconciliation.md` (issue #92). v0/MVP
-> aligns with the chosen answers there.
+> **Source-paper questions.** Cross-document contradictions and open
+> questions from the three frozen source papers in `docs/papers/`
+> (whitepaper, plan v4, deprecated PRD) are tracked in
+> `docs/papers/open-questions.md`. Current product truth lives in
+> `docs/prd.md` and `docs/definitions.md`.
 
 ## 0. Scope
 
