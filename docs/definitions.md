@@ -22,6 +22,20 @@ Examples:
 An underlying vault is any individual Robot Money vault used as a
 destination by the Portfolio Router.
 
+## Vault Adapter
+
+A vault adapter is an internal module used by one Robot Money vault to
+connect that vault to an underlying strategy or venue.
+
+Adapters are not vaults, are not Portfolio Router destinations, and are
+not selected directly by users or agents. They sit inside a vault's
+implementation and handle venue-specific operations such as deploying
+USDC, withdrawing USDC, and reporting the vault's live value in that
+venue.
+
+Adding or changing a vault adapter is a privileged vault-management
+operation and expands that vault's security and audit surface.
+
 ## Vault Receipt
 
 A vault receipt is the token issued by an individual vault to represent
