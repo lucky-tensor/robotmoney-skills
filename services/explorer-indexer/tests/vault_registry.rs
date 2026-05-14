@@ -36,6 +36,7 @@ use explorer_indexer::{
 
 /// Encode a `VaultRegistered` log into the wire format expected by the
 /// stub server's `eth_getLogs` response.
+#[allow(clippy::too_many_arguments)]
 fn encode_vault_registered_log(
     registry_addr: Address,
     vault_addr: Address,
@@ -82,6 +83,7 @@ fn encode_vault_registered_log(
 }
 
 /// Encode a `VaultStatusChanged` log.
+#[allow(clippy::too_many_arguments)]
 fn encode_vault_status_changed_log(
     registry_addr: Address,
     vault_addr: Address,
