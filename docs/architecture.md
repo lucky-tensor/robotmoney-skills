@@ -142,8 +142,9 @@ Router requirements:
 - destinations are vaults, not adapters or raw DeFi venues;
 - deposits expose a preview with destination vaults, weights, estimated
   receipts, fees, and unavailable legs;
-- failed legs either revert the whole deposit or are explicitly
-  surfaced as partial fills before signing;
+- a deposit with any unavailable leg reverts in full; the preview
+  surfaces unavailable legs before signing so the user can decide
+  whether to proceed or wait;
 - receipt tokens remain visible as underlying vault receipts;
 - router caps and vault caps both apply;
 - router state, weights, governance execution, and history are publicly
@@ -191,23 +192,26 @@ background implementation details.
 
 The PRD defines three fee classes per vault or Portfolio Router path:
 management fee, swap-fee share, and exit fee. The current deployed
-`RobotMoneyVault` source implements an exit fee only; there is no
-management-fee accrual mechanism in the verified vault source.
+`RobotMoneyVault` source implements an exit fee only.
 
-Architecture requirements:
+**Current phase:** only exit fees are in scope. Management fee,
+swap-fee-share, protocol revenue collection, and buyback-and-burn are
+deferred to a future phase and require explicit contract design before
+implementation.
 
-- fee bounds are explicit per vault or router path before a user or
-  agent signs;
+Architecture requirements for exit fees (current phase):
+
+- exit fee bounds are explicit per vault or router path before a user
+  or agent signs;
 - previews show gross amount, fee amount, and net amount;
-- fee recipient changes are protocol-admin operations and observable;
-- management-fee and swap-fee-share mechanisms require explicit
-  contract design before they are treated as implemented;
-- protocol revenue and buyback-and-burn execution must have observable
-  on-chain events and indexed history.
+- fee recipient changes are protocol-admin operations and observable.
 
-Until the missing fee and buyback contracts are specified, protocol
-revenue and buyback-and-burn are required architecture surfaces, not
-implemented components.
+Architecture requirements for deferred fee surfaces (future phase):
+
+- management-fee and swap-fee-share mechanisms require dedicated
+  contract design and a separate ADR before implementation;
+- protocol revenue and buyback-and-burn execution must have observable
+  on-chain events and indexed history when implemented.
 
 ## 5. Off-Chain Architecture
 
@@ -439,12 +443,12 @@ this architecture:
 
 | Decision | Tradeoff | Recommended default |
 | --- | --- | --- |
-| Portfolio Router contract design | Must reconcile all-or-revert vs explicit partial-fill behavior, receipt routing, caps, and governance execution. | Build a dedicated router contract; do not fold router behavior into adapters or `rmpc`. |
-| Vault registry contract | PRD requires observable vault registry, mandates, statuses, caps, and risk labels; current source docs do not pin a registry implementation. | Add an on-chain registry with stable read methods and event history, then index it. |
+| Portfolio Router contract design | Execution model resolved: all-or-revert. Remaining open: contract API, preview call signatures, cap enforcement across legs, and governance weight execution path. | Build a dedicated router contract; do not fold router behavior into adapters or `rmpc`. |
+| Vault registry contract | Resolved: on-chain contract. PRD requires observable vault registry, mandates, statuses, caps, and risk labels; the registry must expose stable read methods and emit events indexable by the explorer. | Add an on-chain registry with stable read methods and event history, then index it. |
 | Router-weight governance implementation | PRD fixes the governance surface but not the voting contract, cadence enforcement, quorum, delay, or execution path. | Keep governance narrow: one weight-vote module that can update router weights only. |
 | Protocol-asset and agent-token vault execution | These vaults need swaps, oracles, slippage bounds, liquidity rules, and asset-selection criteria. | Require separate ADRs before implementation; exclude from router until synchronous redemption and pricing are proven. |
-| Management fee and swap-fee-share mechanism | PRD requires both fee types, while the current verified vault has only exit fees. | Specify fee accrual/collection contracts per vault/router path before implementation. |
-| Protocol revenue and buyback-and-burn execution | PRD requires observable buybacks funded by protocol revenue; no contract path is pinned. | Add a narrow revenue collector plus buyback executor with indexed events and admin bounds. |
+| Management fee and swap-fee-share mechanism | Resolved: deferred to a future phase. Current phase ships exit-fee-only disclosure. | Require a separate ADR and contract design before management fee or swap-fee-share are implemented. |
+| Protocol revenue and buyback-and-burn execution | Resolved: deferred to a future phase alongside management fee and swap-fee-share. | Require a separate ADR; when implemented, add a narrow revenue collector plus buyback executor with indexed events and admin bounds. |
 | Production JSON-RPC provider | Safety-critical reads depend on provider correctness and availability. | Support configured primary plus documented fallback; defer multi-RPC consensus until a specific risk justifies it. |
 | Production signer vendor | Architecture prefers non-exportable hardware/KMS keys but no vendor is chosen. | Keep signer backend trait stable; ship software only for dev/low-value use until a production operator picks HSM/KMS. |
 | Dapp hosting and CSP | Security model flags XSS/build compromise as unresolved. | Require static hosting with strict CSP, pinned dependencies, and release provenance before public mainnet use. |
