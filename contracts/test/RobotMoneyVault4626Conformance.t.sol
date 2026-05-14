@@ -33,21 +33,18 @@ contract RobotMoneyVault4626Conformance is ERC4626Test {
             OZIERC20(address(underlying)),
             type(uint256).max, // tvlCap — unbounded for fuzzing
             type(uint256).max, // perDepositCap — unbounded for fuzzing
-            0,                 // exitFeeBps — zero so vanilla 4626 props hold
-            address(this),     // feeRecipient (unused at zero fee)
-            address(this)      // admin — this test contract
+            0, // exitFeeBps — zero so vanilla 4626 props hold
+            address(this), // feeRecipient (unused at zero fee)
+            address(this) // admin — this test contract
         );
 
-        PassthroughAdapter adapter = new PassthroughAdapter(
-            address(underlying),
-            address(vault)
-        );
+        PassthroughAdapter adapter = new PassthroughAdapter(address(underlying), address(vault));
         vault.addAdapter(address(adapter), 10000); // 100% cap
 
-        _underlying_      = address(underlying);
-        _vault_           = address(vault);
-        _delta_           = 0;
-        _vaultMayBeEmpty  = true;
-        _unlimitedAmount  = false;
+        _underlying_ = address(underlying);
+        _vault_ = address(vault);
+        _delta_ = 0;
+        _vaultMayBeEmpty = true;
+        _unlimitedAmount = false;
     }
 }
