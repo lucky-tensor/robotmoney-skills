@@ -251,9 +251,8 @@ async fn call_get_vault(
             Some(block_tag),
         )
         .await?;
-    let r = VaultRegistry::getVaultCall::abi_decode_returns(&out, true).map_err(|e| {
-        crate::errors::RmpcError::ErrRpcDecode(format!("getVault abi decode: {e}"))
-    })?;
+    let r = VaultRegistry::getVaultCall::abi_decode_returns(&out, true)
+        .map_err(|e| crate::errors::RmpcError::ErrRpcDecode(format!("getVault abi decode: {e}")))?;
     Ok(r._0)
 }
 
@@ -323,7 +322,10 @@ mod tests {
             ..Default::default()
         };
         let v: Value = serde_json::to_value(&entry).unwrap();
-        assert!(v["total_assets"].is_string(), "total_assets must be a JSON string");
+        assert!(
+            v["total_assets"].is_string(),
+            "total_assets must be a JSON string"
+        );
         assert_eq!(v["total_assets"].as_str().unwrap(), "1000000");
         assert_eq!(v["deposit_cap"].as_str().unwrap(), "0");
     }

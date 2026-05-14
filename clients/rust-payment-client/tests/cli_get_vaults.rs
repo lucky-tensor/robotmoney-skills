@@ -5,14 +5,16 @@
 
 mod common;
 
-use crate::common::{enc_address, enc_u256, jrpc_result, match_eth_call_selector, selector_hex_of, USDC, VAULT};
+use crate::common::{
+    enc_address, enc_u256, jrpc_result, match_eth_call_selector, selector_hex_of, USDC, VAULT,
+};
 use alloy_primitives::{address, hex as ahex, Address, U256};
 use assert_cmd::Command;
 use mockito::Matcher;
 use rust_payment_client::gateway::{MockVault, VaultRegistry};
 use serde_json::{json, Value};
-use tempfile::TempDir;
 use std::path::PathBuf;
+use tempfile::TempDir;
 
 /// A registry address constant for tests.
 const REGISTRY: Address = address!("0000000000000000000000000000000000000e00");
@@ -29,15 +31,16 @@ struct RegistryFixture {
 
 impl RegistryFixture {
     fn build(rpc_url: &str, chain_id: u64) -> Self {
+        use crate::common::{GATEWAY, GATEWAY_CODE, TEST_PASSPHRASE};
         use alloy_primitives::keccak256;
         use rust_payment_client::signer::software::SoftwareSigner;
-        use crate::common::{TEST_PASSPHRASE, GATEWAY, GATEWAY_CODE};
 
         let tmp = TempDir::new().expect("tempdir");
         let keystore_path = tmp.path().join("keystore.json");
         const TEST_PRIVKEY: [u8; 32] = [
-            0xac, 0x09, 0x74, 0xbe, 0xc3, 0x9a, 0x17, 0xe3, 0x6b, 0xa4, 0xa6, 0xb4, 0xd2, 0x38, 0xff, 0x94,
-            0x4b, 0xac, 0xb4, 0x78, 0xcb, 0xed, 0x5e, 0xfc, 0xae, 0x78, 0x4d, 0x7b, 0xf4, 0xf2, 0xff, 0x80,
+            0xac, 0x09, 0x74, 0xbe, 0xc3, 0x9a, 0x17, 0xe3, 0x6b, 0xa4, 0xa6, 0xb4, 0xd2, 0x38,
+            0xff, 0x94, 0x4b, 0xac, 0xb4, 0x78, 0xcb, 0xed, 0x5e, 0xfc, 0xae, 0x78, 0x4d, 0x7b,
+            0xf4, 0xf2, 0xff, 0x80,
         ];
         SoftwareSigner::create_keystore(&keystore_path, &TEST_PRIVKEY, TEST_PASSPHRASE)
             .expect("create keystore");
@@ -61,7 +64,10 @@ keystore_path           = "{}"
             keystore_path.display(),
         );
         std::fs::write(&config_path, toml).expect("write config");
-        Self { _tmp: tmp, config_path }
+        Self {
+            _tmp: tmp,
+            config_path,
+        }
     }
 }
 
