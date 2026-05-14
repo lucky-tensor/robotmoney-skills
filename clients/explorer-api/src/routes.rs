@@ -78,6 +78,9 @@ type VaultRow = (
     DateTime<Utc>,
 );
 
+// (vault_address, name, risk_label, status, deposit_cap, indexed_at) — used by get_vault
+type VaultDetailRow = (Vec<u8>, String, String, i16, BigDecimal, DateTime<Utc>);
+
 // (block_number, total_assets, total_supply, indexed_at)
 type TvlPointRow = (i64, BigDecimal, BigDecimal, DateTime<Utc>);
 
@@ -444,7 +447,7 @@ async fn get_vault(
 ) -> ApiResult<Json<VaultDetailResponse>> {
     let address_bytes = decode_address_param(&address)?;
 
-    let row: Option<(Vec<u8>, String, String, i16, BigDecimal, DateTime<Utc>)> = sqlx::query_as(
+    let row: Option<VaultDetailRow> = sqlx::query_as(
         "SELECT vault_address, name, risk_label, status, deposit_cap, indexed_at \
          FROM vaults \
          WHERE chain_id = $1 AND vault_address = $2 \
