@@ -247,6 +247,140 @@ Common edge cases:
   redemption, and disclosure requirements before being made available to
   depositors.
 
+## 10. Prior Art
+
+The following protocols informed the Robot Money architecture. Each is
+referenced in open questions or build-vs-buy decisions elsewhere in this
+document.
+
+### Veda
+
+Veda is the closest published reference to the Portfolio Router model.
+It manages depositor USDC across a curated set of underlying ERC-4626
+vaults and issues a single composite receipt. Governance or an operator
+sets target weights; the protocol routes deposits accordingly.
+
+Robot Money diverges on one key point: Veda issues an outer share token
+wrapping the underlying vault positions. The Robot Money Portfolio Router
+does not — depositors receive underlying vault receipts directly and the
+portfolio position is a reporting concept over those receipts, not a
+separate on-chain claim. This preserves depositor visibility into each
+vault and avoids creating a hidden custody layer (see §3.12).
+
+### Yearn V3
+
+Yearn V3 is the architectural reference for the Robot Money vault and
+adapter layer. A Yearn V3 vault accepts deposits into a single ERC-4626
+contract and routes assets across multiple pluggable "strategies"
+(yield venues). The RobotMoneyVault reproduces this pattern: an
+IStrategyAdapter interface normalizes each venue, deposits route across
+active adapters by equal-weight target, and a keeper-triggered rebalance
+corrects drift. The asymmetric pause model (EMERGENCY_ROLE pauses,
+ADMIN_ROLE unpauses) is also borrowed from Yearn's security design.
+
+### Giza and Zyfai
+
+Giza and Zyfai are yield optimization protocols on Base that allocate
+USDC across Aave, Compound, and Morpho by utilization-driven or
+off-chain-optimized weight models. Both are candidates for the stable-yield
+vault's adapter layer if the team revisits the decision to maintain
+custom adapters in-house (see §3.13). The current architecture is built
+to support either model: swapping a custom adapter for a Giza- or
+Zyfai-managed allocation requires only deploying a new IStrategyAdapter
+wrapper, not changing the vault contract.
+
+### Morpho Gauntlet USDC Prime
+
+A curated ERC-4626 vault on Base, managed by Gauntlet, that optimally
+allocates USDC across Morpho Blue lending pools. It is itself a vault —
+the MorphoAdapter holds Morpho Gauntlet shares, not raw Morpho Blue
+positions — which means depositors benefit from Gauntlet's active
+allocation without the stable-yield vault needing to manage Morpho Blue
+directly. This two-layer structure (Robot Money vault → Morpho Gauntlet
+vault → Morpho Blue pools) is a practical example of the multi-vault
+nesting the Portfolio Router generalises.
+
+## 11. Vault Catalog
+
+This section specifies the product properties of each Robot Money vault
+category. Technical implementation details live in `docs/architecture.md`
+and the contract source. The catalog is the product-level commitment:
+risk label, fee structure, accepted asset, withdrawal model, and status.
+
+### 11.1 Stable Yield Vault
+
+| Property | Value |
+| --- | --- |
+| Name | Robot Money USDC |
+| Receipt token | rmUSDC |
+| Accepted asset | USDC (Base, 6 decimals) |
+| Risk label | STABLE_YIELD |
+| Exposure | USDC yield across Morpho Gauntlet USDC Prime, Aave V3, Compound V3 on Base |
+| Allocation model | Equal-weight across active adapters; keeper-triggered rebalance |
+| Exit fee | Configurable 0–1%; 0.1% at launch |
+| Management fee | Not implemented in current phase |
+| Swap-fee share | Not implemented in current phase |
+| Withdrawal | Synchronous; single transaction |
+| TVL cap | Configurable; launch cap TBD (see §2, §3.4) |
+| Per-deposit cap | Configurable |
+| Status | Deployed on Base mainnet |
+
+The stable-yield vault is the launch vault and the only vault currently
+eligible for Portfolio Router allocation. Its synchronous redemption
+guarantee is met through proportional withdrawal across all active
+adapters in a single transaction. If any adapter cannot fulfil its
+proportional share, the vault attempts to cover the shortfall from the
+remaining adapters before reverting.
+
+### 11.2 Protocol Asset Vault
+
+| Property | Value |
+| --- | --- |
+| Name | Robot Money Protocol |
+| Receipt token | rmPROTO |
+| Accepted asset | USDC (Base, 6 decimals) |
+| Risk label | VOLATILE |
+| Exposure | Basket of protocol assets (wETH, cbBTC, wSOL) via Uniswap V3 swaps |
+| Allocation model | Equal-weight across active basket assets at deposit time |
+| Exit fee | Configurable 0–1% |
+| Withdrawal | Synchronous; depends on swap liquidity |
+| Status | Prototype — not audited, not Router-eligible |
+
+Deposits swap USDC into basket assets; withdrawals swap back. NAV is
+denominated in USDC. Swap slippage means actual withdrawal proceeds may
+differ from the preview by up to the configured slippage bound.
+This vault requires a TWAP oracle replacing the current slot0 pricing and
+a resolved rebalancing model (§3.15) before it is Router-eligible.
+
+### 11.3 Agent Token Vault
+
+| Property | Value |
+| --- | --- |
+| Name | Robot Money Agent Tokens |
+| Receipt token | rmAGENT |
+| Accepted asset | USDC (Base, 6 decimals) |
+| Risk label | SPECULATIVE |
+| Exposure | Admin-curated basket of agent-economy tokens via Uniswap V3 swaps |
+| Allocation model | Equal-weight across shortlisted tokens at deposit time |
+| Exit fee | Configurable 0–1% |
+| Withdrawal | Synchronous; depends on swap liquidity |
+| Status | Prototype — not audited, not Router-eligible |
+
+Shortlist curation is admin-controlled in the prototype. The production
+model (bribery-based or RM-token inclusion vote) is unresolved (§1.3,
+§1.4, §3.15). This vault is not Router-eligible until shortlist
+governance, TWAP pricing, and the rebalancing model are specified.
+
+### 11.4 RWA / Thematic Vault
+
+| Property | Value |
+| --- | --- |
+| Status | Future — not specified |
+
+Flagged for narrative value (SP500 perp via Hyperliquid, commodities).
+Requires separate legal, oracle, liquidation, disclosure, and redemption
+work before inclusion in Portfolio Router allocations (§3.14).
+
 # Robot Money — Open Questions
 
 Unresolved questions derived from reading the three source documents kept locally under `docs/papers/`:
