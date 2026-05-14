@@ -215,6 +215,38 @@ Architecture requirements for deferred fee surfaces (future phase):
 
 ## 5. Off-Chain Architecture
 
+### 5.0 Read Surface Taxonomy
+
+All client surfaces — dapp, `rmpc`, and explorer API — expose data in
+two scopes. The scope determines what address (if any) is required and
+which data source is authoritative.
+
+**Protocol scope** — no address required. Shows the state of the
+protocol as a whole: all registered vaults, vault statuses, caps, fees,
+risk labels, adapter breakdowns, Portfolio Router weights, governance
+proposals, and aggregate metrics (total TVL, number of active vaults).
+This is the data a landing page, a public API consumer, or an agent
+with no depositor relationship needs to decide whether and where to
+deposit. Sources: live chain reads for current vault state and weights;
+explorer indexer for historical activity and aggregate metrics.
+
+**Account scope** — an address is required. Shows the state of a
+specific depositor or agent address: receipt token balances across all
+vaults, USDC value of each position, combined portfolio value, agent
+policy details, gateway window usage, and full transaction history.
+Sources: live chain reads for balances, receipt supply, and policy
+state; explorer indexer for history and aggregated fee data.
+
+Both scopes are read-only and require no signing. The account scope
+requires only an address, not a signature — a watched address is
+sufficient. Signing is required only for writes (deposits, withdrawals,
+policy management, governance votes).
+
+Safety-critical values used for signing (fee bounds, cap headroom,
+policy state, allowances, code hash) must always come from live chain
+reads regardless of scope. Explorer data may annotate display but must
+not be the source of values presented in a signing prompt.
+
 ### 5.1 `rmpc`
 
 `rmpc` is the constrained Rust command client for agents and operators.
@@ -233,6 +265,37 @@ Large integer fields are serialized as decimal strings. For
 safety-critical flows, JSON-RPC is the source of truth; explorer/indexer
 data may be used only as an explicitly labeled non-authoritative source
 if a future ADR adds that path.
+
+`rmpc` read commands cover both scopes defined in §5.0:
+
+**Protocol-scope reads** (no address argument required):
+
+- `get-vaults` — vault registry: all registered vaults, their name,
+  risk label, mandate, status (active/paused/retired), TVL, caps, exit
+  fee, and receipt token address.
+- `get-vault <address>` — single vault: all of the above plus adapter
+  breakdown (address, balance, cap, active flag) and rebalance state.
+- `get-router` — Portfolio Router: active vault addresses, current
+  weight bps per vault, pending governance proposal if any, and router
+  cap.
+- `get-governance` — governance state: active proposal, vote tallies if
+  available, cadence, quorum threshold, execution delay, and last
+  applied weights.
+
+**Account-scope reads** (address argument required):
+
+- `get-position <address>` — positions across all registered vaults:
+  receipt token balance, USDC value, share of vault TVL, and composite
+  portfolio total. Suitable for an agent checking its treasury exposure.
+- `get-agent <address>` — agent policy: valid-until, max per payment,
+  max per window, window usage to date, allowed destinations, share
+  receiver, and asset recipient.
+- `get-balance <address>` — USDC and receipt token balances for the
+  address, plus USDC allowance to each configured contract.
+
+Protocol-scope reads require only the chain and registry configuration;
+they do not require a signer key. This allows agent runtimes to run
+protocol reads from a read-only deployment without any key material.
 
 ### 5.2 Agent Permissions Gateway
 
@@ -283,9 +346,61 @@ must not create hidden custody or an unobservable outer claim.
 
 ### 5.3 Human Dapp
 
-The dapp is the human command and observability surface. It must support
-wallet-connected deposits, withdrawals, governance participation,
-calldata preview, role/policy management, and `rmpc` config export.
+The dapp is the human command and observability surface. It covers both
+scopes defined in §5.0 and is organized into three view layers.
+
+**Protocol layer (no wallet required)**
+
+The protocol layer is the first contact for any visitor. It must be
+fully functional without a connected wallet and must load from the
+explorer API plus live chain reads for vault state. It contains:
+
+- Vault registry view: all registered vaults listed with name, risk
+  label, TVL, current APY estimate, exit fee, deposit cap headroom, and
+  status (active/paused/retired). The list is derived from the on-chain
+  vault registry so new vaults appear automatically.
+- Vault detail view: single-vault breakdown — adapter allocations and
+  their individual TVL, rebalance state, fee schedule, caps, receipt
+  token address, and historical TVL and activity charts from the
+  explorer.
+- Portfolio Router view: active vaults, current target weights, pending
+  governance proposal (if any), and historical weight changes.
+- Protocol stats: total TVL across all active vaults, number of unique
+  depositor addresses (indexed), and a recent activity feed of deposits
+  and withdrawals across all vaults.
+
+**Account layer (wallet connected or watched address)**
+
+The account layer shows the state of a specific address. It activates
+on wallet connection but must also be accessible by entering any address
+for read-only portfolio inspection (watched address mode).
+
+- Portfolio position: receipt token balances across all registered
+  vaults, USDC value of each position using live vault share price, and
+  composite portfolio total. Positions from direct vault deposits and
+  Portfolio Router deposits are both shown, broken down by vault.
+- Transaction history: chronological list of deposits, withdrawals, fee
+  events, and governance votes for the address, sourced from the
+  explorer indexer.
+- Agent policies: all active agent policies the address owns — each
+  showing allowed destinations, max per payment, max per window, window
+  usage, share receiver, asset recipient, and expiry.
+
+**Action layer (wallet required for signing)**
+
+Actions are available only with a connected wallet. Every action must
+render a preview before invoking the wallet.
+
+- Deposit: vault selection or Portfolio Router path, amount entry,
+  preview (destination weights, estimated receipts, fees, net amount,
+  unavailable legs), and sign.
+- Withdrawal: position selection, amount or share entry, preview
+  (source vault or router path, estimated USDC, fee, net amount), and
+  sign.
+- Agent policy management: authorize a new agent, update or revoke an
+  existing policy, and export the resulting `rmpc` config file.
+- Governance: review active weight proposal, cast vote, and view
+  execution state.
 
 Credential boundary:
 
@@ -311,6 +426,32 @@ all-or-revert or an explicitly previewed partial fill.
 The explorer stack exists for public history, dashboards, and display. It
 does not authorize actions and does not replace live `rmpc` preflight.
 
+The explorer API exposes both scopes defined in §5.0. It is the primary
+data source for the dapp protocol layer and account history, and for
+integrators who need activity feeds without running their own indexer.
+
+**Protocol-scope endpoints** (no address parameter):
+
+- Vault list: all registered vaults with current indexed TVL, status,
+  fee, and receipt token. Updates on every indexer tick.
+- Vault detail: single vault with adapter allocation history, TVL over
+  time, deposit and withdrawal event log, and fee collection history.
+- Router state: current weights, weight change history, and governance
+  proposal log.
+- Protocol stats: aggregate TVL across all active vaults, unique
+  depositor count, total deposits and withdrawals by volume and count,
+  and a global activity feed of recent events across all vaults.
+
+**Account-scope endpoints** (address parameter required):
+
+- Account positions: receipt token balances and USDC values per vault
+  for a given address, derived from indexed transfer events and current
+  share price.
+- Account history: chronological event log for the address — deposits,
+  withdrawals, fee events, policy changes, and governance votes.
+- Account agent policies: all gateway policy states for policies owned
+  by the address, including window usage history.
+
 Architecture constraints:
 
 - Postgres is the database for every environment that runs the indexer.
@@ -319,6 +460,10 @@ Architecture constraints:
 - Reorg handling rewrites rows at or above the safe head.
 - `rmpc` outputs are never ingested by the indexer.
 - The API is read-only and scoped to one configured chain.
+- Explorer data is non-authoritative for signing. The dapp must
+  re-fetch balances, caps, fees, and policy state from live chain
+  before presenting any signing prompt, even if the explorer was
+  used to populate the preceding display view.
 
 ### 5.5 Agent Runtime Integration
 
