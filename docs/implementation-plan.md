@@ -79,7 +79,8 @@ Goal: Lightweight HTTP API + background indexer over a Postgres database for
 browsing Robot Money deposit/vault history.
 
 Status: **Complete.** Explorer API (`clients/explorer-api/`) and indexer
-(`services/explorer-indexer/`) are implemented with CI coverage (suite-08).
+(`services/explorer-indexer/`) are implemented with CI coverage (suite-08). See
+`docs/technical/explorer-schema-decisions.md` for the schema ADR.
 
 ### Phase 6 — Human Dapp
 Goal: Human-facing interface for deposits, withdrawals, agent authorization,
