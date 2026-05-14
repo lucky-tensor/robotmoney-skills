@@ -25,9 +25,7 @@ contract VaultRegistryTest is Test {
     });
 
     VaultRegistry.VaultMetadata internal meta2 = VaultRegistry.VaultMetadata({
-        name: "Robot Money ETH",
-        asset: makeAddr("weth"),
-        registeredAt: 0
+        name: "Robot Money ETH", asset: makeAddr("weth"), registeredAt: 0
     });
 
     // ─── setUp ────────────────────────────────────────────────────────────────
@@ -119,9 +117,7 @@ contract VaultRegistryTest is Test {
         bytes32 role = registry.ADMIN_ROLE();
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                stranger,
-                role
+                IAccessControl.AccessControlUnauthorizedAccount.selector, stranger, role
             )
         );
         vm.prank(stranger);
@@ -168,9 +164,7 @@ contract VaultRegistryTest is Test {
         vm.warp(2_000_000);
         vm.prank(admin);
         vm.expectEmit(true, true, false, true);
-        emit VaultRegistry.VaultStatusChanged(
-            vault1, VaultRegistry.VaultStatus.Paused, 2_000_000
-        );
+        emit VaultRegistry.VaultStatusChanged(vault1, VaultRegistry.VaultStatus.Paused, 2_000_000);
         registry.setVaultStatus(vault1, VaultRegistry.VaultStatus.Paused);
     }
 
@@ -189,9 +183,7 @@ contract VaultRegistryTest is Test {
         bytes32 role = registry.ADMIN_ROLE();
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                stranger,
-                role
+                IAccessControl.AccessControlUnauthorizedAccount.selector, stranger, role
             )
         );
         vm.prank(stranger);

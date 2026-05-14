@@ -112,9 +112,7 @@ contract VaultRegistry is AccessControl {
         _registered[vault] = true;
         _vaults.push(vault);
         _metadata[vault] = VaultMetadata({
-            name: metadata.name,
-            asset: metadata.asset,
-            registeredAt: block.timestamp
+            name: metadata.name, asset: metadata.asset, registeredAt: block.timestamp
         });
         _status[vault] = VaultStatus.Active;
 
