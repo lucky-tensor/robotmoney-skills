@@ -127,12 +127,8 @@ impl Topics {
                 b"ExitFeeCharged(address,address,uint256,uint256,uint256)",
             ),
             // VaultRegistry — docs/technical/vault-registry-decisions.md §3.5.
-            vault_registered: keccak256(
-                b"VaultRegistered(address,string,string,uint256,uint64)",
-            ),
-            vault_status_changed: keccak256(
-                b"VaultStatusChanged(address,uint8,uint8,uint64)",
-            ),
+            vault_registered: keccak256(b"VaultRegistered(address,string,string,uint256,uint64)"),
+            vault_status_changed: keccak256(b"VaultStatusChanged(address,uint8,uint8,uint64)"),
         }
     }
 

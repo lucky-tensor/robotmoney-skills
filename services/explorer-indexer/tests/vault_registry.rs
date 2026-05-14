@@ -160,18 +160,12 @@ async fn vault_registered_event_inserts_vaults_row() {
         "eth_blockNumber",
         serde_json::Value::String("0x46".into()), // 70
     );
-    stub.set(
-        "eth_getLogs",
-        serde_json::Value::Array(vec![reg_log]),
-    );
+    stub.set("eth_getLogs", serde_json::Value::Array(vec![reg_log]));
     stub.set(
         "eth_call",
         serde_json::Value::String(format!("0x{}", "00".repeat(32))),
     );
-    stub.set(
-        "eth_getBlockByNumber",
-        stub_block(65, 0xab, 0xaa),
-    );
+    stub.set("eth_getBlockByNumber", stub_block(65, 0xab, 0xaa));
     stub.set(
         "eth_getTransactionReceipt",
         serde_json::json!({ "status": "0x1" }),
@@ -213,7 +207,11 @@ async fn vault_registered_event_inserts_vaults_row() {
     .unwrap();
 
     let (addr_bytes, name, risk_label, status) = row.expect("vault row must exist");
-    assert_eq!(addr_bytes, vault_addr.as_slice(), "vault_address must match");
+    assert_eq!(
+        addr_bytes,
+        vault_addr.as_slice(),
+        "vault_address must match"
+    );
     assert_eq!(name, "RobotMoney USDC Vault");
     assert_eq!(risk_label, "stable-yield");
     assert_eq!(status, 0, "status must be Active (0) at registration");
@@ -278,13 +276,15 @@ async fn vault_status_changed_updates_status() {
     stub1.shutdown();
 
     // Confirm vault is Active.
-    let (status_before,): (i16,) =
-        sqlx::query_as("SELECT status FROM vaults WHERE chain_id = $1")
-            .bind(8453i64)
-            .fetch_one(fx.db.pool())
-            .await
-            .unwrap();
-    assert_eq!(status_before, 0, "status must be Active before status-change");
+    let (status_before,): (i16,) = sqlx::query_as("SELECT status FROM vaults WHERE chain_id = $1")
+        .bind(8453i64)
+        .fetch_one(fx.db.pool())
+        .await
+        .unwrap();
+    assert_eq!(
+        status_before, 0,
+        "status must be Active before status-change"
+    );
 
     // Second tick: emit VaultStatusChanged (Active → Paused).
     let sc_log = encode_vault_status_changed_log(
@@ -331,15 +331,17 @@ async fn vault_status_changed_updates_status() {
     stub2.shutdown();
 
     // Status must now be Paused (1).
-    let (status_after, changed_at): (i16, Option<i64>) = sqlx::query_as(
-        "SELECT status, status_changed_at FROM vaults WHERE chain_id = $1",
-    )
-    .bind(8453i64)
-    .fetch_one(fx.db.pool())
-    .await
-    .unwrap();
+    let (status_after, changed_at): (i16, Option<i64>) =
+        sqlx::query_as("SELECT status, status_changed_at FROM vaults WHERE chain_id = $1")
+            .bind(8453i64)
+            .fetch_one(fx.db.pool())
+            .await
+            .unwrap();
 
-    assert_eq!(status_after, 1, "status must be Paused (1) after VaultStatusChanged");
+    assert_eq!(
+        status_after, 1,
+        "status must be Paused (1) after VaultStatusChanged"
+    );
     assert_eq!(
         changed_at,
         Some(1_748_000_100i64),
@@ -381,7 +383,10 @@ async fn migration_preserves_existing_vault_snapshots() {
 
     // The snapshot must still be there (migration 0002 is additive).
     let snap_count = fx.db.count(CountTable::VaultSnapshots).await.unwrap();
-    assert_eq!(snap_count, 1, "vault_snapshots row must survive migration 0002");
+    assert_eq!(
+        snap_count, 1,
+        "vault_snapshots row must survive migration 0002"
+    );
 
     // The new vaults table must exist and be empty.
     let vault_count = fx.db.count(CountTable::Vaults).await.unwrap();
@@ -431,10 +436,7 @@ async fn reorg_deletes_snapshot_rows_but_preserves_vaults_rows() {
         serde_json::Value::String(format!("0x{}", "00".repeat(32))),
     );
     // Return cursor block 65 with hash 0xcc…
-    stub1.set(
-        "eth_getBlockByNumber",
-        stub_block(65, 0xcc, 0xbb),
-    );
+    stub1.set("eth_getBlockByNumber", stub_block(65, 0xcc, 0xbb));
     stub1.set(
         "eth_getTransactionReceipt",
         serde_json::json!({ "status": "0x1" }),
@@ -488,20 +490,14 @@ async fn reorg_deletes_snapshot_rows_but_preserves_vaults_rows() {
 
     // Tick 2: reorg — cursor block 65 now has a different hash.
     let stub2 = StubRpcServer::start().await;
-    stub2.set(
-        "eth_blockNumber",
-        serde_json::Value::String("0x46".into()),
-    );
+    stub2.set("eth_blockNumber", serde_json::Value::String("0x46".into()));
     stub2.set("eth_getLogs", serde_json::Value::Array(Vec::new()));
     stub2.set(
         "eth_call",
         serde_json::Value::String(format!("0x{}", "00".repeat(32))),
     );
     // Block 65 with new hash 0xdd… triggers reorg; walk_back returns -1.
-    stub2.set(
-        "eth_getBlockByNumber",
-        stub_block(65, 0xddu8, 0xeeu8),
-    );
+    stub2.set("eth_getBlockByNumber", stub_block(65, 0xddu8, 0xeeu8));
 
     let rpc2 = JsonRpc::new(&stub2.url);
     let cfg2 = IndexerConfig {

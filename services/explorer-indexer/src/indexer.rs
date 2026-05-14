@@ -425,9 +425,8 @@ async fn handle_log(
 
     // VaultRegistered — upsert a row into `vaults`.
     if topic0 == topics.vault_registered {
-        let decoded =
-            IVaultRegistryEvents::VaultRegistered::decode_log(&into_alloy_log(log), true)
-                .map_err(|e| IndexerError::Decode(format!("VaultRegistered: {e}")))?;
+        let decoded = IVaultRegistryEvents::VaultRegistered::decode_log(&into_alloy_log(log), true)
+            .map_err(|e| IndexerError::Decode(format!("VaultRegistered: {e}")))?;
         let r = db
             .upsert_vault(
                 cfg.chain_id,
