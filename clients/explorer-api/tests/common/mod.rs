@@ -297,8 +297,20 @@ async fn seed_fixture(pool: &PgPool) {
     let reg_tx = hex_bytes("1010101010101010101010101010101010101010101010101010101010101010");
 
     for (addr, name, risk_label, status, deposit_cap) in [
-        (&vault_a_addr[..], "Alpha Vault", "stable-yield", 0_i16, "1000000000"),
-        (&vault_b_addr[..], "Beta Vault", "growth", 1_i16, "500000000"),
+        (
+            &vault_a_addr[..],
+            "Alpha Vault",
+            "stable-yield",
+            0_i16,
+            "1000000000",
+        ),
+        (
+            &vault_b_addr[..],
+            "Beta Vault",
+            "growth",
+            1_i16,
+            "500000000",
+        ),
     ] {
         // vaults has a FK on chains(chain_id) only — no FK on contracts.
         sqlx::query(

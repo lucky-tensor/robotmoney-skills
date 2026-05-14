@@ -41,8 +41,8 @@ use serde::Deserialize;
 use crate::error::{ApiError, ApiResult};
 use crate::model::{
     dec_to_string, AgentPolicy, AgentResponse, Contract, ContractsResponse, Deposit,
-    DepositResponse, DepositsResponse, Freshness, Health, Transaction, TransactionResponse,
-    Vault, VaultDetail, VaultDetailResponse, VaultSnapshot, VaultSnapshotsResponse, VaultTvlPoint,
+    DepositResponse, DepositsResponse, Freshness, Health, Transaction, TransactionResponse, Vault,
+    VaultDetail, VaultDetailResponse, VaultSnapshot, VaultSnapshotsResponse, VaultTvlPoint,
     VaultsResponse,
 };
 use crate::state::AppState;
@@ -403,7 +403,17 @@ async fn list_vaults(State(state): State<AppState>) -> ApiResult<Json<VaultsResp
     let vaults: Vec<Vault> = rows
         .into_iter()
         .map(
-            |(chain_id, vault_address, name, risk_label, status, deposit_cap, total_assets, exit_fee_bps, indexed_at)| {
+            |(
+                chain_id,
+                vault_address,
+                name,
+                risk_label,
+                status,
+                deposit_cap,
+                total_assets,
+                exit_fee_bps,
+                indexed_at,
+            )| {
                 Vault {
                     chain_id,
                     address: addr_to_hex(&vault_address),
@@ -463,12 +473,14 @@ async fn get_vault(
 
     let tvl_history: Vec<VaultTvlPoint> = tvl_rows
         .into_iter()
-        .map(|(block_number, total_assets, total_supply, ia)| VaultTvlPoint {
-            block_number,
-            total_assets: dec_to_string(&total_assets),
-            total_supply: dec_to_string(&total_supply),
-            indexed_at: ia,
-        })
+        .map(
+            |(block_number, total_assets, total_supply, ia)| VaultTvlPoint {
+                block_number,
+                total_assets: dec_to_string(&total_assets),
+                total_supply: dec_to_string(&total_supply),
+                indexed_at: ia,
+            },
+        )
         .collect();
 
     // Freshness is taken from the most recent TVL point if available,

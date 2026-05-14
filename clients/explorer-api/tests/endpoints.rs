@@ -349,7 +349,10 @@ async fn list_vaults_returns_all_registered_vaults() {
         "expected 2 registered vaults, got {vaults:?}"
     );
     // The response envelope must include chain_id and block_number.
-    assert!(body["block_number"].is_i64(), "block_number must be present");
+    assert!(
+        body["block_number"].is_i64(),
+        "block_number must be present"
+    );
     assert!(body["indexed_at"].is_string(), "indexed_at must be present");
 }
 
