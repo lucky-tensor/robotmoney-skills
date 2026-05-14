@@ -72,6 +72,7 @@ keystore_path           = "{}"
 }
 
 /// ABI-encode a `VaultRecord` tuple for mocking `getVault` returns.
+#[allow(clippy::too_many_arguments)]
 fn enc_vault_record(
     vault: Address,
     name: &str,
