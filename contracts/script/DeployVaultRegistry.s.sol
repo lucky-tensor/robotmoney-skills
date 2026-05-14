@@ -120,8 +120,7 @@ contract DeployVaultRegistry is Script {
             }
         }
         registry.registerVault(
-            vault,
-            VaultRegistry.VaultMetadata({name: vaultName, asset: asset, registeredAt: 0})
+            vault, VaultRegistry.VaultMetadata({name: vaultName, asset: asset, registeredAt: 0})
         );
         return true;
     }
@@ -153,8 +152,7 @@ contract DeployVaultRegistry is Script {
         try vm.envString("DEPLOYMENT_OUT") returns (string memory s) {
             outPath = s;
         } catch {
-            outPath =
-                string.concat("deployments/registry-", vm.toString(block.chainid), ".json");
+            outPath = string.concat("deployments/registry-", vm.toString(block.chainid), ".json");
         }
 
         string memory obj = "registry_deployment";
