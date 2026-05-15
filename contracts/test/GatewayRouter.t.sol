@@ -16,6 +16,7 @@ import {MockVault} from "../gateway/MockVault.sol";
 import {RobotMoneyGateway} from "../gateway/RobotMoneyGateway.sol";
 import {PortfolioRouter} from "../PortfolioRouter.sol";
 import {VaultRegistry} from "../VaultRegistry.sol";
+import {FeeOnTransferUSDC, ShareLeakVault, UnderPullVault} from "./RobotMoneyGateway.t.sol";
 
 // ─── Test fixtures ────────────────────────────────────────────────────────────
 
@@ -49,6 +50,25 @@ contract RouterMockVault is ERC20 {
         assetToken.safeTransferFrom(msg.sender, address(this), assets);
         shares = assets;
         _mint(receiver, shares);
+    }
+}
+
+/// @notice Mock router that underpulls USDC during deposit, leaving residual USDC
+///         in the caller (gateway). Used to trigger the router-path USDC custody invariant.
+contract UnderPullRouter {
+    IERC20 public immutable usdc;
+
+    constructor(address usdc_) {
+        usdc = IERC20(usdc_);
+    }
+
+    function depositFor(address, uint256 amount, uint256[] calldata)
+        external
+        returns (uint256[] memory sharesPerLeg)
+    {
+        // Pull `amount - 1` instead of `amount`. The gateway will be left holding 1 wei.
+        usdc.transferFrom(msg.sender, address(this), amount - 1);
+        sharesPerLeg = new uint256[](0);
     }
 }
 
@@ -509,6 +529,55 @@ contract GatewayRouterTest is Test {
 
     // ─── Common preflight check propagation ──────────────────────────────────
 
+    /// @dev depositTo enforces zero-amount check.
+    function test_depositTo_revertsOnZeroAmount() public {
+        _authorize(agent, _policyWithRouter());
+        uint256[] memory empty = new uint256[](0);
+        vm.prank(agent);
+        vm.expectRevert(RobotMoneyGateway.InvalidAmount.selector);
+        gateway.depositTo(
+            keccak256("o"), 0, uint64(block.timestamp + 60), keccak256("i"), address(router), empty
+        );
+    }
+
+    /// @dev depositTo enforces deadline too far.
+    function test_depositTo_revertsOnDeadlineTooFar() public {
+        _authorize(agent, _policyWithRouter());
+        _fundAndApprove(agent, 10 * ONE_USDC);
+        uint256[] memory empty = new uint256[](0);
+        vm.prank(agent);
+        vm.expectRevert(RobotMoneyGateway.DeadlineTooFar.selector);
+        gateway.depositTo(
+            keccak256("o"),
+            10 * ONE_USDC,
+            uint64(block.timestamp + 601),
+            keccak256("i"),
+            address(router),
+            empty
+        );
+    }
+
+    /// @dev depositTo enforces expired policy.
+    function test_depositTo_revertsOnExpiredPolicy() public {
+        IGateway.AgentPolicy memory p = _policyWithRouter();
+        p.validUntil = uint64(block.timestamp + 100);
+        _authorize(agent, p);
+        _fundAndApprove(agent, 10 * ONE_USDC);
+
+        vm.warp(block.timestamp + 200);
+        uint256[] memory empty = new uint256[](0);
+        vm.prank(agent);
+        vm.expectRevert(RobotMoneyGateway.AgentPolicyExpired.selector);
+        gateway.depositTo(
+            keccak256("o"),
+            10 * ONE_USDC,
+            uint64(block.timestamp + 60),
+            keccak256("i"),
+            address(router),
+            empty
+        );
+    }
+
     /// @dev depositTo enforces the paused check.
     function test_depositTo_revertsWhenPaused() public {
         _authorize(agent, _policyWithRouter());
@@ -644,6 +713,196 @@ contract GatewayRouterTest is Test {
             keccak256("i"),
             address(router),
             empty
+        );
+    }
+
+    // ─── Coverage: custody invariants and fee-on-transfer in depositTo ─────────
+
+    /// @dev `depositTo` router path: post-call USDC custody invariant — a router
+    ///      that under-pulls USDC leaves the gateway holding leftover stablecoin.
+    function test_depositTo_routerPath_revertsOnUsdcCustodyInvariant() public {
+        // Deploy gateway with an underpull router.
+        UnderPullRouter underPullRouter = new UnderPullRouter(address(usdc));
+        RobotMoneyGateway gw = new RobotMoneyGateway(
+            IERC20(address(usdc)), IERC4626(address(vault)), admin, pauser, address(underPullRouter)
+        );
+        address[] memory routerDests = new address[](1);
+        routerDests[0] = address(underPullRouter);
+        IGateway.AgentPolicy memory p = IGateway.AgentPolicy({
+            active: true,
+            validUntil: uint64(block.timestamp + 365 days),
+            maxPerPayment: MAX_PER_PAYMENT,
+            maxPerWindow: MAX_PER_WINDOW,
+            shareReceiver: shareReceiver,
+            allowedDestinations: routerDests
+        });
+        vm.prank(depositor);
+        gw.authorizeAgent(agent, p);
+
+        usdc.mint(agent, 100 * ONE_USDC);
+        vm.prank(agent);
+        usdc.approve(address(gw), 100 * ONE_USDC);
+
+        uint256[] memory emptyMin = new uint256[](0);
+        vm.prank(agent);
+        vm.expectRevert(RobotMoneyGateway.ShareCustodyInvariantViolated.selector);
+        gw.depositTo(
+            keccak256("o"),
+            100 * ONE_USDC,
+            uint64(block.timestamp + 60),
+            keccak256("i"),
+            address(underPullRouter),
+            emptyMin
+        );
+    }
+
+    /// @dev `depositTo` detects fee-on-transfer tokens just like `deposit`.
+    function test_depositTo_revertsOnFeeOnTransferToken() public {
+        // Build a fresh stack: fee-on-transfer usdc, matching vault, gateway with router.
+        FeeOnTransferUSDC fotUsdc = new FeeOnTransferUSDC();
+        MockVault fotVault = new MockVault(address(fotUsdc));
+        VaultRegistry fotRegistry = new VaultRegistry(admin);
+        RouterMockVault fotVaultA = new RouterMockVault(address(fotUsdc), "FOT Vault A", "fA");
+        vm.prank(admin);
+        fotRegistry.registerVault(
+            address(fotVaultA),
+            VaultRegistry.VaultMetadata({name: "FOT A", asset: address(fotUsdc), registeredAt: 0})
+        );
+        PortfolioRouter fotRouter =
+            new PortfolioRouter(address(fotUsdc), address(fotRegistry), admin);
+        address[] memory fvaults = new address[](1);
+        fvaults[0] = address(fotVaultA);
+        uint256[] memory fbps = new uint256[](1);
+        fbps[0] = 10_000;
+        vm.prank(admin);
+        fotRouter.setWeights(fvaults, fbps);
+
+        RobotMoneyGateway fotGateway = new RobotMoneyGateway(
+            IERC20(address(fotUsdc)), IERC4626(address(fotVault)), admin, pauser, address(fotRouter)
+        );
+
+        address[] memory routerDests = new address[](1);
+        routerDests[0] = address(fotRouter);
+        IGateway.AgentPolicy memory p = IGateway.AgentPolicy({
+            active: true,
+            validUntil: uint64(block.timestamp + 365 days),
+            maxPerPayment: MAX_PER_PAYMENT,
+            maxPerWindow: MAX_PER_WINDOW,
+            shareReceiver: shareReceiver,
+            allowedDestinations: routerDests
+        });
+        vm.prank(depositor);
+        fotGateway.authorizeAgent(agent, p);
+
+        fotUsdc.mint(agent, 200 * ONE_USDC);
+        vm.prank(agent);
+        fotUsdc.approve(address(fotGateway), 200 * ONE_USDC);
+
+        uint256[] memory emptyMin = new uint256[](0);
+        vm.prank(agent);
+        vm.expectRevert(RobotMoneyGateway.FeeOnTransferDetected.selector);
+        fotGateway.depositTo(
+            keccak256("o"),
+            100 * ONE_USDC,
+            uint64(block.timestamp + 60),
+            keccak256("i"),
+            address(fotRouter),
+            emptyMin
+        );
+    }
+
+    /// @dev `depositTo` vault path: pre-call share custody invariant — gateway must
+    ///      hold zero shares of the destination vault before the call.
+    function test_depositTo_vaultPath_revertsOnPreCallShareCustody() public {
+        _authorize(agent, _policyOpenDestinations());
+        _fundAndApprove(agent, 100 * ONE_USDC);
+
+        // Seed the gateway with vault shares before the deposit.
+        deal(address(vault), address(gateway), 1, true);
+
+        uint256[] memory emptyMin = new uint256[](0);
+        vm.prank(agent);
+        vm.expectRevert(RobotMoneyGateway.ShareCustodyInvariantViolated.selector);
+        gateway.depositTo(
+            keccak256("o"),
+            100 * ONE_USDC,
+            uint64(block.timestamp + 60),
+            keccak256("i"),
+            address(vault),
+            emptyMin
+        );
+    }
+
+    /// @dev `depositTo` vault path: post-call share custody invariant —
+    ///      a vault that leaks shares back to the gateway trips the invariant.
+    function test_depositTo_vaultPath_revertsOnPostCallShareCustody() public {
+        // Use a share-leaking vault.
+        ShareLeakVault leaky = new ShareLeakVault(address(usdc));
+        RobotMoneyGateway gw = new RobotMoneyGateway(
+            IERC20(address(usdc)), IERC4626(address(leaky)), admin, pauser, address(0)
+        );
+        address[] memory empty = new address[](0);
+        IGateway.AgentPolicy memory p = IGateway.AgentPolicy({
+            active: true,
+            validUntil: uint64(block.timestamp + 365 days),
+            maxPerPayment: MAX_PER_PAYMENT,
+            maxPerWindow: MAX_PER_WINDOW,
+            shareReceiver: shareReceiver,
+            allowedDestinations: empty
+        });
+        vm.prank(depositor);
+        gw.authorizeAgent(agent, p);
+
+        usdc.mint(agent, 100 * ONE_USDC);
+        vm.prank(agent);
+        usdc.approve(address(gw), 100 * ONE_USDC);
+
+        uint256[] memory emptyMin = new uint256[](0);
+        vm.prank(agent);
+        vm.expectRevert(RobotMoneyGateway.ShareCustodyInvariantViolated.selector);
+        gw.depositTo(
+            keccak256("o"),
+            100 * ONE_USDC,
+            uint64(block.timestamp + 60),
+            keccak256("i"),
+            address(leaky),
+            emptyMin
+        );
+    }
+
+    /// @dev `depositTo` vault path: post-call USDC custody invariant — a vault that
+    ///      under-pulls USDC leaves the gateway holding leftover stablecoin.
+    function test_depositTo_vaultPath_revertsOnPostCallUsdcCustody() public {
+        UnderPullVault underPull = new UnderPullVault(address(usdc));
+        RobotMoneyGateway gw = new RobotMoneyGateway(
+            IERC20(address(usdc)), IERC4626(address(underPull)), admin, pauser, address(0)
+        );
+        address[] memory empty = new address[](0);
+        IGateway.AgentPolicy memory p = IGateway.AgentPolicy({
+            active: true,
+            validUntil: uint64(block.timestamp + 365 days),
+            maxPerPayment: MAX_PER_PAYMENT,
+            maxPerWindow: MAX_PER_WINDOW,
+            shareReceiver: shareReceiver,
+            allowedDestinations: empty
+        });
+        vm.prank(depositor);
+        gw.authorizeAgent(agent, p);
+
+        usdc.mint(agent, 100 * ONE_USDC);
+        vm.prank(agent);
+        usdc.approve(address(gw), 100 * ONE_USDC);
+
+        uint256[] memory emptyMin = new uint256[](0);
+        vm.prank(agent);
+        vm.expectRevert(RobotMoneyGateway.ShareCustodyInvariantViolated.selector);
+        gw.depositTo(
+            keccak256("o"),
+            100 * ONE_USDC,
+            uint64(block.timestamp + 60),
+            keccak256("i"),
+            address(underPull),
+            emptyMin
         );
     }
 }
