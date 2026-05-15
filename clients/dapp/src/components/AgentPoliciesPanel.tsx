@@ -65,78 +65,76 @@ export function AgentPoliciesPanel(props: AgentPoliciesPanelProps) {
         <p data-testid="agent-policies-error">Failed to load policies: {props.error}</p>
       )}
 
-      {!props.loading && !props.error && (
-        props.policies.length === 0 ? (
-            <p data-testid="agent-policies-empty">No agent policies found for this address.</p>
-          ) : (
-            <ul data-testid="agent-policies-list">
-              {props.policies.map((policy) => (
-                <li key={policy.agent} data-testid="agent-policy-entry">
-                  <details>
-                    <summary data-testid="agent-policy-agent">
-                      <code>{policy.agent}</code>{" "}
-                      {policy.authorized ? (
-                        <span data-testid="agent-policy-status-active">(active)</span>
-                      ) : (
-                        <span data-testid="agent-policy-status-revoked">(revoked)</span>
-                      )}
-                    </summary>
-                    <dl data-testid="agent-policy-fields">
-                      {policy.validUntil !== undefined && (
+      {!props.loading &&
+        !props.error &&
+        (props.policies.length === 0 ? (
+          <p data-testid="agent-policies-empty">No agent policies found for this address.</p>
+        ) : (
+          <ul data-testid="agent-policies-list">
+            {props.policies.map((policy) => (
+              <li key={policy.agent} data-testid="agent-policy-entry">
+                <details>
+                  <summary data-testid="agent-policy-agent">
+                    <code>{policy.agent}</code>{" "}
+                    {policy.authorized ? (
+                      <span data-testid="agent-policy-status-active">(active)</span>
+                    ) : (
+                      <span data-testid="agent-policy-status-revoked">(revoked)</span>
+                    )}
+                  </summary>
+                  <dl data-testid="agent-policy-fields">
+                    {policy.validUntil !== undefined && (
+                      <>
+                        <dt>Valid until</dt>
+                        <dd data-testid="agent-policy-valid-until">{policy.validUntil}</dd>
+                      </>
+                    )}
+                    {policy.maxPerPayment !== undefined && (
+                      <>
+                        <dt>Max per payment</dt>
+                        <dd data-testid="agent-policy-max-per-payment">{policy.maxPerPayment}</dd>
+                      </>
+                    )}
+                    {policy.maxPerWindow !== undefined && (
+                      <>
+                        <dt>Max per window</dt>
+                        <dd data-testid="agent-policy-max-per-window">{policy.maxPerWindow}</dd>
+                      </>
+                    )}
+                    {policy.shareReceiver !== undefined && (
+                      <>
+                        <dt>Share receiver</dt>
+                        <dd data-testid="agent-policy-share-receiver">{policy.shareReceiver}</dd>
+                      </>
+                    )}
+                    {/* Withdrawal policy fields (issue #319 extension) */}
+                    {policy.assetRecipient !== undefined && (
+                      <>
+                        <dt>Asset recipient (withdrawal)</dt>
+                        <dd data-testid="agent-policy-asset-recipient">{policy.assetRecipient}</dd>
+                      </>
+                    )}
+                    {policy.allowedSourceVaults !== undefined &&
+                      policy.allowedSourceVaults.length > 0 && (
                         <>
-                          <dt>Valid until</dt>
-                          <dd data-testid="agent-policy-valid-until">{policy.validUntil}</dd>
-                        </>
-                      )}
-                      {policy.maxPerPayment !== undefined && (
-                        <>
-                          <dt>Max per payment</dt>
-                          <dd data-testid="agent-policy-max-per-payment">{policy.maxPerPayment}</dd>
-                        </>
-                      )}
-                      {policy.maxPerWindow !== undefined && (
-                        <>
-                          <dt>Max per window</dt>
-                          <dd data-testid="agent-policy-max-per-window">{policy.maxPerWindow}</dd>
-                        </>
-                      )}
-                      {policy.shareReceiver !== undefined && (
-                        <>
-                          <dt>Share receiver</dt>
-                          <dd data-testid="agent-policy-share-receiver">{policy.shareReceiver}</dd>
-                        </>
-                      )}
-                      {/* Withdrawal policy fields (issue #319 extension) */}
-                      {policy.assetRecipient !== undefined && (
-                        <>
-                          <dt>Asset recipient (withdrawal)</dt>
-                          <dd data-testid="agent-policy-asset-recipient">
-                            {policy.assetRecipient}
+                          <dt>Allowed source vaults</dt>
+                          <dd data-testid="agent-policy-allowed-source-vaults">
+                            <ul>
+                              {policy.allowedSourceVaults.map((v) => (
+                                <li key={v} data-testid="agent-policy-source-vault">
+                                  <code>{v}</code>
+                                </li>
+                              ))}
+                            </ul>
                           </dd>
                         </>
                       )}
-                      {policy.allowedSourceVaults !== undefined &&
-                        policy.allowedSourceVaults.length > 0 && (
-                          <>
-                            <dt>Allowed source vaults</dt>
-                            <dd data-testid="agent-policy-allowed-source-vaults">
-                              <ul>
-                                {policy.allowedSourceVaults.map((v) => (
-                                  <li key={v} data-testid="agent-policy-source-vault">
-                                    <code>{v}</code>
-                                  </li>
-                                ))}
-                              </ul>
-                            </dd>
-                          </>
-                        )}
-                    </dl>
-                  </details>
-                </li>
-              ))}
-            </ul>
-          )
-      )}
+                  </dl>
+                </details>
+              </li>
+            ))}
+          </ul>
+        ))}
     </section>
   );
 }
