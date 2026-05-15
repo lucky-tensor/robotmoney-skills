@@ -78,8 +78,8 @@ mod tests {
         assert_eq!(&actual, expected, "deposit selector drift");
     }
 
-    /// `authorizeAgent(address,(bool,uint64,uint256,uint256,address,address[]))` —
-    /// ensure the tuple layout matches the on-chain ABI (allowedDestinations added in #302).
+    /// `authorizeAgent(address,(bool,uint64,uint256,uint256,address,address[],address,uint256,uint256,address[]))` —
+    /// ensure the tuple layout matches the on-chain ABI (withdrawal fields added in #311).
     #[test]
     fn authorize_agent_selector_matches() {
         let canonical = "authorizeAgent(address,(bool,uint64,uint256,uint256,address,address[],address,uint256,uint256,address[]))";
