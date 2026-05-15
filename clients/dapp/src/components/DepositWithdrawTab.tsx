@@ -142,13 +142,12 @@ export function DepositWithdrawTab(props: Props) {
   const [depositInput, setDepositInput] = useState("");
   const [withdrawInput, setWithdrawInput] = useState("");
 
-  // Multi-vault: selected vault and its pre-filled share balance from PositionSelector.
-  // When explorerApiUrl is provided we start with no selection so that clicking a
-  // radio in PositionSelector always fires onChange (a pre-checked radio never
-  // fires onChange when clicked, which would leave withdrawInput empty).
-  const [selectedVault, setSelectedVault] = useState<Address | undefined>(
-    props.explorerApiUrl ? undefined : props.vaultAddress,
-  );
+  // Multi-vault: selected vault drives the redeem simulation.
+  // Defaults to props.vaultAddress so direct amount entry works without clicking
+  // PositionSelector. The PositionSelector is always rendered with selectedVault=undefined
+  // so its radios are never pre-checked — a pre-checked radio never fires onChange,
+  // which would leave the withdrawInput empty when clicked.
+  const [selectedVault, setSelectedVault] = useState<Address | undefined>(props.vaultAddress);
 
   const depositAssets = parseUsdcAmount(depositInput);
   const withdrawShares = parseUsdcAmount(withdrawInput);
@@ -395,7 +394,7 @@ export function DepositWithdrawTab(props: Props) {
           <PositionSelector
             account={address}
             explorerApiUrl={props.explorerApiUrl}
-            selectedVault={selectedVault}
+            selectedVault={undefined}
             onSelect={(vault, sharesStr) => {
               setSelectedVault(vault);
               // Pre-fill the input with the full position balance so the
