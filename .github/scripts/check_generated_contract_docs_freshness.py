@@ -28,6 +28,7 @@ PREREQUISITES
 from __future__ import annotations
 
 import difflib
+import re
 import shutil
 import subprocess
 import sys
@@ -36,6 +37,22 @@ from pathlib import Path
 
 
 GENERATED_DIR = Path("docs/src/contracts")
+
+# forge doc embeds the current HEAD SHA in [Git Source] lines, e.g.:
+#   [Git Source](https://github.com/org/repo/blob/<sha>/contracts/Foo.sol)
+# This SHA changes with every commit, so comparing it against a freshly
+# regenerated snapshot would always fail. We normalise these lines to a
+# placeholder before comparison so that only meaningful content changes
+# (NatSpec additions, deletions, renames) are flagged as drift.
+_GIT_SOURCE_RE = re.compile(
+    r"(\[Git Source\]\(https://[^)]+/blob/)[0-9a-f]{40}(/[^)]*\))",
+    re.IGNORECASE,
+)
+
+
+def normalize(content: str) -> str:
+    """Strip commit-SHA from [Git Source] links so they don't cause false diffs."""
+    return _GIT_SOURCE_RE.sub(r"\1<SHA>\2", content)
 
 
 def repo_root() -> Path:
@@ -52,13 +69,17 @@ def repo_root() -> Path:
 
 
 def snapshot_tree(base: Path) -> dict[str, str]:
-    """Return {relative_path: content} for all files under base."""
+    """Return {relative_path: normalized_content} for all files under base.
+
+    Content is normalized so that commit-SHA tokens in [Git Source] links
+    are replaced with a placeholder before comparison (see normalize()).
+    """
     result: dict[str, str] = {}
     for p in sorted(base.rglob("*")):
         if p.is_file():
             rel = str(p.relative_to(base))
             try:
-                result[rel] = p.read_text(encoding="utf-8")
+                result[rel] = normalize(p.read_text(encoding="utf-8"))
             except UnicodeDecodeError:
                 result[rel] = p.read_bytes().hex()
     return result
