@@ -112,16 +112,13 @@ function App() {
                 <div className="tab-section-stack">
                   <RouterView apiUrl={explorerApiUrl} />
                   {governance ? (
-                    <GovernancePanel
-                      governanceAddress={governance}
-                      apiUrl={explorerApiUrl}
-                    />
+                    <GovernancePanel governanceAddress={governance} apiUrl={explorerApiUrl} />
                   ) : (
                     <section data-testid="governance-config-missing">
                       <h2>Governance — Weight Proposals</h2>
                       <p className="hint">
-                        Router governance voting is unavailable until the governance
-                        contract address is configured.
+                        Router governance voting is unavailable until the governance contract
+                        address is configured.
                       </p>
                     </section>
                   )}

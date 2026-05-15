@@ -129,9 +129,7 @@ contract DeployRouterGovernance is Script {
         try vm.envString("DEPLOYMENT_OUT") returns (string memory s) {
             outPath = s;
         } catch {
-            outPath = string.concat(
-                "deployments/governance-", vm.toString(block.chainid), ".json"
-            );
+            outPath = string.concat("deployments/governance-", vm.toString(block.chainid), ".json");
         }
 
         string memory obj = "governance_deployment";
