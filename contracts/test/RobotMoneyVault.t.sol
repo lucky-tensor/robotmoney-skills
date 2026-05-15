@@ -564,7 +564,11 @@ contract RobotMoneyVaultTest is Test {
         // After emergencyWithdraw, deposits must be blocked.
         assertEq(vault.depositsPaused(), true, "deposits must be paused after emergencyWithdraw");
         // Withdrawals must NOT be blocked.
-        assertEq(vault.withdrawalsPaused(), false, "withdrawals must not be paused after emergencyWithdraw");
+        assertEq(
+            vault.withdrawalsPaused(),
+            false,
+            "withdrawals must not be paused after emergencyWithdraw"
+        );
         // paused() (= both flags) must be false.
         assertFalse(vault.paused(), "full paused() must be false after emergencyWithdraw");
 
