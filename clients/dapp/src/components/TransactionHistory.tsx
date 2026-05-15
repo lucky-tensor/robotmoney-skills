@@ -82,9 +82,7 @@ export function TransactionHistory(props: TransactionHistoryProps) {
       )}
 
       {state.kind === "error" && (
-        <p data-testid="transaction-history-error">
-          Failed to load history: {state.message}
-        </p>
+        <p data-testid="transaction-history-error">Failed to load history: {state.message}</p>
       )}
 
       {state.kind === "ready" && (
@@ -116,12 +114,8 @@ export function TransactionHistory(props: TransactionHistoryProps) {
                     <td data-testid="transaction-history-row-type">{ev.event_type}</td>
                     <td data-testid="transaction-history-row-block">{ev.block_number}</td>
                     <td data-testid="transaction-history-row-tx">{ev.tx_hash}</td>
-                    <td data-testid="transaction-history-row-vault">
-                      {ev.vault_address ?? "—"}
-                    </td>
-                    <td data-testid="transaction-history-row-amount">
-                      {ev.amount ?? "—"}
-                    </td>
+                    <td data-testid="transaction-history-row-vault">{ev.vault_address ?? "—"}</td>
+                    <td data-testid="transaction-history-row-amount">{ev.amount ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>

@@ -59,14 +59,10 @@ export function AgentPoliciesPanel(props: AgentPoliciesPanelProps) {
         Owner: <code>{props.ownerAddress}</code>
       </p>
 
-      {props.loading && (
-        <p data-testid="agent-policies-loading">Loading agent policies…</p>
-      )}
+      {props.loading && <p data-testid="agent-policies-loading">Loading agent policies…</p>}
 
       {props.error && (
-        <p data-testid="agent-policies-error">
-          Failed to load policies: {props.error}
-        </p>
+        <p data-testid="agent-policies-error">Failed to load policies: {props.error}</p>
       )}
 
       {!props.loading && !props.error && (
@@ -96,25 +92,19 @@ export function AgentPoliciesPanel(props: AgentPoliciesPanelProps) {
                       {policy.maxPerPayment !== undefined && (
                         <>
                           <dt>Max per payment</dt>
-                          <dd data-testid="agent-policy-max-per-payment">
-                            {policy.maxPerPayment}
-                          </dd>
+                          <dd data-testid="agent-policy-max-per-payment">{policy.maxPerPayment}</dd>
                         </>
                       )}
                       {policy.maxPerWindow !== undefined && (
                         <>
                           <dt>Max per window</dt>
-                          <dd data-testid="agent-policy-max-per-window">
-                            {policy.maxPerWindow}
-                          </dd>
+                          <dd data-testid="agent-policy-max-per-window">{policy.maxPerWindow}</dd>
                         </>
                       )}
                       {policy.shareReceiver !== undefined && (
                         <>
                           <dt>Share receiver</dt>
-                          <dd data-testid="agent-policy-share-receiver">
-                            {policy.shareReceiver}
-                          </dd>
+                          <dd data-testid="agent-policy-share-receiver">{policy.shareReceiver}</dd>
                         </>
                       )}
                       {/* Withdrawal policy fields (issue #319 extension) */}

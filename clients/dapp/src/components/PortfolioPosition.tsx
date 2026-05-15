@@ -111,9 +111,7 @@ export function PortfolioPosition(props: PortfolioPositionProps) {
       )}
 
       {state.kind === "error" && (
-        <p data-testid="portfolio-position-error">
-          Failed to load positions: {state.message}
-        </p>
+        <p data-testid="portfolio-position-error">Failed to load positions: {state.message}</p>
       )}
 
       {state.kind === "ready" && (
@@ -139,19 +137,10 @@ export function PortfolioPosition(props: PortfolioPositionProps) {
                   {state.positions.map((pos) => {
                     const usdc = usdcValues[pos.vault_address.toLowerCase()];
                     return (
-                      <tr
-                        key={pos.vault_address}
-                        data-testid="portfolio-position-row"
-                      >
-                        <td data-testid="portfolio-position-row-vault">
-                          {pos.vault_name}
-                        </td>
-                        <td data-testid="portfolio-position-row-risk">
-                          {pos.risk_label}
-                        </td>
-                        <td data-testid="portfolio-position-row-shares">
-                          {pos.shares}
-                        </td>
+                      <tr key={pos.vault_address} data-testid="portfolio-position-row">
+                        <td data-testid="portfolio-position-row-vault">{pos.vault_name}</td>
+                        <td data-testid="portfolio-position-row-risk">{pos.risk_label}</td>
+                        <td data-testid="portfolio-position-row-shares">{pos.shares}</td>
                         <td data-testid="portfolio-position-row-usdc">
                           {usdc !== undefined ? usdc : "—"}
                         </td>
@@ -164,9 +153,7 @@ export function PortfolioPosition(props: PortfolioPositionProps) {
               <p data-testid="portfolio-position-total">
                 Composite total (USDC):{" "}
                 <strong>
-                  {compositeTotal(state.positions) !== null
-                    ? compositeTotal(state.positions)
-                    : "—"}
+                  {compositeTotal(state.positions) !== null ? compositeTotal(state.positions) : "—"}
                 </strong>
               </p>
             </>

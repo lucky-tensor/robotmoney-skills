@@ -45,9 +45,7 @@ function makeFetch(body: unknown, ok = true, status = 200): FetchLike {
 
 describe("WatchedAddressInput", () => {
   it("renders the input form with submit button", () => {
-    const { getByTestId } = render(
-      <WatchedAddressInput onAddress={vi.fn()} />,
-    );
+    const { getByTestId } = render(<WatchedAddressInput onAddress={vi.fn()} />);
     expect(getByTestId("watched-address-form")).toBeTruthy();
     expect(getByTestId("watched-address-input")).toBeTruthy();
     expect(getByTestId("watched-address-submit")).toBeTruthy();
@@ -63,9 +61,7 @@ describe("WatchedAddressInput", () => {
 
   it("calls onAddress with the validated address on valid submit", () => {
     const onAddress = vi.fn();
-    const { getByTestId } = render(
-      <WatchedAddressInput onAddress={onAddress} />,
-    );
+    const { getByTestId } = render(<WatchedAddressInput onAddress={onAddress} />);
     const input = getByTestId("watched-address-input");
     fireEvent.change(input, { target: { value: WATCHED } });
     fireEvent.submit(getByTestId("watched-address-form"));
@@ -74,9 +70,7 @@ describe("WatchedAddressInput", () => {
 
   it("shows an error and does not call onAddress for an invalid address", () => {
     const onAddress = vi.fn();
-    const { getByTestId, queryByTestId } = render(
-      <WatchedAddressInput onAddress={onAddress} />,
-    );
+    const { getByTestId, queryByTestId } = render(<WatchedAddressInput onAddress={onAddress} />);
     fireEvent.change(getByTestId("watched-address-input"), {
       target: { value: "not-an-address" },
     });
@@ -89,9 +83,7 @@ describe("WatchedAddressInput", () => {
 
   it("clears the error after a subsequent valid submission", () => {
     const onAddress = vi.fn();
-    const { getByTestId, queryByTestId } = render(
-      <WatchedAddressInput onAddress={onAddress} />,
-    );
+    const { getByTestId, queryByTestId } = render(<WatchedAddressInput onAddress={onAddress} />);
     // First: invalid.
     fireEvent.change(getByTestId("watched-address-input"), {
       target: { value: "bad" },
@@ -157,9 +149,7 @@ describe("PortfolioPosition", () => {
     const rows = getAllByTestId("portfolio-position-row");
     expect(rows).toHaveLength(2);
 
-    const vaultNames = getAllByTestId("portfolio-position-row-vault").map(
-      (n) => n.textContent,
-    );
+    const vaultNames = getAllByTestId("portfolio-position-row-vault").map((n) => n.textContent);
     expect(vaultNames).toEqual(["Alpha Vault", "Beta Vault"]);
 
     const shares = getAllByTestId("portfolio-position-row-shares").map((n) => n.textContent);
@@ -237,11 +227,7 @@ describe("PortfolioPosition", () => {
       indexed_at: "2026-05-10T00:00:00Z",
     };
     const { getByTestId, queryByTestId } = render(
-      <PortfolioPosition
-        address={WATCHED}
-        apiUrl="http://api"
-        fetchImpl={makeFetch(empty)}
-      />,
+      <PortfolioPosition address={WATCHED} apiUrl="http://api" fetchImpl={makeFetch(empty)} />,
     );
     await waitFor(() => {
       expect(getByTestId("portfolio-position-empty")).toBeTruthy();
@@ -368,11 +354,7 @@ describe("TransactionHistory", () => {
       indexed_at: "2026-05-10T00:00:00Z",
     };
     const { getByTestId, queryByTestId } = render(
-      <TransactionHistory
-        address={WATCHED}
-        apiUrl="http://api"
-        fetchImpl={makeFetch(empty)}
-      />,
+      <TransactionHistory address={WATCHED} apiUrl="http://api" fetchImpl={makeFetch(empty)} />,
     );
     await waitFor(() => {
       expect(getByTestId("transaction-history-empty")).toBeTruthy();
@@ -395,9 +377,7 @@ describe("TransactionHistory", () => {
 
   it("makes exactly one request to the history endpoint", async () => {
     const fetchImpl = makeFetch(historyFixture);
-    render(
-      <TransactionHistory address={WATCHED} apiUrl="http://api" fetchImpl={fetchImpl} />,
-    );
+    render(<TransactionHistory address={WATCHED} apiUrl="http://api" fetchImpl={fetchImpl} />);
     await waitFor(() => {
       expect(fetchImpl).toHaveBeenCalledTimes(1);
     });
@@ -421,19 +401,13 @@ describe("AgentPoliciesPanel", () => {
 
   it("shows error state", () => {
     const { getByTestId } = render(
-      <AgentPoliciesPanel
-        ownerAddress={WATCHED}
-        policies={[]}
-        error="RPC failed"
-      />,
+      <AgentPoliciesPanel ownerAddress={WATCHED} policies={[]} error="RPC failed" />,
     );
     expect(getByTestId("agent-policies-error").textContent).toContain("RPC failed");
   });
 
   it("shows empty state when no policies", () => {
-    const { getByTestId } = render(
-      <AgentPoliciesPanel ownerAddress={WATCHED} policies={[]} />,
-    );
+    const { getByTestId } = render(<AgentPoliciesPanel ownerAddress={WATCHED} policies={[]} />);
     expect(getByTestId("agent-policies-empty")).toBeTruthy();
   });
 
@@ -493,9 +467,7 @@ describe("AgentPoliciesPanel", () => {
   });
 
   it("shows the owner address", () => {
-    const { getByTestId } = render(
-      <AgentPoliciesPanel ownerAddress={WATCHED} policies={[]} />,
-    );
+    const { getByTestId } = render(<AgentPoliciesPanel ownerAddress={WATCHED} policies={[]} />);
     expect(getByTestId("agent-policies-owner").textContent).toContain(WATCHED);
   });
 });

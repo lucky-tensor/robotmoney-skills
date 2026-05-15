@@ -44,24 +44,17 @@ export function AccountLayerView({ apiUrl, connectedAddress, usdcValues }: Accou
     <section data-testid="account-layer-view">
       <h2>Account inspector</h2>
       <p className="hint">
-        Enter any Ethereum address to inspect portfolio positions and transaction
-        history without connecting a wallet.
+        Enter any Ethereum address to inspect portfolio positions and transaction history without
+        connecting a wallet.
       </p>
 
       <WatchedAddressInput defaultAddress={connectedAddress} onAddress={setWatchedAddress} />
 
       {watchedAddress !== undefined && (
         <>
-          <PortfolioPosition
-            address={watchedAddress}
-            apiUrl={apiUrl}
-            usdcValues={usdcValues}
-          />
+          <PortfolioPosition address={watchedAddress} apiUrl={apiUrl} usdcValues={usdcValues} />
           <TransactionHistory address={watchedAddress} apiUrl={apiUrl} />
-          <AgentPoliciesPanel
-            ownerAddress={watchedAddress}
-            policies={[]}
-          />
+          <AgentPoliciesPanel ownerAddress={watchedAddress} policies={[]} />
         </>
       )}
     </section>
