@@ -13,16 +13,12 @@ import { ReceiptValueDisplay } from "../../../src/components/shared/ReceiptValue
 
 describe("ReceiptValueDisplay", () => {
   it("renders receipt token (shares) amount", () => {
-    const { getByTestId } = render(
-      <ReceiptValueDisplay shares="1000000" usdcValue="999500" />,
-    );
+    const { getByTestId } = render(<ReceiptValueDisplay shares="1000000" usdcValue="999500" />);
     expect(getByTestId("receipt-value-display-shares").textContent).toBe("1000000");
   });
 
   it("renders USD value when usdcValue is provided", () => {
-    const { getByTestId } = render(
-      <ReceiptValueDisplay shares="2000000" usdcValue="1998000" />,
-    );
+    const { getByTestId } = render(<ReceiptValueDisplay shares="2000000" usdcValue="1998000" />);
     expect(getByTestId("receipt-value-display-usdc").textContent).toBe("1998000");
   });
 

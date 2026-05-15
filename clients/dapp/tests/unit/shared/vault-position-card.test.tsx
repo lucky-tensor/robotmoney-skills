@@ -16,22 +16,14 @@ const VAULT = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 describe("VaultPositionCard", () => {
   it("renders vault name", () => {
     const { getByTestId } = render(
-      <VaultPositionCard
-        vaultAddress={VAULT}
-        vaultName="Alpha Vault"
-        shares="1000000"
-      />,
+      <VaultPositionCard vaultAddress={VAULT} vaultName="Alpha Vault" shares="1000000" />,
     );
     expect(getByTestId("vault-position-card-name").textContent).toBe("Alpha Vault");
   });
 
   it("renders receipt token (shares) count from mocked on-chain hook data", () => {
     const { getByTestId } = render(
-      <VaultPositionCard
-        vaultAddress={VAULT}
-        vaultName="Alpha Vault"
-        shares="1500000"
-      />,
+      <VaultPositionCard vaultAddress={VAULT} vaultName="Alpha Vault" shares="1500000" />,
     );
     expect(getByTestId("vault-position-card-shares").textContent).toBe("1500000");
   });
@@ -50,22 +42,14 @@ describe("VaultPositionCard", () => {
 
   it("shows dash for USDC when usdcValue is not provided", () => {
     const { getByTestId } = render(
-      <VaultPositionCard
-        vaultAddress={VAULT}
-        vaultName="Alpha Vault"
-        shares="1000000"
-      />,
+      <VaultPositionCard vaultAddress={VAULT} vaultName="Alpha Vault" shares="1000000" />,
     );
     expect(getByTestId("vault-position-card-usdc").textContent).toBe("—");
   });
 
   it("renders the vault address", () => {
     const { getByTestId } = render(
-      <VaultPositionCard
-        vaultAddress={VAULT}
-        vaultName="Alpha Vault"
-        shares="500000"
-      />,
+      <VaultPositionCard vaultAddress={VAULT} vaultName="Alpha Vault" shares="500000" />,
     );
     expect(getByTestId("vault-position-card-address").textContent).toContain(VAULT);
   });
@@ -84,22 +68,14 @@ describe("VaultPositionCard", () => {
 
   it("does not render risk label when omitted", () => {
     const { queryByTestId } = render(
-      <VaultPositionCard
-        vaultAddress={VAULT}
-        vaultName="Alpha Vault"
-        shares="500000"
-      />,
+      <VaultPositionCard vaultAddress={VAULT} vaultName="Alpha Vault" shares="500000" />,
     );
     expect(queryByTestId("vault-position-card-risk")).toBeNull();
   });
 
   it("has the expected data-testid on the article", () => {
     const { getByTestId } = render(
-      <VaultPositionCard
-        vaultAddress={VAULT}
-        vaultName="Alpha Vault"
-        shares="1000000"
-      />,
+      <VaultPositionCard vaultAddress={VAULT} vaultName="Alpha Vault" shares="1000000" />,
     );
     expect(getByTestId("vault-position-card")).toBeTruthy();
   });

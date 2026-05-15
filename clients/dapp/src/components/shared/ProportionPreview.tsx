@@ -78,9 +78,7 @@ export function ProportionPreview({ legs }: ProportionPreviewProps) {
                 {leg.vault.slice(0, 8)}…{leg.vault.slice(-4)}
               </code>
             </td>
-            <td data-testid={`proportion-preview-weight-${i}`}>
-              {formatPercent(leg.weightBps)}
-            </td>
+            <td data-testid={`proportion-preview-weight-${i}`}>{formatPercent(leg.weightBps)}</td>
             <td data-testid={`proportion-preview-usdc-${i}`}>{formatUsdc(leg.legAmount)}</td>
             <td data-testid={`proportion-preview-shares-${i}`}>
               {leg.unavailable ? "—" : formatShares(leg.estShares)}

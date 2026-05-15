@@ -69,7 +69,9 @@ export function VaultPositionCard({
         </div>
         <div>
           <dt>Est. USDC value</dt>
-          <dd data-testid="vault-position-card-usdc">{usdcValue !== undefined ? usdcValue : "—"}</dd>
+          <dd data-testid="vault-position-card-usdc">
+            {usdcValue !== undefined ? usdcValue : "—"}
+          </dd>
         </div>
       </dl>
     </article>

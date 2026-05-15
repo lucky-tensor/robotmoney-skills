@@ -39,7 +39,6 @@ type Props = Readonly<{
   ctx: RouterPreviewContext;
 }>;
 
-
 export function RouterDepositSection(props: Props) {
   const { address, isConnected } = useAccount();
   const approveWrite = useWriteContract();

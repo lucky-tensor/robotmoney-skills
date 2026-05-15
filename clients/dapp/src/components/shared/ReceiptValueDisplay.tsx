@@ -37,7 +37,11 @@ export interface ReceiptValueDisplayProps {
  * ReceiptValueDisplay renders a receipt-token amount alongside its USD
  * conversion. Purely presentational — no hooks, no fetching.
  */
-export function ReceiptValueDisplay({ shares, usdcValue, label = "rmUSDC shares" }: ReceiptValueDisplayProps) {
+export function ReceiptValueDisplay({
+  shares,
+  usdcValue,
+  label = "rmUSDC shares",
+}: ReceiptValueDisplayProps) {
   return (
     <p className="hint" data-testid="receipt-value-display">
       <span data-testid="receipt-value-display-label">{label}:</span>{" "}

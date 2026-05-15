@@ -66,19 +66,14 @@ describe("ProportionPreview", () => {
   });
 
   it("shows ⚠ UNAVAILABLE status for unavailable legs", () => {
-    const legsWithUnavailable: LegPreview[] = [
-      { ...twoLegs[0], unavailable: true },
-      twoLegs[1],
-    ];
+    const legsWithUnavailable: LegPreview[] = [{ ...twoLegs[0], unavailable: true }, twoLegs[1]];
     const { getByTestId } = render(<ProportionPreview legs={legsWithUnavailable} />);
     expect(getByTestId("proportion-preview-status-0").textContent).toContain("UNAVAILABLE");
     expect(getByTestId("proportion-preview-status-1").textContent).toBe("Active");
   });
 
   it("shows dash for shares of unavailable leg", () => {
-    const legsWithUnavailable: LegPreview[] = [
-      { ...twoLegs[0], unavailable: true },
-    ];
+    const legsWithUnavailable: LegPreview[] = [{ ...twoLegs[0], unavailable: true }];
     const { getByTestId } = render(<ProportionPreview legs={legsWithUnavailable} />);
     expect(getByTestId("proportion-preview-shares-0").textContent).toBe("—");
   });
