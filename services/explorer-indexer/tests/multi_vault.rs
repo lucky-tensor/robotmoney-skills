@@ -21,7 +21,7 @@ mod common;
 use alloy_primitives::{Address, U256};
 use common::{try_pg_fixture, StubRpcServer};
 use explorer_indexer::{
-    abi::{IPortfolioRouterEvents, IRouterGovernanceEvents, IVaultRegistryEvents},
+    abi::{IRouterGovernanceEvents, IVaultRegistryEvents},
     db::CountTable,
     indexer::{run_once, IndexerConfig},
     rpc::JsonRpc,
@@ -90,7 +90,7 @@ fn encode_weights_set_log(
     use alloy_primitives::LogData;
     use alloy_sol_types::SolEvent as _;
 
-    let event = IPortfolioRouterEvents::WeightsSet {
+    let event = IRouterGovernanceEvents::WeightsSet {
         vaults: vaults.to_vec(),
         bps: bps.to_vec(),
     };
@@ -115,13 +115,13 @@ fn encode_weights_set_log(
 }
 
 /// Encode a `ProposalCreated` log from RouterGovernance.
+#[allow(clippy::too_many_arguments)]
 fn encode_proposal_created_log(
     gov_addr: Address,
     proposal_id: U256,
     proposer: Address,
-    vaults: &[Address],
-    bps: &[U256],
-    snapshot_block: U256,
+    description: &str,
+    deadline_block: U256,
     block_number: u64,
     tx_hash: [u8; 32],
     log_index: u32,
@@ -132,9 +132,9 @@ fn encode_proposal_created_log(
     let event = IRouterGovernanceEvents::ProposalCreated {
         proposalId: proposal_id,
         proposer,
-        vaults: vaults.to_vec(),
-        bps: bps.to_vec(),
-        snapshotBlock: snapshot_block,
+        description: description.to_string(),
+        deadlineBlock: deadline_block,
+        createdAt: block_number,
     };
     let log_data: LogData = event.encode_log_data();
     let topics: Vec<String> = log_data
@@ -157,10 +157,12 @@ fn encode_proposal_created_log(
 }
 
 /// Encode a `VoteCast` log from RouterGovernance.
+#[allow(clippy::too_many_arguments)]
 fn encode_vote_cast_log(
     gov_addr: Address,
     proposal_id: U256,
     voter: Address,
+    support: bool,
     weight: U256,
     block_number: u64,
     tx_hash: [u8; 32],
@@ -172,6 +174,7 @@ fn encode_vote_cast_log(
     let event = IRouterGovernanceEvents::VoteCast {
         proposalId: proposal_id,
         voter,
+        support,
         weight,
     };
     let log_data: LogData = event.encode_log_data();
@@ -244,8 +247,7 @@ async fn two_registered_vaults_indexed_independently() {
         gateway: Address::from([0xCCu8; 20]),
         vault: vault_a,
         registry: Some(registry_addr),
-        portfolio_router: None,
-        governance: None,
+        router_governance: None,
         max_blocks_per_tick: 200,
         end_block: Some(65),
     };
@@ -280,8 +282,7 @@ async fn two_registered_vaults_indexed_independently() {
         gateway: Address::from([0xCCu8; 20]),
         vault: vault_a,
         registry: Some(registry_addr),
-        portfolio_router: None,
-        governance: None,
+        router_governance: None,
         max_blocks_per_tick: 200,
         end_block: Some(89),
     };
@@ -354,8 +355,7 @@ async fn weights_set_event_populates_router_weight_snapshots() {
         gateway: Address::from([0xCCu8; 20]),
         vault: Address::from([0xDDu8; 20]),
         registry: None,
-        portfolio_router: Some(router_addr),
-        governance: None,
+        router_governance: Some(router_addr),
         max_blocks_per_tick: 200,
         end_block: Some(65),
     };
@@ -417,15 +417,14 @@ async fn proposal_created_event_populates_governance_proposals() {
 
     let gov_addr = Address::from([0x99u8; 20]);
     let proposer = Address::from([0x11u8; 20]);
-    let vault_a = Address::from([0xAAu8; 20]);
+    let _vault_a = Address::from([0xAAu8; 20]);
 
     let proposal_log = encode_proposal_created_log(
         gov_addr,
         U256::from(1u64),
         proposer,
-        &[vault_a],
-        &[U256::from(10000u64)],
-        U256::from(48u64), // snapshotBlock
+        "vault_a=10000bps",
+        U256::from(48u64), // deadlineBlock
         50u64,
         [0x33u8; 32],
         0,
@@ -451,8 +450,7 @@ async fn proposal_created_event_populates_governance_proposals() {
         gateway: Address::from([0xCCu8; 20]),
         vault: Address::from([0xDDu8; 20]),
         registry: None,
-        portfolio_router: None,
-        governance: Some(gov_addr),
+        router_governance: Some(gov_addr),
         max_blocks_per_tick: 200,
         end_block: Some(65),
     };
@@ -490,15 +488,16 @@ async fn vote_cast_event_populates_governance_votes() {
         .await
         .unwrap();
     fx.db
-        .upsert_governance_proposal(
+        .insert_proposal(
             8453,
-            U256::from(1u64),
+            1i64,
+            40i64,
+            0i32,
+            [0x11u8; 32],
             gov_addr.into_array(),
-            [0x11u8; 20],
-            40,
-            38,
-            U256::ZERO,
-            100,
+            "seed proposal",
+            1_748_000_000i64,
+            100i64,
         )
         .await
         .unwrap();
@@ -507,6 +506,7 @@ async fn vote_cast_event_populates_governance_votes() {
         gov_addr,
         U256::from(1u64),
         voter,
+        true,
         U256::from(500_000u64),
         55u64,
         [0x44u8; 32],
@@ -533,8 +533,7 @@ async fn vote_cast_event_populates_governance_votes() {
         gateway: Address::from([0xCCu8; 20]),
         vault: Address::from([0xDDu8; 20]),
         registry: None,
-        portfolio_router: None,
-        governance: Some(gov_addr),
+        router_governance: Some(gov_addr),
         max_blocks_per_tick: 200,
         end_block: Some(65),
     };
