@@ -1,8 +1,9 @@
 /**
  * Entry point. Reads runtime config from `import.meta.env` and bootstraps
- * the wagmi provider. Renders the brand nav, a always-on status header,
+ * the wagmi provider. Renders the brand nav, the public landing header,
  * the protocol-layer (no wallet required), the per-user Agents panel,
- * and the account-layer inspector (issue #319).
+ * the account-layer inspector (issue #319), and the debug observability
+ * drawer for engineering diagnostics.
  */
 import "./styles.css";
 import React, { useState } from "react";
@@ -20,6 +21,7 @@ import { VaultList } from "./components/VaultList";
 import { VaultDetail } from "./components/VaultDetail";
 import { RouterView } from "./components/RouterView";
 import { ProtocolStats } from "./components/ProtocolStats";
+import { DebugPanel } from "./components/DebugPanel";
 import { makeConfig } from "./lib/wagmi";
 import { useGatewayVerifier } from "./lib/useGatewayVerifier";
 import { resolveExplorerApiUrl } from "./lib/explorerApi";
@@ -43,6 +45,7 @@ function App() {
     expectedCodeHash,
   );
   const [selectedVault, setSelectedVault] = useState<string | null>(null);
+  const [debugOpen, setDebugOpen] = useState(false);
   const { address: connectedAddress } = useAccount();
 
   return (
@@ -52,7 +55,21 @@ function App() {
         forkTimestamp={env.VITE_FORK_BLOCK_TIMESTAMP}
         forkBlock={env.VITE_FORK_BLOCK_NUMBER}
       />
-      <NavBar />
+      <NavBar debugOpen={debugOpen} onToggleDebug={() => setDebugOpen((open) => !open)} />
+      <DebugPanel
+        open={debugOpen}
+        onClose={() => setDebugOpen(false)}
+        gatewayAddress={gateway}
+        vaultAddress={vault}
+        registryAddress={registry}
+        routerAddress={router}
+        envClass={envClass}
+        explorerApiUrl={explorerApiUrl}
+        expectedCodeHash={expectedCodeHash}
+        forkTimestamp={env.VITE_FORK_BLOCK_TIMESTAMP}
+        forkBlock={env.VITE_FORK_BLOCK_NUMBER}
+        verificationState={verificationState}
+      />
       <VerificationBanner state={verificationState} refresh={verificationRefresh} />
       {/* Protocol layer — works without a connected wallet (issue #318). */}
       <ProtocolStats apiUrl={explorerApiUrl} />
@@ -67,7 +84,7 @@ function App() {
       )}
       <RouterView apiUrl={explorerApiUrl} />
       {/* Account / action layer — requires a connected wallet. */}
-      <StatusHeader gatewayAddress={gateway} vaultAddress={vault} envClass={envClass} />
+      <StatusHeader />
       <AgentsPanel
         gatewayAddress={gateway}
         vaultAddress={vault}
