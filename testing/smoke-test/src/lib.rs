@@ -1911,6 +1911,8 @@ pub struct DappStack {
     compose_log_followers: Vec<MonitoredChild>,
     pub endpoints: DappEndpoints,
     _tunnels: Option<Tunnels>,
+    /// Env vars captured at boot time for `rebuild_dapp`.
+    rebuild_env: Vec<(String, String)>,
 }
 
 /// Where the dapp, RPC, and explorer-api are publicly reachable from a
@@ -2051,6 +2053,27 @@ impl DappStack {
                 explorer_api_url,
             } => (None, rpc_url, dapp_url, explorer_api_url),
         };
+
+        let rebuild_env: Vec<(String, String)> = vec![
+            ("POSTGRES_PORT".into(), ports.postgres_port.to_string()),
+            ("EXPLORER_API_PORT".into(), ports.explorer_api_port.to_string()),
+            ("DAPP_PORT".into(), ports.dapp_port.to_string()),
+            ("VITE_GATEWAY_ADDRESS".into(), gateway_hex.to_string()),
+            ("VITE_VAULT_ADDRESS".into(), vault_hex.to_string()),
+            ("VITE_GATEWAY_EXPECTED_CODE_HASH".into(), gateway_runtime_hash.clone()),
+            ("VITE_REGISTRY_ADDRESS".into(), fixture.registry_hex().to_string()),
+            ("VITE_ROUTER_ADDRESS".into(), fixture.router_hex().to_string()),
+            ("INDEXER_GATEWAY".into(), gateway_hex.to_string()),
+            ("INDEXER_VAULT".into(), vault_hex.to_string()),
+            ("INDEXER_RPC_URL".into(), format!("http://host.docker.internal:{}", fixture.rpc_port())),
+            ("VITE_DEVNET_RPC_URL".into(), vite_rpc_url.clone()),
+            ("VITE_EXPLORER_API_URL".into(), vite_explorer_api_url.clone()),
+            ("VITE_DAPP_URL".into(), vite_dapp_url.clone()),
+            ("VITE_FAUCET_HARNESS_PRIVATE_KEY".into(), HARNESS_USDC_HOLDER_PRIVATE_KEY_HEX.into()),
+            ("INDEXER_CHAIN_ID".into(), "918453".into()),
+            ("INDEXER_CHAIN_NAME".into(), "devnet".into()),
+            ("EXPLORER_API_CHAIN_ID".into(), "918453".into()),
+        ];
 
         eprintln!("smoke-test: building and starting dapp stack (this may take several minutes for first build)...");
 
@@ -2217,7 +2240,42 @@ impl DappStack {
                 explorer_api_url: vite_explorer_api_url,
             },
             _tunnels: tunnels,
+            rebuild_env,
         })
+    }
+
+    /// Rebuild and restart only the `dapp` container in-place, leaving
+    /// postgres, explorer-indexer, and explorer-api untouched. All VITE_*
+    /// build args are re-injected from the values captured at boot time so
+    /// the new bundle points at the same devnet addresses and ports.
+    pub fn rebuild_dapp(&self) -> Result<(), HarnessError> {
+        logging::info("smoke-test", "rebuilding dapp container (--no-deps)");
+        let mut cmd = Command::new("docker");
+        cmd.args([
+            "compose",
+            "-f",
+            "docker-compose.dapp.yaml",
+            "up",
+            "--build",
+            "--no-deps",
+            "-d",
+            "dapp",
+        ]);
+        for (k, v) in &self.rebuild_env {
+            cmd.env(k, v);
+        }
+        let out = cmd
+            .current_dir(&self.compose_dir)
+            .output()
+            .map_err(HarnessError::from)?;
+        logging::log_command_output("compose-rebuild-dapp", &out);
+        if !out.status.success() {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            return Err(HarnessError::Docker(format!(
+                "dapp rebuild failed: {stderr}"
+            )));
+        }
+        Ok(())
     }
 }
 
