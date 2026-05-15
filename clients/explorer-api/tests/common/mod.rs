@@ -53,6 +53,15 @@ pub const VAULTS_MIGRATION: &str =
 pub const GOVERNANCE_MIGRATION: &str =
     include_str!("../../../../services/explorer-indexer/migrations/0005_add_governance_tables.sql");
 
+/// Migration 0006: adds nullable `vault` column to `agent_deposits` and
+/// creates `router_deposit_legs` table (issue #373).
+/// Required so that the `COALESCE(vault, share_receiver)` query in routes.rs
+/// resolves — without this column the API would error on any activity/history
+/// request.
+pub const ROUTER_LEGS_MIGRATION: &str = include_str!(
+    "../../../../services/explorer-indexer/migrations/0006_agent_deposit_vault_and_router_legs.sql"
+);
+
 /// Primary chain used by the API instance under test.
 pub const PRIMARY_CHAIN_ID: i64 = 8453; // Base mainnet
 /// Shadow chain used only to prove cross-chain isolation (issue #178).
@@ -128,7 +137,11 @@ pub async fn apply_migrations(pool: &PgPool) {
     sqlx::raw_sql(GOVERNANCE_MIGRATION)
         .execute(pool)
         .await
-        .expect("apply governance migration (0003)");
+        .expect("apply governance migration (0005)");
+    sqlx::raw_sql(ROUTER_LEGS_MIGRATION)
+        .execute(pool)
+        .await
+        .expect("apply router_deposit_legs migration (0006)");
 }
 
 /// Decode a 0x-prefixed hex string into raw bytes for BYTEA columns.
