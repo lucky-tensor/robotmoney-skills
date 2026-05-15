@@ -712,12 +712,30 @@ impl Fixture {
 
         let registry_deployment = read_registry_deployment(&reg_out)?;
 
+        // Pin the fork block for the router simulation to the current chain
+        // head — guarantees the simulation sees the registerVault tx that
+        // run_forge_deploy_registry just mined (avoids a race where Geth
+        // reports a stale "latest" before the block propagates to the RPC).
+        let fork_block = fetch_current_block_number(&rpc_url).inspect_err(|err| {
+            logging::error("smoke-test", format!("fetch block number failed: {err}"));
+            log_compose_state(
+                &compose_dir,
+                &compose_files_owned,
+                &compose_log_env,
+                "chain-compose",
+                "block number fetch failure",
+                200,
+            );
+            cleanup();
+        })?;
+
         // Deploy PortfolioRouter and wire initial weights (issue #303).
         // 10 000 bps → RobotMoneyVault as the sole active vault.
         let router_out = tmp.path().join("router.json");
         run_forge_deploy_router(
             &repo_root,
             &rpc_url,
+            fork_block,
             &router_out,
             &registry_deployment.registry,
             &deployment.vault,
@@ -1533,9 +1551,14 @@ fn read_registry_deployment(path: &Path) -> Result<RegistryDeploymentJson, Harne
 /// Run the DeployPortfolioRouter forge script (issue #303) and write the
 /// router deployment JSON to `router_out`. Sets initial weights to 10 000 bps
 /// (100%) pointing at RobotMoneyVault — the sole active vault at this phase.
+///
+/// `fork_block` pins the forge simulation to a specific chain head so that
+/// the simulation sees the `registerVault` tx from `run_forge_deploy_registry`
+/// regardless of Geth's "latest" propagation timing.
 fn run_forge_deploy_router(
     repo_root: &Path,
     rpc_url: &str,
+    fork_block: u64,
     router_out: &Path,
     registry_address: &str,
     vault_address: &str,
@@ -1547,6 +1570,7 @@ fn run_forge_deploy_router(
         "contracts/script/DeployPortfolioRouter.s.sol:DeployPortfolioRouter",
     ])
     .args(["--rpc-url", rpc_url])
+    .args(["--fork-block-number", &fork_block.to_string()])
     .args(["--private-key", DEPLOYER_PRIVATE_KEY_HEX])
     .arg("--broadcast")
     .arg("--slow")
@@ -1568,6 +1592,26 @@ fn run_forge_deploy_router(
         )));
     }
     Ok(())
+}
+
+/// Query the chain head block number via `cast block-number`. Used to pin
+/// the forge simulation fork block after `run_forge_deploy_registry` so the
+/// router simulation sees the `registerVault` tx regardless of Geth's
+/// "latest" propagation timing.
+fn fetch_current_block_number(rpc_url: &str) -> Result<u64, HarnessError> {
+    let out = Command::new("cast")
+        .args(["block-number", "--rpc-url", rpc_url])
+        .output()?;
+    if !out.status.success() {
+        return Err(HarnessError::Other(format!(
+            "cast block-number failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        )));
+    }
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    s.parse::<u64>().map_err(|e| {
+        HarnessError::Other(format!("cast block-number returned non-integer {s:?}: {e}"))
+    })
 }
 
 fn read_router_deployment(path: &Path) -> Result<RouterDeploymentJson, HarnessError> {
