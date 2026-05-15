@@ -123,10 +123,7 @@ impl<'a> Preflight<'a> {
     /// deposit caps (`maxPerPayment`, `maxPerWindow`) instead of the
     /// withdrawal caps, which could reject valid withdrawals and pass
     /// invalid ones.
-    pub async fn run_withdraw_gateway(
-        &self,
-        inputs: PreflightInputs,
-    ) -> Result<PreflightReport> {
+    pub async fn run_withdraw_gateway(&self, inputs: PreflightInputs) -> Result<PreflightReport> {
         self.run_withdraw_inner(inputs).await
     }
 
@@ -198,11 +195,7 @@ impl<'a> Preflight<'a> {
         // 8w. agentWithdrawWindowGross + shares <= maxWithdrawPerWindow
         let window_id = now / WINDOW_SECONDS;
         let window_gross = self
-            .call_view_agent_withdraw_window_gross(
-                gateway_addr,
-                inputs.signer_address,
-                window_id,
-            )
+            .call_view_agent_withdraw_window_gross(gateway_addr, inputs.signer_address, window_id)
             .await?;
         let projected = window_gross.saturating_add(inputs.amount);
         if projected > agent.maxWithdrawPerWindow {

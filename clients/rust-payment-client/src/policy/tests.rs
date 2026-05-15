@@ -679,7 +679,7 @@ async fn withdraw_gateway_rejects_when_deposit_caps_high_withdraw_caps_low() {
     install_withdraw_gateway_mocks(
         &mut server,
         &cfg,
-        U256::from(10_000_000u64),   // maxPerPayment (deposit) = 10 USDC
+        U256::from(10_000_000u64),    // maxPerPayment (deposit) = 10 USDC
         U256::from(1_000_000_000u64), // maxPerWindow (deposit)  = 1000 USDC
         U256::from(50u64),            // maxWithdrawPerPayment   = 50 shares
         U256::from(500u64),           // maxWithdrawPerWindow    = 500 shares
@@ -717,11 +717,11 @@ async fn withdraw_gateway_allows_when_deposit_caps_low_withdraw_caps_high() {
     install_withdraw_gateway_mocks(
         &mut server,
         &cfg,
-        U256::from(50u64),             // maxPerPayment (deposit)  = 50 (tight)
-        U256::from(500u64),            // maxPerWindow  (deposit)  = 500 (tight)
-        U256::from(10_000u64),         // maxWithdrawPerPayment    = 10_000
-        U256::from(100_000u64),        // maxWithdrawPerWindow     = 100_000
-        U256::ZERO,                    // withdrawWindowGross      = 0
+        U256::from(50u64),      // maxPerPayment (deposit)  = 50 (tight)
+        U256::from(500u64),     // maxPerWindow  (deposit)  = 500 (tight)
+        U256::from(10_000u64),  // maxWithdrawPerPayment    = 10_000
+        U256::from(100_000u64), // maxWithdrawPerWindow     = 100_000
+        U256::ZERO,             // withdrawWindowGross      = 0
     )
     .await;
     let rpc = RpcClient::new(server.url()).unwrap();
