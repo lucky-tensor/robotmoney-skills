@@ -600,12 +600,9 @@ contract RobotMoneyGateway is AccessRoles, ReentrancyGuard, IGateway {
         {
             uint256 len = p.allowedSourceVaults.length;
             if (len > 0) {
-                bool found = false;
-                for (uint256 i = 0; i < len; i++) {
-                    if (p.allowedSourceVaults[i] == sourceVault) {
-                        found = true;
-                        break;
-                    }
+                bool found;
+                for (uint256 i = 0; i < len && !found; i++) {
+                    found = p.allowedSourceVaults[i] == sourceVault;
                 }
                 if (!found) revert InvalidSourceVault();
             }
