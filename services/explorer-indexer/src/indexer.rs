@@ -409,14 +409,11 @@ async fn handle_log(
     // Stores a parent row in agent_deposits (vault = NULL; per-leg data is
     // written by the corresponding RouterDeposit events from PortfolioRouter).
     if topic0 == topics.agent_deposit_routed {
-        let decoded = IGatewayEvents::AgentDepositRouted::decode_log(&into_alloy_log(log), true)
-            .map_err(|e| IndexerError::Decode(format!("AgentDepositRouted: {e}")))?;
+        let decoded =
+            IGatewayEvents::AgentDepositRouted::decode_log(&into_alloy_log(log), true)
+                .map_err(|e| IndexerError::Decode(format!("AgentDepositRouted: {e}")))?;
         // Sum sharesPerLeg to populate shares_minted on the parent row.
-        let total_shares: U256 = decoded
-            .sharesPerLeg
-            .iter()
-            .copied()
-            .fold(U256::ZERO, |acc, s| acc.saturating_add(s));
+        let total_shares: U256 = decoded.sharesPerLeg.iter().copied().fold(U256::ZERO, |acc, s| acc.saturating_add(s));
         let r = db
             .insert_agent_deposit(
                 cfg.chain_id,
@@ -487,8 +484,9 @@ async fn handle_log(
     // PortfolioRouter does not forward the gateway's paymentId.  Callers
     // should join on (chain_id, tx_hash) to correlate with agent_deposits.
     if topic0 == topics.router_deposit {
-        let decoded = IPortfolioRouterEvents::RouterDeposit::decode_log(&into_alloy_log(log), true)
-            .map_err(|e| IndexerError::Decode(format!("RouterDeposit: {e}")))?;
+        let decoded =
+            IPortfolioRouterEvents::RouterDeposit::decode_log(&into_alloy_log(log), true)
+                .map_err(|e| IndexerError::Decode(format!("RouterDeposit: {e}")))?;
         // Use the tx_hash as the payment_id correlation key: PortfolioRouter
         // does not forward the gateway's paymentId, so the tx hash is the
         // best available link between leg rows and the parent deposit.
