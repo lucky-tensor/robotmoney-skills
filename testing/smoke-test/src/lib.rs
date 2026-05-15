@@ -2249,6 +2249,9 @@ impl DappStack {
     /// postgres, explorer-indexer, and explorer-api untouched. All VITE_*
     /// build args are re-injected from the values captured at boot time so
     /// the new bundle points at the same devnet addresses and ports.
+    ///
+    /// Docker's build output is streamed to the caller's stderr so the
+    /// developer can see progress during the (potentially long) bun build.
     pub fn rebuild_dapp(&self) -> Result<(), HarnessError> {
         logging::info("smoke-test", "rebuilding dapp container (--no-deps)");
         let mut cmd = Command::new("docker");
@@ -2265,17 +2268,15 @@ impl DappStack {
         for (k, v) in &self.rebuild_env {
             cmd.env(k, v);
         }
-        let out = cmd
+        let status = cmd
             .current_dir(&self.compose_dir)
             .stdin(Stdio::null())
-            .output()
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status()
             .map_err(HarnessError::from)?;
-        logging::log_command_output("compose-rebuild-dapp", &out);
-        if !out.status.success() {
-            let stderr = String::from_utf8_lossy(&out.stderr);
-            return Err(HarnessError::Docker(format!(
-                "dapp rebuild failed: {stderr}"
-            )));
+        if !status.success() {
+            return Err(HarnessError::Docker("dapp rebuild failed".to_string()));
         }
         Ok(())
     }
