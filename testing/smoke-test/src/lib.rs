@@ -121,10 +121,18 @@ struct DeploymentJson {
     chain_id: u64,
     usdc: String,
     vault: String,
-    /// PassthroughAdapter address registered with the vault at deploy time.
-    /// Absent on legacy deployments (pre-#277); those used MockVault with no adapter.
+    /// Aave V3 strategy adapter address registered with the vault at deploy time.
+    /// Absent on legacy deployments (pre-#363).
     #[serde(default)]
-    adapter: String,
+    aave_adapter: String,
+    /// Compound V3 strategy adapter address registered with the vault at deploy time.
+    /// Absent on legacy deployments (pre-#363).
+    #[serde(default)]
+    compound_adapter: String,
+    /// Morpho strategy adapter address registered with the vault at deploy time.
+    /// Absent on legacy deployments (pre-#363).
+    #[serde(default)]
+    morpho_adapter: String,
     gateway: String,
     #[serde(default)]
     #[allow(dead_code)]
@@ -929,13 +937,31 @@ impl Fixture {
     pub fn vault(&self) -> Address {
         parse_addr(&self.deployment.vault)
     }
-    /// PassthroughAdapter address registered with the vault at deploy time.
-    /// Returns `Address::ZERO` for legacy deployments that predate issue #277.
-    pub fn adapter(&self) -> Address {
-        if self.deployment.adapter.is_empty() {
+    /// AaveV3Adapter address registered with the vault at deploy time (issue #363).
+    /// Returns `Address::ZERO` for legacy deployments that predate issue #363.
+    pub fn aave_adapter(&self) -> Address {
+        if self.deployment.aave_adapter.is_empty() {
             Address::ZERO
         } else {
-            parse_addr(&self.deployment.adapter)
+            parse_addr(&self.deployment.aave_adapter)
+        }
+    }
+    /// CompoundV3Adapter address registered with the vault at deploy time (issue #363).
+    /// Returns `Address::ZERO` for legacy deployments that predate issue #363.
+    pub fn compound_adapter(&self) -> Address {
+        if self.deployment.compound_adapter.is_empty() {
+            Address::ZERO
+        } else {
+            parse_addr(&self.deployment.compound_adapter)
+        }
+    }
+    /// MorphoAdapter address registered with the vault at deploy time (issue #363).
+    /// Returns `Address::ZERO` for legacy deployments that predate issue #363.
+    pub fn morpho_adapter(&self) -> Address {
+        if self.deployment.morpho_adapter.is_empty() {
+            Address::ZERO
+        } else {
+            parse_addr(&self.deployment.morpho_adapter)
         }
     }
     pub fn agent(&self) -> Address {

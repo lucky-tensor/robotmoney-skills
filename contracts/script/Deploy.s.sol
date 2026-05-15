@@ -12,20 +12,24 @@ import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 import {RobotMoneyVault} from "../RobotMoneyVault.sol";
 import {PassthroughAdapter} from "../adapters/PassthroughAdapter.sol";
+import {AaveV3Adapter} from "../adapters/AaveV3Adapter.sol";
+import {CompoundV3Adapter} from "../adapters/CompoundV3Adapter.sol";
+import {MorphoAdapter} from "../adapters/MorphoAdapter.sol";
 import {RobotMoneyGateway} from "../gateway/RobotMoneyGateway.sol";
 import {IGateway} from "../gateway/interfaces/IGateway.sol";
 
 /// @title Deploy
 /// @notice Foundry deploy script for the Robot Money gateway stack.
-///         Deploys RobotMoneyVault + PassthroughAdapter as the primary vault,
-///         wires a RobotMoneyGateway to the vault, grants AGENT_ROLE to a
+///         Deploys RobotMoneyVault wired to real Aave V3, Compound V3, and
+///         Morpho strategy adapters (Base mainnet protocol addresses), a
+///         RobotMoneyGateway bound to the vault, grants AGENT_ROLE to a
 ///         distinct EOA via `authorizeAgent`, asserts role-separation, and
 ///         writes a deployment JSON.
 ///
 ///         MockVault is NOT deployed by this script; it is only used by
 ///         gateway deposit-routing unit tests directly. See issue #277.
-///         The vault deploys with exitFeeBps=0 and a single PassthroughAdapter
-///         (no external calls) suitable for the smoke-test devnet.
+///         PassthroughAdapter is NOT registered by this script; it is
+///         retained in the codebase for unit tests only. See issue #363.
 /// @dev Implements `docs/implementation-plan.md` §5 step 1–2 and
 ///      satisfies issue #10. Inputs are env-driven so the same script works
 ///      on Anvil, the docker devnet, and (with care) any throwaway L1.
@@ -63,11 +67,14 @@ contract Deploy is Script {
     ///      `vault` is the deployed RobotMoneyVault (smoke-test devnet and
     ///      integration tests). For gateway unit tests that still need MockVault,
     ///      use the separate `MockVault` import directly.
-    ///      `adapter` is the PassthroughAdapter wired into vault at deploy time.
+    ///      `aaveAdapter`, `compoundAdapter`, and `morphoAdapter` are the
+    ///      real protocol adapters registered with the vault at deploy time.
     struct Deployed {
         address usdc;
         RobotMoneyVault vault;
-        PassthroughAdapter adapter;
+        AaveV3Adapter aaveAdapter;
+        CompoundV3Adapter compoundAdapter;
+        MorphoAdapter morphoAdapter;
         RobotMoneyGateway gateway;
         address admin;
         address pauser;
@@ -80,6 +87,19 @@ contract Deploy is Script {
     ///         devnet seeds this address with real proxy storage + the
     ///         FiatTokenV2_2 implementation in genesis alloc.
     address public constant CANONICAL_BASE_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+
+    // -- Real protocol contract addresses (Base mainnet) ----------------
+    // Sourced from testing/fork-e2e-rust/src/addresses.rs and
+    // contracts/test/VaultForkRegressions.t.sol.
+
+    /// @notice Aave V3 Pool on Base mainnet.
+    address public constant AAVE_V3_POOL = 0xA238Dd80C259a72e81d7e4664a9801593F98d1c5;
+    /// @notice aBasUSDC — Aave V3 interest-bearing USDC receipt token on Base.
+    address public constant AAVE_V3_A_TOKEN = 0x4e65fE4DbA92790696d040ac24Aa414708F5c0AB;
+    /// @notice Morpho Gauntlet USDC Prime ERC-4626 vault on Base.
+    address public constant MORPHO_GAUNTLET_USDC_PRIME = 0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca;
+    /// @notice Compound V3 (Comet) USDC market on Base.
+    address public constant COMPOUND_V3_COMET = 0xB125e6687D4313864e53df431d5425969c15eb28;
 
     /// @notice Default per-payment cap if `AGENT_MAX_PER_PAYMENT` is unset.
     uint256 public constant DEFAULT_MAX_PER_PAYMENT = 10_000 * 1e6;
@@ -100,9 +120,11 @@ contract Deploy is Script {
         d = _doDeploy(p);
         // In broadcast mode the broadcaster IS d.admin (the smoke-test devnet
         // runs the deploy script with the admin private key), so msg.sender on
-        // the addAdapter call is d.admin which holds ADMIN_ROLE.  No vm.prank
+        // the addAdapter calls is d.admin which holds ADMIN_ROLE.  No vm.prank
         // is required — and vm.prank is prohibited inside startBroadcast.
-        d.vault.addAdapter(address(d.adapter), 10_000);
+        d.vault.addAdapter(address(d.aaveAdapter), 3_334);
+        d.vault.addAdapter(address(d.compoundAdapter), 3_333);
+        d.vault.addAdapter(address(d.morphoAdapter), 3_333);
         vm.stopBroadcast();
 
         _writeDeploymentJson(d);
@@ -116,8 +138,11 @@ contract Deploy is Script {
         d = _doDeploy(p);
         // In-process (no broadcast): addAdapter requires ADMIN_ROLE which is
         // held by d.admin. Use vm.prank to call it as d.admin.
-        vm.prank(d.admin);
-        d.vault.addAdapter(address(d.adapter), 10_000);
+        vm.startPrank(d.admin);
+        d.vault.addAdapter(address(d.aaveAdapter), 3_334);
+        d.vault.addAdapter(address(d.compoundAdapter), 3_333);
+        d.vault.addAdapter(address(d.morphoAdapter), 3_333);
+        vm.stopPrank();
     }
 
     /// @notice Direct-parameter variant for forge tests. Skips env-var
@@ -151,8 +176,11 @@ contract Deploy is Script {
         d = _doDeploy(p);
         // In-process (no broadcast): addAdapter requires ADMIN_ROLE which is
         // held by d.admin. Use vm.prank to call it as d.admin.
-        vm.prank(d.admin);
-        d.vault.addAdapter(address(d.adapter), 10_000);
+        vm.startPrank(d.admin);
+        d.vault.addAdapter(address(d.aaveAdapter), 3_334);
+        d.vault.addAdapter(address(d.compoundAdapter), 3_333);
+        d.vault.addAdapter(address(d.morphoAdapter), 3_333);
+        vm.stopPrank();
     }
 
     struct Params {
@@ -214,10 +242,11 @@ contract Deploy is Script {
         //    address via `runInProcessWithUsdc`.
         //
         //    RobotMoneyVault (issue #277): replaces MockVault as the primary
-        //    vault. Deployed with exitFeeBps=0 and a PassthroughAdapter that
-        //    holds USDC with no external protocol calls — suitable for the
-        //    smoke-test devnet. MockVault is retained in the codebase only for
-        //    gateway deposit-routing unit tests.
+        //    vault. Deployed with exitFeeBps=0 and real Aave V3, Compound V3,
+        //    and Morpho strategy adapters using canonical Base mainnet protocol
+        //    addresses (issue #363). MockVault is retained in the codebase only
+        //    for gateway deposit-routing unit tests. PassthroughAdapter is
+        //    retained for unit tests only and is NOT registered here.
         //
         //    Vault constructor parameters:
         //      tvlCap        = 10M USDC (generous for devnet, no real risk)
@@ -229,8 +258,8 @@ contract Deploy is Script {
         //    addAdapter requires ADMIN_ROLE.  In `run()` (broadcast) the
         //    broadcaster IS d.admin (smoke-test devnet deploys from the admin
         //    key), so the call succeeds without any cheatcode.  In the test
-        //    helpers (runInProcessWith / runInProcess) the caller wraps
-        //    _wireAdapter with vm.prank(d.admin) — see those callers.
+        //    helpers (runInProcessWith / runInProcess) the callers use
+        //    vm.startPrank(d.admin)/vm.stopPrank() — see those callers.
         require(p.usdcAddress != address(0), "USDC_ADDRESS=0");
         require(p.usdcAddress.code.length > 0, "USDC_ADDRESS has no code");
         d.usdc = p.usdcAddress;
@@ -244,11 +273,17 @@ contract Deploy is Script {
             d.admin, // feeRecipient (fees are 0, any non-zero addr)
             d.admin // vaultAdmin — receives ADMIN_ROLE
         );
-        // Deploy PassthroughAdapter.  Registration (addAdapter) is done by
-        // the callers of _doDeploy — see run(), runInProcess(), and
-        // runInProcessWith() — because the caller context differs between
-        // broadcast and in-process test modes.
-        d.adapter = new PassthroughAdapter(d.usdc, address(d.vault));
+        // Deploy real protocol adapters wired to the new vault.
+        // Protocol addresses are Base mainnet constants — the smoke-test devnet
+        // forks Base so these contracts already exist at these addresses.
+        // Registration (addAdapter) is done by the callers of _doDeploy —
+        // see run(), runInProcess(), and runInProcessWith() — because the
+        // caller context differs between broadcast and in-process test modes.
+        d.aaveAdapter =
+            new AaveV3Adapter(AAVE_V3_POOL, d.usdc, AAVE_V3_A_TOKEN, address(d.vault));
+        d.compoundAdapter = new CompoundV3Adapter(COMPOUND_V3_COMET, d.usdc, address(d.vault));
+        d.morphoAdapter =
+            new MorphoAdapter(MORPHO_GAUNTLET_USDC_PRIME, d.usdc, address(d.vault));
         d.gateway = new RobotMoneyGateway(
             IERC20(d.usdc), IERC4626(address(d.vault)), d.admin, d.pauser, address(0)
         );
@@ -296,16 +331,18 @@ contract Deploy is Script {
         //    forge unit tests mint via the `TestERC20` helper directly.
         d.gatewayRuntimeHash = keccak256(address(d.gateway).code);
 
-        console2.log("RobotMoneyVault + PassthroughAdapter + RobotMoneyGateway deployed");
-        console2.log("  usdc           :", d.usdc);
-        console2.log("  vault          :", address(d.vault));
-        console2.log("  adapter        :", address(d.adapter));
-        console2.log("  gateway        :", address(d.gateway));
-        console2.log("  admin          :", d.admin);
-        console2.log("  pauser         :", d.pauser);
-        console2.log("  agent          :", d.agent);
-        console2.log("  shareReceiver  :", d.shareReceiver);
-        console2.log("  agent USDC bal :", IERC20(d.usdc).balanceOf(d.agent));
+        console2.log("RobotMoneyVault + AaveV3Adapter + CompoundV3Adapter + MorphoAdapter + RobotMoneyGateway deployed");
+        console2.log("  usdc             :", d.usdc);
+        console2.log("  vault            :", address(d.vault));
+        console2.log("  aave_adapter     :", address(d.aaveAdapter));
+        console2.log("  compound_adapter :", address(d.compoundAdapter));
+        console2.log("  morpho_adapter   :", address(d.morphoAdapter));
+        console2.log("  gateway          :", address(d.gateway));
+        console2.log("  admin            :", d.admin);
+        console2.log("  pauser           :", d.pauser);
+        console2.log("  agent            :", d.agent);
+        console2.log("  shareReceiver    :", d.shareReceiver);
+        console2.log("  agent USDC bal   :", IERC20(d.usdc).balanceOf(d.agent));
     }
 
     function _envOrDefault(string memory key, uint256 fallbackValue)
@@ -332,7 +369,9 @@ contract Deploy is Script {
         vm.serializeUint(obj, "chain_id", block.chainid);
         vm.serializeAddress(obj, "usdc", d.usdc);
         vm.serializeAddress(obj, "vault", address(d.vault));
-        vm.serializeAddress(obj, "adapter", address(d.adapter));
+        vm.serializeAddress(obj, "aave_adapter", address(d.aaveAdapter));
+        vm.serializeAddress(obj, "compound_adapter", address(d.compoundAdapter));
+        vm.serializeAddress(obj, "morpho_adapter", address(d.morphoAdapter));
         vm.serializeAddress(obj, "gateway", address(d.gateway));
         vm.serializeAddress(obj, "admin", d.admin);
         vm.serializeAddress(obj, "pauser", d.pauser);
