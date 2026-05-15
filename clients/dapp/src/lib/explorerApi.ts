@@ -164,16 +164,23 @@ export interface ProposalsResponse {
 
 // ─── Protocol stats types (issue #318) ──────────────────────────────────────
 
+/** One entry in the GET /v1/stats activity feed — always a deposit event. */
 export interface ActivityEvent {
-  readonly kind: "deposit" | "vault_registered" | "weight_set" | "proposal" | "unknown";
+  readonly chain_id: number;
   readonly block_number: number;
+  readonly log_index: number;
+  readonly tx_hash: string;
+  readonly vault: string;
+  readonly agent: string;
+  readonly share_receiver: string;
+  readonly amount: string;
   readonly indexed_at: string;
 }
 
 export interface StatsResponse {
-  readonly aggregate_tvl: string;
-  readonly depositor_count: number;
-  readonly recent_activity: readonly ActivityEvent[];
+  readonly total_tvl: string;
+  readonly unique_depositors: number;
+  readonly activity_feed: readonly ActivityEvent[];
   readonly block_number: number;
   readonly indexed_at: string;
 }

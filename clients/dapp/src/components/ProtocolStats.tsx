@@ -57,27 +57,27 @@ export function ProtocolStats({ apiUrl, fetchImpl }: ProtocolStatsProps) {
         <div className="stat-card">
           <p className="stat-label">Aggregate TVL</p>
           <p data-testid="protocol-stats-tvl" className="stat-value font-mono">
-            {stats.aggregate_tvl}
+            {stats.total_tvl}
           </p>
         </div>
         <div className="stat-card">
           <p className="stat-label">Depositors</p>
           <p data-testid="protocol-stats-depositors" className="stat-value">
-            {stats.depositor_count}
+            {stats.unique_depositors}
           </p>
         </div>
       </div>
 
-      {stats.recent_activity.length > 0 && (
+      {stats.activity_feed.length > 0 && (
         <div data-testid="protocol-stats-activity">
           <h3>Recent Activity</h3>
           <ul>
-            {stats.recent_activity.map((event) => (
+            {stats.activity_feed.map((event) => (
               <li
-                key={`${event.kind}-${event.block_number}-${event.indexed_at}`}
+                key={`${event.tx_hash}-${event.log_index}`}
                 data-testid="protocol-stats-activity-item"
               >
-                <span data-testid="protocol-stats-activity-kind">{event.kind}</span>
+                <span data-testid="protocol-stats-activity-kind">deposit</span>
                 {" @ block "}
                 <span data-testid="protocol-stats-activity-block">{event.block_number}</span>
               </li>

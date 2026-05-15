@@ -121,17 +121,29 @@ const proposalsFixture: ProposalsResponse = {
 };
 
 const statsFixture: StatsResponse = {
-  aggregate_tvl: "99999999",
-  depositor_count: 1,
-  recent_activity: [
+  total_tvl: "99999999",
+  unique_depositors: 1,
+  activity_feed: [
     {
-      kind: "deposit",
+      chain_id: 1,
       block_number: 1000,
+      log_index: 0,
+      tx_hash: "0xaaaa",
+      vault: "0x" + "1".repeat(40),
+      agent: "0x" + "2".repeat(40),
+      share_receiver: "0x" + "3".repeat(40),
+      amount: "1000",
       indexed_at: "2026-01-01T12:00:00Z",
     },
     {
-      kind: "vault_registered",
+      chain_id: 1,
       block_number: 900,
+      log_index: 1,
+      tx_hash: "0xbbbb",
+      vault: "0x" + "1".repeat(40),
+      agent: "0x" + "2".repeat(40),
+      share_receiver: "0x" + "3".repeat(40),
+      amount: "500",
       indexed_at: "2026-01-01T12:00:00Z",
     },
   ],
@@ -393,8 +405,8 @@ describe("ProtocolStats", () => {
     expect(items).toHaveLength(2);
 
     const kinds = getAllByTestId("protocol-stats-activity-kind").map((n) => n.textContent);
-    expect(kinds).toContain("deposit");
-    expect(kinds).toContain("vault_registered");
+    expect(kinds).toHaveLength(2);
+    expect(kinds.every((k) => k === "deposit")).toBe(true);
   });
 
   it("shows error on non-2xx response", async () => {
