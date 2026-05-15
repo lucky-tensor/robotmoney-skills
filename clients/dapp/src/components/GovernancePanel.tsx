@@ -23,11 +23,7 @@ import { useAccount, useReadContract, useWriteContract, useSimulateContract } fr
 import type { Address } from "viem";
 import { erc20Abi } from "../lib/abi";
 import type { FetchLike } from "../lib/explorerApi";
-import {
-  fetchProposals,
-  type ProposalSummary,
-  type ProposalsResponse,
-} from "../lib/governanceApi";
+import { fetchProposals, type ProposalSummary, type ProposalsResponse } from "../lib/governanceApi";
 
 // ─── RouterGovernance ABI (vote function only) ───────────────────────────────
 
@@ -69,7 +65,12 @@ type PanelState =
   | { kind: "loading" }
   | { kind: "error"; message: string }
   | { kind: "no-proposal" }
-  | { kind: "ready"; proposals: readonly ProposalSummary[]; latestBlock: number; indexedAt: string };
+  | {
+      kind: "ready";
+      proposals: readonly ProposalSummary[];
+      latestBlock: number;
+      indexedAt: string;
+    };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -195,9 +196,7 @@ export function GovernancePanel(props: GovernancePanelProps) {
     <section data-testid="governance-panel">
       <h2>Governance — Weight Proposals</h2>
 
-      {panelState.kind === "loading" && (
-        <p data-testid="governance-loading">Loading proposals…</p>
-      )}
+      {panelState.kind === "loading" && <p data-testid="governance-loading">Loading proposals…</p>}
 
       {panelState.kind === "error" && (
         <p data-testid="governance-error">Failed to load proposals: {panelState.message}</p>
@@ -246,13 +245,9 @@ export function GovernancePanel(props: GovernancePanelProps) {
           {/* Selected proposal detail */}
           {selectedProposal && (
             <div data-testid="governance-proposal-detail">
-              <h3 data-testid="governance-proposal-id">
-                Proposal #{selectedProposal.proposal_id}
-              </h3>
+              <h3 data-testid="governance-proposal-id">Proposal #{selectedProposal.proposal_id}</h3>
 
-              <p data-testid="governance-proposal-description">
-                {selectedProposal.description}
-              </p>
+              <p data-testid="governance-proposal-description">{selectedProposal.description}</p>
 
               <dl>
                 <dt>Status</dt>
@@ -276,9 +271,7 @@ export function GovernancePanel(props: GovernancePanelProps) {
                 </dd>
 
                 <dt>Votes for</dt>
-                <dd data-testid="governance-proposal-votes-for">
-                  {selectedProposal.votes_for}
-                </dd>
+                <dd data-testid="governance-proposal-votes-for">{selectedProposal.votes_for}</dd>
 
                 <dt>Votes against</dt>
                 <dd data-testid="governance-proposal-votes-against">
@@ -298,13 +291,8 @@ export function GovernancePanel(props: GovernancePanelProps) {
                 <div data-testid="governance-voting-prompt">
                   <p>
                     Casting a vote encodes{" "}
-                    <code>
-                      RouterGovernance.vote({selectedProposal.proposal_id})
-                    </code>{" "}
-                    against{" "}
-                    <code data-testid="governance-contract-address">
-                      {props.governanceAddress}
-                    </code>
+                    <code>RouterGovernance.vote({selectedProposal.proposal_id})</code> against{" "}
+                    <code data-testid="governance-contract-address">{props.governanceAddress}</code>
                     .
                   </p>
                   <button
@@ -316,21 +304,15 @@ export function GovernancePanel(props: GovernancePanelProps) {
                     {voteWrite.isPending ? "Signing…" : "Vote"}
                   </button>
                   {!isConnected && (
-                    <p data-testid="governance-connect-hint">
-                      Connect your wallet to vote.
-                    </p>
+                    <p data-testid="governance-connect-hint">Connect your wallet to vote.</p>
                   )}
                   {isConnected && typeof rmBalance === "bigint" && rmBalance === 0n && (
                     <p data-testid="governance-no-rm-hint">
                       You hold no RM tokens and cannot vote on this proposal.
                     </p>
                   )}
-                  {voteError && (
-                    <p data-testid="governance-vote-error">Vote failed: {voteError}</p>
-                  )}
-                  {voteSuccess && (
-                    <p data-testid="governance-vote-success">{voteSuccess}</p>
-                  )}
+                  {voteError && <p data-testid="governance-vote-error">Vote failed: {voteError}</p>}
+                  {voteSuccess && <p data-testid="governance-vote-success">{voteSuccess}</p>}
                 </div>
               )}
             </div>

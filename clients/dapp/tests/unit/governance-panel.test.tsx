@@ -95,9 +95,7 @@ function renderPanel(fetchImpl: FetchLike) {
 describe("GovernancePanel — loading and error states", () => {
   it("shows a loading indicator while the API call is in flight", () => {
     // Return a promise that never resolves so we stay in loading state.
-    const neverFetch = vi.fn(
-      () => new Promise(() => {}),
-    ) as unknown as FetchLike;
+    const neverFetch = vi.fn(() => new Promise(() => {})) as unknown as FetchLike;
     const { getByTestId } = renderPanel(neverFetch);
     expect(getByTestId("governance-loading")).toBeTruthy();
   });
@@ -166,9 +164,7 @@ describe("GovernancePanel — open proposal", () => {
 
 describe("GovernancePanel — passed proposal", () => {
   it("renders status 'Passed' and hides the voting prompt", async () => {
-    const { getByTestId, queryByTestId } = renderPanel(
-      makeFetch(makeProposalsResponse("passed")),
-    );
+    const { getByTestId, queryByTestId } = renderPanel(makeFetch(makeProposalsResponse("passed")));
     await waitFor(() => {
       expect(getByTestId("governance-proposal-status").textContent).toContain("Passed");
     });
@@ -191,9 +187,7 @@ describe("GovernancePanel — executed proposal", () => {
 
 describe("GovernancePanel — expired proposal", () => {
   it("renders status 'Expired' and hides the voting prompt", async () => {
-    const { getByTestId, queryByTestId } = renderPanel(
-      makeFetch(makeProposalsResponse("expired")),
-    );
+    const { getByTestId, queryByTestId } = renderPanel(makeFetch(makeProposalsResponse("expired")));
     await waitFor(() => {
       expect(getByTestId("governance-proposal-status").textContent).toContain("Expired");
     });
