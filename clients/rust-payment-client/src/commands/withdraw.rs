@@ -309,7 +309,7 @@ pub fn run(args: Args) -> i32 {
     // per-window cap checks run against shares.
     let preflight_result = rt.block_on(async {
         let pf = Preflight::new(&rpc, &cfg);
-        pf.run(PreflightInputs {
+        pf.run_gateway_only(PreflightInputs {
             signer_address: agent_address,
             amount: shares,
         })
@@ -710,12 +710,10 @@ fn error_name(err: &RmpcError) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Config, SignerConfig};
     use alloy_primitives::{address, hex as ahex, keccak256, Address, U256};
     use alloy_sol_types::SolCall;
     use mockito::Matcher;
     use serde_json::json;
-    use std::path::PathBuf;
 
     const SIGNER: Address = address!("00000000000000000000000000000000000000aa");
     const GATEWAY: Address = address!("0000000000000000000000000000000000000b00");
