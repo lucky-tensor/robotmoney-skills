@@ -279,55 +279,6 @@ pub struct ProposalDetailResponse {
     pub freshness: Freshness,
 }
 
-// ─── Account layer types (issue #319) ──────────────────────────────────────
-
-/// Per-vault receipt-token balance for a watched address.
-///
-/// `shares` is the raw ERC-20 balance from `wallet_positions`; `vault_address`
-/// and `vault_name` are joined from the `vaults` table so the dapp can label
-/// each row without a separate request.
-#[derive(Debug, Serialize)]
-pub struct AccountPosition {
-    pub vault_address: String,
-    pub vault_name: String,
-    pub risk_label: String,
-    pub shares: String,
-    pub block_number: i64,
-}
-
-/// Response for GET /v1/accounts/:address/positions.
-#[derive(Debug, Serialize)]
-pub struct AccountPositionsResponse {
-    pub address: String,
-    pub positions: Vec<AccountPosition>,
-    #[serde(flatten)]
-    pub freshness: Freshness,
-}
-
-/// A single history event for a watched address.
-///
-/// `event_type` is one of "deposit" | "withdrawal" | "governance_vote".
-/// `vault_address` is set for deposit and withdrawal events; null for votes.
-/// `amount` is set for deposit/withdrawal; null for votes.
-#[derive(Debug, Serialize)]
-pub struct AccountEvent {
-    pub event_type: String,
-    pub block_number: i64,
-    pub tx_hash: String,
-    pub vault_address: Option<String>,
-    pub amount: Option<String>,
-    pub indexed_at: DateTime<Utc>,
-}
-
-/// Response for GET /v1/accounts/:address/history.
-#[derive(Debug, Serialize)]
-pub struct AccountHistoryResponse {
-    pub address: String,
-    pub events: Vec<AccountEvent>,
-    #[serde(flatten)]
-    pub freshness: Freshness,
-}
-
 /// Decode a governance proposal `status` smallint into a string label.
 pub fn proposal_status_label(status: i16) -> &'static str {
     match status {
