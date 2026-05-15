@@ -1,11 +1,17 @@
 # DeployTest
-[Git Source](https://github.com/lucky-tensor/robotmoney-skills/blob/b462a72b60a914ceeff6cdf3ad7148bfb0361abb/contracts/test/Deploy.t.sol)
+[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/e1269e8b8cad4814263c616cac976e46cf68e4a1/contracts/test/Deploy.t.sol)
 
 **Inherits:**
 Test
 
 Exercises the deploy script in-process and asserts the post-deploy
 invariants the operator and downstream tooling rely on (issue #10).
+The script now deploys RobotMoneyVault + PassthroughAdapter (issue #277)
+instead of MockVault. MockVault is retained only for gateway unit tests.
+The script always binds the gateway to an externally-supplied USDC
+token; this test deploys a `TestERC20` helper and passes its address
+in. The smoke-test devnet does the same with the canonical Base USDC
+proxy seeded into genesis alloc (issue #255).
 
 
 ## State Variables
@@ -13,6 +19,13 @@ invariants the operator and downstream tooling rely on (issue #10).
 
 ```solidity
 Deploy internal script
+```
+
+
+### usdc
+
+```solidity
+TestERC20 internal usdc
 ```
 
 
@@ -52,6 +65,13 @@ address internal shareReceiver = makeAddr("shareReceiver")
 function setUp() public;
 ```
 
+### _run
+
+
+```solidity
+function _run() internal returns (Deploy.Deployed memory);
+```
+
 ### test_deploy_wiresUsdcVaultAndAdminPauserRoles
 
 
@@ -66,11 +86,25 @@ function test_deploy_wiresUsdcVaultAndAdminPauserRoles() public;
 function test_deploy_authorizesAgentWithSanePolicy() public;
 ```
 
-### test_deploy_mintsTestUsdcToAgent
+### test_deploy_doesNotMintToAgent
 
 
 ```solidity
-function test_deploy_mintsTestUsdcToAgent() public;
+function test_deploy_doesNotMintToAgent() public;
+```
+
+### test_deploy_revertsWhenUsdcAddressZero
+
+
+```solidity
+function test_deploy_revertsWhenUsdcAddressZero() public;
+```
+
+### test_deploy_revertsWhenUsdcAddressHasNoCode
+
+
+```solidity
+function test_deploy_revertsWhenUsdcAddressHasNoCode() public;
 ```
 
 ### test_deploy_grantingAgentRoleToAdminReverts
