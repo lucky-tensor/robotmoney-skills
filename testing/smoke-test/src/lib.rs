@@ -1644,6 +1644,7 @@ fn start_compose_log_follower(
     }
     cmd.args(["logs", "--follow", "--no-color", "--timestamps"])
         .current_dir(compose_dir)
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let mut child = cmd
@@ -2266,6 +2267,7 @@ impl DappStack {
         }
         let out = cmd
             .current_dir(&self.compose_dir)
+            .stdin(Stdio::null())
             .output()
             .map_err(HarnessError::from)?;
         logging::log_command_output("compose-rebuild-dapp", &out);
