@@ -310,12 +310,18 @@ fn run() -> i32 {
                 smoke_test::logging::info("smoke-test", "dapp rebuild triggered via keybinding");
                 match stack.rebuild_dapp() {
                     Ok(()) => {
-                        eprintln!("smoke-test: dapp rebuild complete — {}", stack.endpoints.dapp_url);
+                        eprintln!(
+                            "smoke-test: dapp rebuild complete — {}",
+                            stack.endpoints.dapp_url
+                        );
                         smoke_test::logging::info("smoke-test", "dapp rebuild complete");
                     }
                     Err(err) => {
                         eprintln!("smoke-test: dapp rebuild failed: {err}");
-                        smoke_test::logging::error("smoke-test", format!("dapp rebuild failed: {err}"));
+                        smoke_test::logging::error(
+                            "smoke-test",
+                            format!("dapp rebuild failed: {err}"),
+                        );
                     }
                 }
             }
