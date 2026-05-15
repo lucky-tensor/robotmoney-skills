@@ -101,6 +101,45 @@ contract ReentrantVault is MockVault {
     }
 }
 
+/// @dev Vault that, during redeem, routes USDC to the caller (the gateway)
+///      instead of to the designated receiver. This trips the post-redeem
+///      gateway-USDC-balance invariant (UnexpectedAssetsReceived).
+contract UnexpectedAssetsRedeemVault is MockVault {
+    constructor(address asset_) MockVault(asset_) {}
+
+    function redeem(uint256 shares, address, address owner)
+        external
+        override
+        returns (uint256 assets)
+    {
+        _burn(owner, shares);
+        assets = shares;
+        // Route USDC to msg.sender (the gateway) rather than the designated
+        // receiver. The gateway's USDC balance rises, tripping the invariant.
+        IERC20(address(assetToken)).transfer(msg.sender, assets);
+    }
+}
+
+/// @dev Vault that, during redeem, re-mints 1 share to the caller after
+///      burning the redeemed shares. The gateway must hold zero shares after
+///      redeem; re-minting 1 trips the ShareCustodyInvariantViolated check.
+contract ShareLeakRedeemVault is MockVault {
+    constructor(address asset_) MockVault(asset_) {}
+
+    function redeem(uint256 shares, address receiver, address owner)
+        external
+        override
+        returns (uint256 assets)
+    {
+        _burn(owner, shares);
+        assets = shares;
+        IERC20(address(assetToken)).transfer(receiver, assets);
+        // Re-mint 1 share to the caller (gateway), breaking the zero-share
+        // post-condition the gateway asserts after every redeem.
+        _mint(msg.sender, 1);
+    }
+}
+
 contract RobotMoneyGatewayTest is Test {
     TestERC20 internal usdc;
     MockVault internal vault;
@@ -1304,5 +1343,152 @@ contract GatewayWithdrawTest is Test {
         vm.prank(agent);
         vm.expectRevert(RobotMoneyGateway.PaymentIdAlreadyUsed.selector);
         gateway.withdraw(orderId, shares, address(vault), uint64(block.timestamp + 120), idem);
+    }
+
+    // -------------------------------------------------------------------
+    // Reverts: policy expired at call time
+    // -------------------------------------------------------------------
+
+    function test_withdraw_revertsWhenPolicyExpired() public {
+        IGateway.AgentPolicy memory p = _defaultPolicy();
+        uint64 shortValidity = uint64(block.timestamp + 1);
+        p.validUntil = shortValidity;
+        _authorize(p);
+
+        _mintSharesAndApprove(100 * ONE_USDC);
+
+        // Warp past validUntil so the policy is now expired.
+        vm.warp(shortValidity + 1);
+
+        vm.prank(agent);
+        vm.expectRevert(RobotMoneyGateway.AgentPolicyExpired.selector);
+        gateway.withdraw(
+            keccak256("o-expired"),
+            100 * ONE_USDC,
+            address(vault),
+            uint64(block.timestamp + 60),
+            keccak256("i-expired")
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // allowedSourceVaults: vault in allowed list succeeds
+    // -------------------------------------------------------------------
+
+    function test_withdraw_succeedsWhenSourceVaultInAllowedList() public {
+        IGateway.AgentPolicy memory p = _defaultPolicy();
+        address[] memory sources = new address[](1);
+        sources[0] = address(vault); // vault IS in the allowed list
+        p.allowedSourceVaults = sources;
+        _authorize(p);
+
+        uint256 shares = 100 * ONE_USDC;
+        _mintSharesAndApprove(shares);
+
+        vm.prank(agent);
+        // Must succeed — sourceVault matches the single allowedSourceVaults entry.
+        gateway.withdraw(
+            keccak256("o-allowed"),
+            shares,
+            address(vault),
+            uint64(block.timestamp + 60),
+            keccak256("i-allowed")
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // _validatePolicy: withdrawal window cap must be non-zero when enabled
+    // -------------------------------------------------------------------
+
+    function test_authorizeAgent_revertsWhenWithdrawWindowCapIsZero() public {
+        IGateway.AgentPolicy memory p = _defaultPolicy();
+        p.maxWithdrawPerWindow = 0; // payment cap > 0 but window cap = 0
+        vm.prank(depositor);
+        vm.expectRevert(RobotMoneyGateway.InvalidAmount.selector);
+        gateway.authorizeAgent(agent, p);
+    }
+
+    function test_authorizeAgent_revertsWhenPaymentCapExceedsWithdrawWindowCap() public {
+        IGateway.AgentPolicy memory p = _defaultPolicy();
+        p.maxWithdrawPerPayment = MAX_WITHDRAW_PER_WINDOW + 1; // exceeds window cap
+        vm.prank(depositor);
+        vm.expectRevert(RobotMoneyGateway.InvalidAmount.selector);
+        gateway.authorizeAgent(agent, p);
+    }
+
+    // -------------------------------------------------------------------
+    // Defensive invariant: vault routes USDC to gateway → UnexpectedAssetsReceived
+    // -------------------------------------------------------------------
+
+    function test_withdraw_revertsOnUnexpectedAssetsReceived() public {
+        // Deploy a gateway backed by the misbehaving vault.
+        UnexpectedAssetsRedeemVault badVault = new UnexpectedAssetsRedeemVault(address(usdc));
+        RobotMoneyGateway gw = new RobotMoneyGateway(
+            IERC20(address(usdc)), IERC4626(address(badVault)), admin, pauser, address(0)
+        );
+        bytes32 role = gw.AGENT_ROLE();
+
+        // Authorize agent with withdrawal-enabled policy.
+        IGateway.AgentPolicy memory p = _defaultPolicy();
+        vm.prank(depositor);
+        gw.authorizeAgent(agent, p);
+
+        // Mint shares to agent via badVault and approve gw.
+        uint256 shares = 100 * ONE_USDC;
+        usdc.mint(depositor, shares);
+        vm.prank(depositor);
+        usdc.approve(address(badVault), shares);
+        vm.prank(depositor);
+        badVault.deposit(shares, agent);
+        vm.prank(agent);
+        badVault.approve(address(gw), shares);
+
+        vm.prank(agent);
+        vm.expectRevert(RobotMoneyGateway.UnexpectedAssetsReceived.selector);
+        gw.withdraw(
+            keccak256("o-bad"),
+            shares,
+            address(badVault),
+            uint64(block.timestamp + 60),
+            keccak256("i-bad")
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // Defensive invariant: vault leaks shares to gateway → ShareCustodyInvariantViolated
+    // -------------------------------------------------------------------
+
+    function test_withdraw_revertsOnShareCustodyInvariantViolated() public {
+        ShareLeakRedeemVault leakyVault = new ShareLeakRedeemVault(address(usdc));
+        RobotMoneyGateway gw = new RobotMoneyGateway(
+            IERC20(address(usdc)), IERC4626(address(leakyVault)), admin, pauser, address(0)
+        );
+
+        IGateway.AgentPolicy memory p = _defaultPolicy();
+        vm.prank(depositor);
+        gw.authorizeAgent(agent, p);
+
+        uint256 shares = 100 * ONE_USDC;
+        usdc.mint(depositor, shares);
+        vm.prank(depositor);
+        usdc.approve(address(leakyVault), shares);
+        vm.prank(depositor);
+        leakyVault.deposit(shares, agent);
+        vm.prank(agent);
+        leakyVault.approve(address(gw), shares);
+
+        // Mint extra USDC to leakyVault so it can send assets to assetRecipient AND
+        // still re-mint 1 share. The vault only needs enough USDC for the redeem.
+        // (leakyVault already holds `shares` USDC from the deposit above.)
+
+        vm.prank(agent);
+        vm.expectRevert(RobotMoneyGateway.ShareCustodyInvariantViolated.selector);
+        gw.withdraw(
+            keccak256("o-leak"),
+            shares,
+            address(leakyVault),
+            uint64(block.timestamp + 60),
+            keccak256("i-leak")
+        );
     }
 }
