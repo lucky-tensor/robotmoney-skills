@@ -727,7 +727,7 @@ async fn router_state_empty_when_no_snapshots() {
 }
 
 /// Suite-08 AC: GET /v1/accounts/:address/positions returns correct balances
-/// across two registered vaults (fixture seeds agent on vault_a only).
+/// across two registered vaults (fixture seeds agent on vault_a and vault_b).
 #[tokio::test]
 async fn account_positions_returns_vault_balances() {
     let s = start_with_seed().await;
@@ -745,20 +745,64 @@ async fn account_positions_returns_vault_balances() {
     let positions = body["positions"]
         .as_array()
         .expect("positions must be an array");
-    assert_eq!(
-        positions.len(),
-        1,
-        "fixture seeds agent shares in vault_a only"
+    // Fixture seeds agent shares in both vault_a (50000000) and vault_b (30000000).
+    assert!(
+        positions.len() >= 1,
+        "fixture seeds agent shares in at least one vault"
     );
-    assert_eq!(
-        positions[0]["shares"], "50000000",
-        "shares must equal the seeded wallet_position"
-    );
+    // Find the vault_a position (shares=50000000) and verify its usdc_value.
+    let vault_a_pos = positions
+        .iter()
+        .find(|p| p["shares"].as_str() == Some("50000000"))
+        .expect("vault_a position with shares=50000000 must be present");
     // usdc_value = 50000000 * 99999999 / 99999999 = 50000000.
     assert_eq!(
-        positions[0]["usdc_value"], "50000000",
+        vault_a_pos["usdc_value"], "50000000",
         "usdc_value must equal shares when total_assets == total_supply"
     );
+    assert!(body["block_number"].is_i64());
+    assert!(body["indexed_at"].is_string());
+}
+
+/// Suite-08 AC: GET /v1/accounts/:address/positions reflects positions in both
+/// vault_a and vault_b when the agent holds shares in each.
+///
+/// Fixture seeds: vault_a shares=50000000, vault_b shares=30000000.
+#[tokio::test]
+async fn account_positions_returns_both_vaults() {
+    let s = start_with_seed().await;
+    let body: serde_json::Value = http()
+        .get(format!(
+            "http://{}/v1/accounts/0x3333333333333333333333333333333333333333/positions",
+            s.addr
+        ))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let positions = body["positions"]
+        .as_array()
+        .expect("positions must be an array");
+    assert_eq!(
+        positions.len(),
+        2,
+        "fixture seeds agent shares in both vault_a and vault_b, got {positions:?}"
+    );
+
+    // Collect shares values; order may vary by implementation.
+    let mut shares_set: Vec<&str> = positions
+        .iter()
+        .map(|p| p["shares"].as_str().expect("shares must be a string"))
+        .collect();
+    shares_set.sort();
+    assert_eq!(
+        shares_set,
+        vec!["30000000", "50000000"],
+        "must have one position with shares=50000000 (vault_a) and one with shares=30000000 (vault_b)"
+    );
+
     assert!(body["block_number"].is_i64());
     assert!(body["indexed_at"].is_string());
 }

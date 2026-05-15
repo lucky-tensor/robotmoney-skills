@@ -393,6 +393,35 @@ async fn seed_fixture(pool: &PgPool) {
     .await
     .unwrap();
 
+    // vault_b_addr must exist in contracts for the wallet_positions FK.
+    sqlx::query(
+        "INSERT INTO contracts (chain_id, address, kind, deployed_block) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(PRIMARY_CHAIN_ID)
+    .bind(&vault_b_addr[..])
+    .bind("vault")
+    .bind(Some(900_i64))
+    .execute(pool)
+    .await
+    .unwrap();
+
+    // Seed a share balance for `agent` on vault_b.
+    // shares = 30000000 (distinct from vault_a's 50000000 so the two-vault test
+    // can identify each position unambiguously).
+    sqlx::query(
+        "INSERT INTO wallet_positions (chain_id, contract, owner, block_number, shares, indexed_at) \
+         VALUES ($1, $2, $3, $4, $5::NUMERIC, $6)",
+    )
+    .bind(PRIMARY_CHAIN_ID)
+    .bind(&vault_b_addr[..])
+    .bind(&agent[..])
+    .bind(500_i64)
+    .bind("30000000")
+    .bind(indexed_at)
+    .execute(pool)
+    .await
+    .unwrap();
+
     // --- governance fixture (issue #307 suite-08) ---
     //
     // Scenario:
