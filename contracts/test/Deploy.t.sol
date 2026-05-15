@@ -78,8 +78,7 @@ contract DeployTest is Test {
             uint64 validUntil,
             uint256 maxPerPayment,
             uint256 maxPerWindow,
-            address recv,
-            ,
+            address recv,,
             uint256 maxWithdrawPerPayment,
             uint256 maxWithdrawPerWindow
         ) = d.gateway.agents(agent);

@@ -263,8 +263,7 @@ contract Deploy is Script {
         // When withdrawals are enabled (maxWithdrawPerPayment > 0) the contract
         // requires assetRecipient != address(0).  Use shareReceiver as the
         // USDC recipient for devnet/test deployments.
-        address assetRecipient =
-            p.maxWithdrawPerPayment > 0 ? d.shareReceiver : address(0);
+        address assetRecipient = p.maxWithdrawPerPayment > 0 ? d.shareReceiver : address(0);
         IGateway.AgentPolicy memory policy = IGateway.AgentPolicy({
             active: true,
             validUntil: p.validUntil,
