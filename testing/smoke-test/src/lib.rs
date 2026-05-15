@@ -1949,6 +1949,11 @@ impl DappStack {
                 "VITE_GATEWAY_EXPECTED_CODE_HASH",
                 gateway_runtime_hash.clone(),
             ),
+            // Issue #320: surface registry and router addresses so the dapp's
+            // DestinationSelector can list registered vaults and offer the
+            // Portfolio Router deposit path.
+            ("VITE_REGISTRY_ADDRESS", fixture.registry_hex().to_string()),
+            ("VITE_ROUTER_ADDRESS", fixture.router_hex().to_string()),
             ("INDEXER_GATEWAY", gateway_hex.to_string()),
             ("INDEXER_VAULT", vault_hex.to_string()),
             (
@@ -2019,6 +2024,10 @@ impl DappStack {
             .env("VITE_GATEWAY_ADDRESS", gateway_hex)
             .env("VITE_VAULT_ADDRESS", vault_hex)
             .env("VITE_GATEWAY_EXPECTED_CODE_HASH", &gateway_runtime_hash)
+            // Issue #320: thread registry and router addresses into the dapp
+            // build so the DestinationSelector and router deposit flow work.
+            .env("VITE_REGISTRY_ADDRESS", fixture.registry_hex())
+            .env("VITE_ROUTER_ADDRESS", fixture.router_hex())
             .env("INDEXER_GATEWAY", gateway_hex)
             .env("INDEXER_VAULT", vault_hex)
             // RPC is on the host; containers reach it via host.docker.internal
@@ -2072,9 +2081,12 @@ impl DappStack {
         let mut compose_log_followers = Vec::new();
         let dapp_log_env = {
             let mut env = dapp_log_env;
-            env[9] = ("VITE_DEVNET_RPC_URL", vite_rpc_url.clone());
-            env[10] = ("VITE_EXPLORER_API_URL", vite_explorer_api_url.clone());
-            env[11] = ("VITE_DAPP_URL", vite_dapp_url.clone());
+            // Indices shifted by 2 vs issue #318 baseline (9/10/11) because
+            // issue #320 inserts VITE_REGISTRY_ADDRESS (6) and
+            // VITE_ROUTER_ADDRESS (7) before these entries.
+            env[11] = ("VITE_DEVNET_RPC_URL", vite_rpc_url.clone());
+            env[12] = ("VITE_EXPLORER_API_URL", vite_explorer_api_url.clone());
+            env[13] = ("VITE_DAPP_URL", vite_dapp_url.clone());
             env
         };
         let dapp_log_follower = start_compose_log_follower(
