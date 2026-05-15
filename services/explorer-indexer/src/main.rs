@@ -5,11 +5,7 @@
 use alloy_primitives::Address;
 use clap::Parser;
 use explorer_indexer::{
-    db::Db,
-    feature_flags,
-    indexer::run_once,
-    indexer::IndexerConfig,
-    rpc::JsonRpc,
+    db::Db, feature_flags, indexer::run_once, indexer::IndexerConfig, rpc::JsonRpc,
     DEFAULT_TICK_SECONDS,
 };
 use std::str::FromStr;

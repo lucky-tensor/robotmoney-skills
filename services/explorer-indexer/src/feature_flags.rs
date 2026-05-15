@@ -62,8 +62,14 @@ mod tests {
     #[test]
     fn flag_id_constants_match_registry() {
         assert_eq!(MULTI_VAULT_ENABLED, 0, "MULTI_VAULT_ENABLED must be id=0");
-        assert_eq!(PORTFOLIO_ROUTER_ENABLED, 1, "PORTFOLIO_ROUTER_ENABLED must be id=1");
-        assert_eq!(INDEXER_MULTI_VAULT_EVENTS, 2, "INDEXER_MULTI_VAULT_EVENTS must be id=2");
+        assert_eq!(
+            PORTFOLIO_ROUTER_ENABLED, 1,
+            "PORTFOLIO_ROUTER_ENABLED must be id=1"
+        );
+        assert_eq!(
+            INDEXER_MULTI_VAULT_EVENTS, 2,
+            "INDEXER_MULTI_VAULT_EVENTS must be id=2"
+        );
     }
 
     #[test]
