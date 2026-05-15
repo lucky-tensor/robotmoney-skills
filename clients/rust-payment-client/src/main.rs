@@ -32,6 +32,8 @@ fn main() {
         Command::GetGateway { config, .. } => Some(config.as_path()),
         Command::GetAgent { config, .. } => Some(config.as_path()),
         Command::GetRoles { config, .. } => Some(config.as_path()),
+        Command::GetRouter { config, .. } => Some(config.as_path()),
+        Command::GetGovernance { config, .. } => Some(config.as_path()),
         Command::GetBalance { config, .. } => Some(config.as_path()),
         Command::GetAllowance { config, .. } => Some(config.as_path()),
         Command::GetDeposit { config, .. } => Some(config.as_path()),
@@ -76,6 +78,8 @@ fn main() {
         Command::GetRouter { config, pretty } => commands::get_router::run(&config, pretty),
         Command::GetGovernance { config, pretty } => commands::get_governance::run(&config, pretty),
         Command::GetGateway { config, pretty } => commands::get_gateway::run(&config, pretty),
+        Command::GetRouter { config, pretty } => commands::get_router::run(&config, pretty),
+        Command::GetGovernance { config, pretty } => commands::get_governance::run(&config, pretty),
         Command::GetAgent {
             config,
             agent,

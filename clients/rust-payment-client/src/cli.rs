@@ -142,6 +142,24 @@ pub enum Command {
         #[arg(long)]
         pretty: bool,
     },
+    /// Read Portfolio Router state: current vault weights and router cap (issue #309).
+    GetRouter {
+        /// Path to the operator config TOML. Must include `router_address`.
+        #[arg(long, short = 'c')]
+        config: PathBuf,
+        /// Pretty-print the JSON output.
+        #[arg(long)]
+        pretty: bool,
+    },
+    /// Read RouterGovernance state: active proposal, cadence params, current weights (issue #309).
+    GetGovernance {
+        /// Path to the operator config TOML. Must include `governance_address`.
+        #[arg(long, short = 'c')]
+        config: PathBuf,
+        /// Pretty-print the JSON output.
+        #[arg(long)]
+        pretty: bool,
+    },
     /// Read an ERC-20 token balance for an address (USDC by default).
     ///
     /// Per docs/implementation-plan.md §9 / docs/technical/rmpc-read-output-contract.md.
