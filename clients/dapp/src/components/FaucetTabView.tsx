@@ -215,11 +215,7 @@ export function FaucetTabView(props: Props) {
             Get <strong>{FAUCET_DRIP_AMOUNT_RM_LABEL}</strong> voting tokens to participate in
             Router Governance.
           </p>
-          <button
-            type="submit"
-            data-testid="faucet-rm-drip-button"
-            disabled={!canDripRm}
-          >
+          <button type="submit" data-testid="faucet-rm-drip-button" disabled={!canDripRm}>
             Get RM tokens
           </button>
           {rmStatus.kind === "pending" && (

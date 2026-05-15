@@ -24,7 +24,12 @@ import { useMemo } from "react";
 import { type Address, type Hex, isAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { useFaucetBalances } from "../lib/useFaucetBalances";
-import { dripUsdc, dripRmToken, type DripUsdcArgs, type DripRmTokenArgs } from "../lib/faucetClient";
+import {
+  dripUsdc,
+  dripRmToken,
+  type DripUsdcArgs,
+  type DripRmTokenArgs,
+} from "../lib/faucetClient";
 import { FaucetTabView } from "./FaucetTabView";
 
 type Props = Readonly<{
