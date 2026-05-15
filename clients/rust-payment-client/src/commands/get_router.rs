@@ -139,7 +139,7 @@ async fn read_router(
         Ok((vaults, bps)) => {
             b.data_mut().weights = vaults
                 .into_iter()
-                .zip(bps.into_iter())
+                .zip(bps)
                 .map(|(vault, bps)| WeightEntry {
                     vault: format!("{vault:#x}"),
                     weight_bps: DecimalU256(bps),

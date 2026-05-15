@@ -9,7 +9,6 @@ mod common;
 
 use crate::common::{enc_u256, jrpc_result, match_eth_call_selector, selector_hex_of, USDC, VAULT};
 use alloy_primitives::{address, hex as ahex, keccak256, Address, U256};
-use alloy_sol_types::SolCall;
 use assert_cmd::Command;
 use mockito::Matcher;
 use rust_payment_client::gateway::PortfolioRouter;

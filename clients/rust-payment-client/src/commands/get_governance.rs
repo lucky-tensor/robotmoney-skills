@@ -333,7 +333,7 @@ async fn call_current_weights(
     let weights =
         r._0.vaults
             .into_iter()
-            .zip(r._0.bps.into_iter())
+            .zip(r._0.bps)
             .map(|(vault, bps)| AppliedWeight {
                 vault: format!("{vault:#x}"),
                 weight_bps: DecimalU256(bps),
