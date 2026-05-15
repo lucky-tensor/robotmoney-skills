@@ -453,67 +453,80 @@ contract RobotMoneyGateway is AccessRoles, ReentrancyGuard, IGateway {
         isRouter = (address(routerContract) != address(0) && destination == address(routerContract));
         if (!isVault && !isRouter) revert InvalidDestination();
 
-        // Enforce allowedDestinations whitelist when non-empty.
-        if (allowedDestinations.length > 0) {
-            bool allowed = false;
-            for (uint256 i = 0; i < allowedDestinations.length; i++) {
-                if (allowedDestinations[i] == destination) {
-                    allowed = true;
-                    break;
-                }
+        // Enforce allowedDestinations whitelist when non-empty. Early return
+        // avoids a `break` statement that viaIR source-maps unreliably.
+        uint256 len = allowedDestinations.length;
+        if (len > 0) {
+            for (uint256 i = 0; i < len; i++) {
+                if (allowedDestinations[i] == destination) return isRouter; // allowed
             }
-            if (!allowed) revert InvalidDestination();
+            revert InvalidDestination();
         }
     }
 
     /// @dev Dispatches to router or vault deposit execution based on `args.isRouter`.
+    ///      Separated into two internal calls to give viaIR coverage instrumentation
+    ///      a reliable source-map anchor for each path.
     function _executeDeposit(DepositArgs memory args, uint256[] calldata minSharesPerLeg) internal {
         if (args.isRouter) {
-            usdcToken.forceApprove(address(routerContract), args.amount);
-            uint256[] memory sharesPerLeg =
-                routerContract.depositFor(args.shareReceiver, args.amount, minSharesPerLeg);
-            usdcToken.forceApprove(address(routerContract), 0);
-
-            if (usdcToken.balanceOf(address(this)) != args.balBefore) {
-                revert ShareCustodyInvariantViolated();
-            }
-
-            emit AgentDepositRouted(
-                args.paymentId,
-                args.orderId,
-                msg.sender,
-                args.shareReceiver,
-                address(routerContract),
-                args.amount,
-                sharesPerLeg,
-                args.windowId
-            );
+            _executeRouterDeposit(args, minSharesPerLeg);
         } else {
-            if (IERC20(args.destination).balanceOf(address(this)) != 0) {
-                revert ShareCustodyInvariantViolated();
-            }
-
-            usdcToken.forceApprove(args.destination, args.amount);
-            uint256 sharesMinted =
-                IERC4626(args.destination).deposit(args.amount, args.shareReceiver);
-            usdcToken.forceApprove(args.destination, 0);
-
-            if (IERC20(args.destination).balanceOf(address(this)) != 0) {
-                revert ShareCustodyInvariantViolated();
-            }
-            if (usdcToken.balanceOf(address(this)) != args.balBefore) {
-                revert ShareCustodyInvariantViolated();
-            }
-
-            emit AgentDeposit(
-                args.paymentId,
-                args.orderId,
-                msg.sender,
-                args.shareReceiver,
-                args.amount,
-                sharesMinted,
-                args.windowId
-            );
+            _executeVaultDeposit(args);
         }
+    }
+
+    /// @dev Router-path deposit: approve router, call `depositFor`, clear allowance,
+    ///      check USDC custody invariant, emit event.
+    function _executeRouterDeposit(DepositArgs memory args, uint256[] calldata minSharesPerLeg)
+        internal
+    {
+        usdcToken.forceApprove(address(routerContract), args.amount);
+        uint256[] memory sharesPerLeg =
+            routerContract.depositFor(args.shareReceiver, args.amount, minSharesPerLeg);
+        usdcToken.forceApprove(address(routerContract), 0);
+
+        if (usdcToken.balanceOf(address(this)) != args.balBefore) {
+            revert ShareCustodyInvariantViolated();
+        }
+
+        emit AgentDepositRouted(
+            args.paymentId,
+            args.orderId,
+            msg.sender,
+            args.shareReceiver,
+            address(routerContract),
+            args.amount,
+            sharesPerLeg,
+            args.windowId
+        );
+    }
+
+    /// @dev Vault-path deposit: pre-call share custody check, approve vault, deposit,
+    ///      clear allowance, post-call custody invariants, emit event.
+    function _executeVaultDeposit(DepositArgs memory args) internal {
+        if (IERC20(args.destination).balanceOf(address(this)) != 0) {
+            revert ShareCustodyInvariantViolated();
+        }
+
+        usdcToken.forceApprove(args.destination, args.amount);
+        uint256 sharesMinted = IERC4626(args.destination).deposit(args.amount, args.shareReceiver);
+        usdcToken.forceApprove(args.destination, 0);
+
+        if (IERC20(args.destination).balanceOf(address(this)) != 0) {
+            revert ShareCustodyInvariantViolated();
+        }
+        if (usdcToken.balanceOf(address(this)) != args.balBefore) {
+            revert ShareCustodyInvariantViolated();
+        }
+
+        emit AgentDeposit(
+            args.paymentId,
+            args.orderId,
+            msg.sender,
+            args.shareReceiver,
+            args.amount,
+            sharesMinted,
+            args.windowId
+        );
     }
 }
