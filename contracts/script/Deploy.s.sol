@@ -279,11 +279,9 @@ contract Deploy is Script {
         // Registration (addAdapter) is done by the callers of _doDeploy —
         // see run(), runInProcess(), and runInProcessWith() — because the
         // caller context differs between broadcast and in-process test modes.
-        d.aaveAdapter =
-            new AaveV3Adapter(AAVE_V3_POOL, d.usdc, AAVE_V3_A_TOKEN, address(d.vault));
+        d.aaveAdapter = new AaveV3Adapter(AAVE_V3_POOL, d.usdc, AAVE_V3_A_TOKEN, address(d.vault));
         d.compoundAdapter = new CompoundV3Adapter(COMPOUND_V3_COMET, d.usdc, address(d.vault));
-        d.morphoAdapter =
-            new MorphoAdapter(MORPHO_GAUNTLET_USDC_PRIME, d.usdc, address(d.vault));
+        d.morphoAdapter = new MorphoAdapter(MORPHO_GAUNTLET_USDC_PRIME, d.usdc, address(d.vault));
         d.gateway = new RobotMoneyGateway(
             IERC20(d.usdc), IERC4626(address(d.vault)), d.admin, d.pauser, address(0)
         );
@@ -331,7 +329,9 @@ contract Deploy is Script {
         //    forge unit tests mint via the `TestERC20` helper directly.
         d.gatewayRuntimeHash = keccak256(address(d.gateway).code);
 
-        console2.log("RobotMoneyVault + AaveV3Adapter + CompoundV3Adapter + MorphoAdapter + RobotMoneyGateway deployed");
+        console2.log(
+            "RobotMoneyVault + AaveV3Adapter + CompoundV3Adapter + MorphoAdapter + RobotMoneyGateway deployed"
+        );
         console2.log("  usdc             :", d.usdc);
         console2.log("  vault            :", address(d.vault));
         console2.log("  aave_adapter     :", address(d.aaveAdapter));
