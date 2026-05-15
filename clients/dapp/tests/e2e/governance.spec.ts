@@ -215,10 +215,7 @@ test.describe("suite-10: GovernancePanel E2E", () => {
 
     const found = await navigateToGovernancePanel(page, endpoints);
     if (!found) {
-      test.skip(
-        true,
-        "GovernancePanel not mounted in dapp bundle — see test (A) skip message.",
-      );
+      test.skip(true, "GovernancePanel not mounted in dapp bundle — see test (A) skip message.");
       return;
     }
 
@@ -264,10 +261,7 @@ test.describe("suite-10: GovernancePanel E2E", () => {
 
     const found = await navigateToGovernancePanel(page, endpoints);
     if (!found) {
-      test.skip(
-        true,
-        "GovernancePanel not mounted in dapp bundle — see test (A) skip message.",
-      );
+      test.skip(true, "GovernancePanel not mounted in dapp bundle — see test (A) skip message.");
       return;
     }
 
