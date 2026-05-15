@@ -72,9 +72,11 @@ export function ProtocolStats({ apiUrl, fetchImpl }: ProtocolStatsProps) {
         <div data-testid="protocol-stats-activity">
           <h3>Recent Activity</h3>
           <ul>
-            {stats.recent_activity.map((event, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: stable fixture list
-              <li key={i} data-testid="protocol-stats-activity-item">
+            {stats.recent_activity.map((event) => (
+              <li
+                key={`${event.kind}-${event.block_number}-${event.indexed_at}`}
+                data-testid="protocol-stats-activity-item"
+              >
                 <span data-testid="protocol-stats-activity-kind">{event.kind}</span>
                 {" @ block "}
                 <span data-testid="protocol-stats-activity-block">{event.block_number}</span>
