@@ -66,8 +66,7 @@ export function AgentPoliciesPanel(props: AgentPoliciesPanelProps) {
       )}
 
       {!props.loading && !props.error && (
-        <>
-          {props.policies.length === 0 ? (
+        props.policies.length === 0 ? (
             <p data-testid="agent-policies-empty">No agent policies found for this address.</p>
           ) : (
             <ul data-testid="agent-policies-list">
@@ -136,8 +135,7 @@ export function AgentPoliciesPanel(props: AgentPoliciesPanelProps) {
                 </li>
               ))}
             </ul>
-          )}
-        </>
+          )
       )}
     </section>
   );
