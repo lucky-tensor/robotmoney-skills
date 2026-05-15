@@ -747,7 +747,7 @@ async fn account_positions_returns_vault_balances() {
         .expect("positions must be an array");
     // Fixture seeds agent shares in both vault_a (50000000) and vault_b (30000000).
     assert!(
-        positions.len() >= 1,
+        !positions.is_empty(),
         "fixture seeds agent shares in at least one vault"
     );
     // Find the vault_a position (shares=50000000) and verify its usdc_value.
