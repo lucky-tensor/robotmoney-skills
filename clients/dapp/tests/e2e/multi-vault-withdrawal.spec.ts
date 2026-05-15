@@ -183,7 +183,9 @@ test.describe("Multi-vault withdrawal — PositionSelector and previewRedeem on 
     await expect(positionSelector).toBeVisible({ timeout: 15_000 });
 
     // Step 5: click the vault radio — should pre-fill the shares input.
-    const positionRadio = page.getByRole("radio").first();
+    // Scope to positionSelector so DestinationSelector radios (rendered above
+    // the deposit section) don't shadow this selector.
+    const positionRadio = positionSelector.getByRole("radio").first();
     await expect(positionRadio).toBeVisible({ timeout: 5_000 });
     await positionRadio.click();
 
