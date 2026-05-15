@@ -77,6 +77,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-foundry-
 
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dapp dependencies (needed for Prettier in generate script)
+        run: bun install --frozen-lockfile
+        working-directory: clients/dapp
+
       - name: forge build
         run: forge build
 

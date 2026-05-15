@@ -130,6 +130,19 @@ with open(dest, "w") as f:
 print(f"  wrote {dest}")
 PYEOF
 
+# Format the generated TypeScript file with Prettier so it passes the dapp
+# fmt check (suite-09).  Requires the dapp dependencies to be installed; if
+# they are not, the script skips formatting and prints a reminder.
+PRETTIER_BIN="$REPO_ROOT/clients/dapp/node_modules/.bin/prettier"
+if [[ -x "$PRETTIER_BIN" ]]; then
+  "$PRETTIER_BIN" --write "$DAPP_LIB/abi.generated.ts" >/dev/null
+  echo "  formatted $DAPP_LIB/abi.generated.ts with Prettier"
+else
+  echo "  WARNING: Prettier not found at $PRETTIER_BIN"
+  echo "           Run 'bun install' inside clients/dapp/ then re-run this script"
+  echo "           to produce a Prettier-compliant abi.generated.ts."
+fi
+
 echo ""
 echo "ABI generation complete."
 echo ""
