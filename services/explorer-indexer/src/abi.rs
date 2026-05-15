@@ -424,7 +424,7 @@ mod tests {
     fn abi_drift_gate() {
         use alloy_primitives::keccak256;
 
-        /// One entry per indexed event: (event_name, canonical_signature, sol_macro_hash).
+        // One entry per indexed event: (event_name, canonical_signature, sol_macro_hash).
         let checks: &[(&str, &[u8], B256)] = &[
             // IGateway.sol:74
             (
