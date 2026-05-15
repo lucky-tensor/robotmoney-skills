@@ -578,9 +578,7 @@ main.public-view {
   color: var(--color-text-dim);
 }
 main.agents-gate {
-  max-width: 64rem;
-  margin: 0 auto;
-  padding: 1rem 1.5rem 4rem;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -613,6 +611,90 @@ main.agents-gate {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: 0.5rem 0.75rem;
+}
+.dapp-shell {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 1.5rem 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+.landing-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.landing-vaults {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.section-heading-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.section-heading-row h2,
+.section-heading-row p {
+  margin: 0;
+}
+.vault-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+.vault-card {
+  min-width: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.vault-card-kicker {
+  color: var(--color-accent);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: var(--tracking-widest);
+  text-transform: uppercase;
+  margin: 0 0 0.375rem;
+}
+.vault-card h3 {
+  color: var(--color-text);
+  font-size: 1.125rem;
+  line-height: 1.25;
+  letter-spacing: 0;
+  text-transform: none;
+  margin: 0;
+}
+.vault-card dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+.vault-card dt {
+  color: var(--color-text-dim);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: var(--tracking-widest);
+  text-transform: uppercase;
+}
+.vault-card dd {
+  margin: 0.25rem 0 0;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+.tab-section-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 /* Tabs */
@@ -664,4 +746,12 @@ main.agents-gate {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+}
+@media (max-width: 760px) {
+  .vault-card-grid {
+    grid-template-columns: 1fr;
+  }
+  .vault-card dl {
+    grid-template-columns: 1fr;
+  }
 }

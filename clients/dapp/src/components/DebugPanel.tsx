@@ -147,6 +147,11 @@ export function DebugPanel(props: DebugPanelProps) {
         </button>
       </div>
 
+      <DebugSection title="Build">
+        <DebugRow label="Dapp version" value={__DAPP_VERSION__} testId="debug-dapp-version" />
+        <DebugRow label="GitHub commit" value={__GIT_COMMIT__} testId="debug-github-commit" />
+      </DebugSection>
+
       <DebugSection title="Chain">
         <DebugRow label="Environment" value={props.envClass} testId="debug-env-class" />
         <DebugRow

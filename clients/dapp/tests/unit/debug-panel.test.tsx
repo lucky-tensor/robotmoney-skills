@@ -54,6 +54,8 @@ describe("DebugPanel", () => {
   it("surfaces chain, contract, wallet, and account state", () => {
     renderPanel();
 
+    expect(screen.getByTestId("debug-dapp-version")).toHaveTextContent("0.1.0");
+    expect(screen.getByTestId("debug-github-commit")).toHaveTextContent("test-commit");
     expect(screen.getByTestId("debug-env-class")).toHaveTextContent("devnet");
     expect(screen.getByTestId("debug-chain-id")).toHaveTextContent("918453");
     expect(screen.getByTestId("debug-block-number")).toHaveTextContent("123");

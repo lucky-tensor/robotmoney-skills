@@ -1,8 +1,5 @@
 /**
- * AdminFlow — orchestrates the agent-management tabs. Each tab owns
- * its wallet hooks and preview pipeline; this component routes shared
- * state (agent address, share receiver) between tabs that reference
- * them and delegates tab assembly to `buildAdminTabs`.
+ * AdminFlow — orchestrates the wallet-scoped My Account tabs.
  */
 import { useState } from "react";
 import { useAccount, useChainId, useReadContract } from "wagmi";
@@ -10,7 +7,6 @@ import type { Address } from "viem";
 import { gatewayAbi } from "../lib/abi";
 import type { PreviewContext } from "../lib/preview";
 import { Tabs } from "./Tabs";
-import { resolveFlags } from "../lib/featureFlags";
 import type { VerificationState } from "../lib/useGatewayVerifier";
 import { buildAdminTabs } from "./buildAdminTabs";
 import { resolveExplorerApiUrl } from "../lib/explorerApi";
@@ -30,7 +26,6 @@ type Props = Readonly<{
 }>;
 
 export function AdminFlow(props: Props) {
-  const flags = resolveFlags(props.flagEnv);
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
 
@@ -60,9 +55,7 @@ export function AdminFlow(props: Props) {
     usdcAddress,
     chainId,
     ctx,
-    gatewayVerificationState,
     flagEnv: props.flagEnv,
-    historyPaneEnabled: flags.historyPane,
     agent,
     setAgent,
     shareReceiver,
@@ -80,16 +73,14 @@ export function AdminFlow(props: Props) {
   });
 
   return (
-    <main className="admin-flow">
-      <h1>Agents</h1>
-
+    <main className="admin-flow" data-testid="my-account-panel">
       {gatewayVerificationState.status === "verified" && (
         <p data-testid="gateway-verification-ok" className="verification-ok">
           Gateway bytecode verified: <code>{gatewayVerificationState.computedHash}</code>
         </p>
       )}
 
-      <Tabs tabs={tabs} />
+      <Tabs tabs={tabs} defaultTabId="agent-permissions" />
     </main>
   );
 }
