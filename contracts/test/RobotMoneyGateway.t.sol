@@ -148,7 +148,11 @@ contract RobotMoneyGatewayTest is Test {
             maxPerPayment: MAX_PER_PAYMENT,
             maxPerWindow: MAX_PER_WINDOW,
             shareReceiver: shareReceiver,
-            allowedDestinations: noDestinations
+            allowedDestinations: noDestinations,
+            assetRecipient: address(0),
+            maxWithdrawPerPayment: 0,
+            maxWithdrawPerWindow: 0,
+            allowedSourceVaults: noDestinations
         });
     }
 
@@ -234,7 +238,7 @@ contract RobotMoneyGatewayTest is Test {
         assertTrue(gateway.hasRole(agentRole, agent));
         assertEq(gateway.agentOwner(agent), depositor);
 
-        (bool active, uint64 validUntil, uint256 maxPay, uint256 maxWin, address recv) =
+        (bool active, uint64 validUntil, uint256 maxPay, uint256 maxWin, address recv,,,) =
             gateway.agents(agent);
         assertTrue(active);
         assertEq(validUntil, p.validUntil);
@@ -355,7 +359,7 @@ contract RobotMoneyGatewayTest is Test {
 
         assertTrue(gateway.hasRole(agentRole, agent));
         assertEq(gateway.agentOwner(agent), depositor);
-        (,, uint256 maxPay,,) = gateway.agents(agent);
+        (,, uint256 maxPay,,,,,) = gateway.agents(agent);
         assertEq(maxPay, 42 * ONE_USDC);
     }
 
@@ -381,7 +385,7 @@ contract RobotMoneyGatewayTest is Test {
         // Recorded owner succeeds.
         vm.prank(depositor);
         gateway.setPolicy(agent, updated);
-        (,, uint256 maxPay,,) = gateway.agents(agent);
+        (,, uint256 maxPay,,,,,) = gateway.agents(agent);
         assertEq(maxPay, 7 * ONE_USDC);
     }
 
@@ -419,7 +423,7 @@ contract RobotMoneyGatewayTest is Test {
         gateway.revokeAgent(agent);
 
         assertFalse(gateway.hasRole(agentRole, agent));
-        (bool active,,,,) = gateway.agents(agent);
+        (bool active,,,,,,,) = gateway.agents(agent);
         assertFalse(active);
         assertEq(gateway.agentOwner(agent), address(0));
     }
@@ -904,5 +908,401 @@ contract RobotMoneyGatewayTest is Test {
         gw.deposit(
             bytes32("outer-order"), amount, uint64(block.timestamp + 60), bytes32("outer-idem")
         );
+    }
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// GatewayWithdrawTest
+// Tests for gateway.withdraw() — agent-initiated vault redemption.
+// ───────────────────────────────────────────────────────────────────────────
+
+contract GatewayWithdrawTest is Test {
+    TestERC20 internal usdc;
+    MockVault internal vault;
+    RobotMoneyGateway internal gateway;
+
+    address internal admin = makeAddr("admin");
+    address internal pauser = makeAddr("pauser");
+    address internal agent = makeAddr("agent");
+    address internal depositor = makeAddr("depositor");
+    address internal shareReceiver = makeAddr("shareReceiver");
+    address internal assetRecipient = makeAddr("assetRecipient");
+
+    bytes32 internal agentRole;
+
+    uint256 internal constant ONE_USDC = 1e6;
+    uint256 internal constant MAX_PER_PAYMENT = 1_000 * ONE_USDC;
+    uint256 internal constant MAX_PER_WINDOW = 5_000 * ONE_USDC;
+    uint256 internal constant MAX_WITHDRAW_PER_PAYMENT = 500 * ONE_USDC;
+    uint256 internal constant MAX_WITHDRAW_PER_WINDOW = 2_500 * ONE_USDC;
+
+    function setUp() public {
+        usdc = new TestERC20();
+        vault = new MockVault(address(usdc));
+        gateway = new RobotMoneyGateway(
+            IERC20(address(usdc)), IERC4626(address(vault)), admin, pauser, address(0)
+        );
+        agentRole = gateway.AGENT_ROLE();
+        vm.warp(1_700_000_000);
+    }
+
+    // -------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------
+
+    function _defaultPolicy() internal view returns (IGateway.AgentPolicy memory) {
+        address[] memory noDestinations = new address[](0);
+        return IGateway.AgentPolicy({
+            active: true,
+            validUntil: uint64(block.timestamp + 365 days),
+            maxPerPayment: MAX_PER_PAYMENT,
+            maxPerWindow: MAX_PER_WINDOW,
+            shareReceiver: shareReceiver,
+            allowedDestinations: noDestinations,
+            assetRecipient: assetRecipient,
+            maxWithdrawPerPayment: MAX_WITHDRAW_PER_PAYMENT,
+            maxWithdrawPerWindow: MAX_WITHDRAW_PER_WINDOW,
+            allowedSourceVaults: noDestinations
+        });
+    }
+
+    function _authorize(IGateway.AgentPolicy memory p) internal {
+        vm.prank(depositor);
+        gateway.authorizeAgent(agent, p);
+    }
+
+    /// @dev Mint USDC to the depositor, deposit through gateway to give agent
+    ///      `shares` vault shares, approve gateway to spend them.
+    function _mintSharesAndApprove(uint256 shares) internal {
+        // Deposit USDC into the vault via the gateway; shares go to shareReceiver.
+        usdc.mint(depositor, shares);
+        vm.prank(depositor);
+        usdc.approve(address(vault), shares);
+        vm.prank(depositor);
+        vault.deposit(shares, agent); // send shares directly to agent
+
+        vm.prank(agent);
+        vault.approve(address(gateway), shares);
+    }
+
+    // -------------------------------------------------------------------
+    // Happy path
+    // -------------------------------------------------------------------
+
+    function test_withdraw_happyPath_burnsSharesSendsUsdcToRecipient() public {
+        _authorize(_defaultPolicy());
+        uint256 shares = 100 * ONE_USDC;
+        _mintSharesAndApprove(shares);
+
+        bytes32 orderId = keccak256("w-order-1");
+        bytes32 idem = keccak256("w-idem-1");
+        uint64 deadline = uint64(block.timestamp + 60);
+        uint64 expectedWindowId = uint64(block.timestamp / gateway.WINDOW_SECONDS());
+
+        bytes32 expectedPaymentId =
+            keccak256(abi.encode(block.chainid, address(gateway), agent, orderId, shares, idem));
+
+        vm.expectEmit(true, true, true, true, address(gateway));
+        emit IGateway.AgentWithdrawal(
+            expectedPaymentId,
+            orderId,
+            agent,
+            address(vault),
+            shares,
+            shares, // 1:1 redeem in MockVault
+            assetRecipient,
+            expectedWindowId
+        );
+
+        vm.prank(agent);
+        (bytes32 paymentId, uint256 assetsOut) =
+            gateway.withdraw(orderId, shares, address(vault), deadline, idem);
+
+        assertEq(paymentId, expectedPaymentId, "paymentId mismatch");
+        assertEq(assetsOut, shares, "assetsOut should be 1:1");
+
+        // Agent shares burned.
+        assertEq(vault.balanceOf(agent), 0, "agent shares must be zero");
+        // Gateway holds no shares.
+        assertEq(vault.balanceOf(address(gateway)), 0, "gateway must hold no shares");
+        // USDC went to assetRecipient, not agent, not gateway.
+        assertEq(usdc.balanceOf(assetRecipient), shares, "USDC to assetRecipient");
+        assertEq(usdc.balanceOf(agent), 0, "agent must not receive USDC");
+        assertEq(usdc.balanceOf(address(gateway)), 0, "gateway must not hold USDC");
+
+        // Window gross updated.
+        assertEq(
+            gateway.agentWithdrawWindowGross(agent, expectedWindowId),
+            shares,
+            "window gross updated"
+        );
+        // PaymentId consumed.
+        assertTrue(gateway.usedPaymentIds(paymentId), "paymentId must be marked used");
+    }
+
+    // -------------------------------------------------------------------
+    // Redirect blocked — agent cannot specify a different recipient
+    // -------------------------------------------------------------------
+
+    function test_withdraw_redirectBlocked_assetsAlwaysGoToAssetRecipient() public {
+        _authorize(_defaultPolicy());
+        uint256 shares = 100 * ONE_USDC;
+        _mintSharesAndApprove(shares);
+
+        vm.prank(agent);
+        (, uint256 assetsOut) = gateway.withdraw(
+            keccak256("o"), shares, address(vault), uint64(block.timestamp + 60), keccak256("i")
+        );
+
+        // Only assetRecipient received USDC.
+        assertEq(usdc.balanceOf(assetRecipient), assetsOut, "USDC must go to assetRecipient");
+        // agent cannot have gotten the USDC.
+        assertEq(usdc.balanceOf(agent), 0, "agent must not receive USDC");
+    }
+
+    // -------------------------------------------------------------------
+    // Reverts: withdrawal disabled
+    // -------------------------------------------------------------------
+
+    function test_withdraw_revertsWhenWithdrawalNotEnabled() public {
+        // Policy with maxWithdrawPerPayment = 0 disables withdrawal.
+        IGateway.AgentPolicy memory p = _defaultPolicy();
+        p.maxWithdrawPerPayment = 0;
+        p.maxWithdrawPerWindow = 0;
+        p.assetRecipient = address(0); // no recipient needed when disabled
+        _authorize(p);
+
+        _mintSharesAndApprove(100 * ONE_USDC);
+        vm.prank(agent);
+        vm.expectRevert(RobotMoneyGateway.WithdrawalNotEnabled.selector);
+        gateway.withdraw(
+            keccak256("o"),
+            100 * ONE_USDC,
+            address(vault),
+            uint64(block.timestamp + 60),
+            keccak256("i")
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // Reverts: per-payment cap
+    // -------------------------------------------------------------------
+
+    function test_withdraw_revertsWhenSharesExceedPerPaymentCap() public {
+        _authorize(_defaultPolicy());
+        uint256 overCap = MAX_WITHDRAW_PER_PAYMENT + 1;
+        _mintSharesAndApprove(overCap);
+
+        vm.prank(agent);
+        vm.expectRevert(RobotMoneyGateway.SharesExceedWithdrawPerPaymentCap.selector);
+        gateway.withdraw(
+            keccak256("o"), overCap, address(vault), uint64(block.timestamp + 60), keccak256("i")
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // Reverts: window cap
+    // -------------------------------------------------------------------
+
+    function test_withdraw_revertsWhenWindowCapExceeded() public {
+        // Policy with small window: 2x single payment.
+        IGateway.AgentPolicy memory p = _defaultPolicy();
+        p.maxWithdrawPerWindow = 2 * MAX_WITHDRAW_PER_PAYMENT;
+        _authorize(p);
+
+        uint256 shares = MAX_WITHDRAW_PER_PAYMENT;
+        _mintSharesAndApprove(3 * shares);
+
+        vm.prank(agent);
+        gateway.withdraw(
+            keccak256("o1"), shares, address(vault), uint64(block.timestamp + 60), keccak256("i1")
+        );
+        vm.prank(agent);
+        vault.approve(address(gateway), shares);
+        vm.prank(agent);
+        gateway.withdraw(
+            keccak256("o2"), shares, address(vault), uint64(block.timestamp + 60), keccak256("i2")
+        );
+
+        // Third in same window must revert.
+        vm.prank(agent);
+        vault.approve(address(gateway), 1);
+        vm.prank(agent);
+        vm.expectRevert(RobotMoneyGateway.WithdrawWindowCapExceeded.selector);
+        gateway.withdraw(
+            keccak256("o3"), 1, address(vault), uint64(block.timestamp + 60), keccak256("i3")
+        );
+
+        // Roll window — should succeed again.
+        vm.warp(block.timestamp + gateway.WINDOW_SECONDS());
+        _mintSharesAndApprove(shares);
+        vm.prank(agent);
+        gateway.withdraw(
+            keccak256("o4"), shares, address(vault), uint64(block.timestamp + 60), keccak256("i4")
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // Reverts: invalid source vault
+    // -------------------------------------------------------------------
+
+    function test_withdraw_revertsWhenSourceVaultNotPinnedVault() public {
+        _authorize(_defaultPolicy());
+        _mintSharesAndApprove(100 * ONE_USDC);
+
+        address rando = makeAddr("rando-vault");
+        vm.prank(agent);
+        vm.expectRevert(RobotMoneyGateway.InvalidSourceVault.selector);
+        gateway.withdraw(
+            keccak256("o"), 100 * ONE_USDC, rando, uint64(block.timestamp + 60), keccak256("i")
+        );
+    }
+
+    function test_withdraw_revertsWhenSourceVaultNotInAllowedList() public {
+        // Policy that pins allowedSourceVaults to something other than the vault.
+        IGateway.AgentPolicy memory p = _defaultPolicy();
+        address[] memory sources = new address[](1);
+        sources[0] = makeAddr("other-vault"); // not the real vault
+        p.allowedSourceVaults = sources;
+        _authorize(p);
+
+        _mintSharesAndApprove(100 * ONE_USDC);
+        vm.prank(agent);
+        vm.expectRevert(RobotMoneyGateway.InvalidSourceVault.selector);
+        gateway.withdraw(
+            keccak256("o"),
+            100 * ONE_USDC,
+            address(vault),
+            uint64(block.timestamp + 60),
+            keccak256("i")
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // Reverts: paused
+    // -------------------------------------------------------------------
+
+    function test_withdraw_revertsWhenPaused() public {
+        _authorize(_defaultPolicy());
+        _mintSharesAndApprove(100 * ONE_USDC);
+
+        vm.prank(pauser);
+        gateway.pause();
+
+        vm.prank(agent);
+        vm.expectRevert(RobotMoneyGateway.PausedError.selector);
+        gateway.withdraw(
+            keccak256("o"),
+            100 * ONE_USDC,
+            address(vault),
+            uint64(block.timestamp + 60),
+            keccak256("i")
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // Reverts: receipt allowance check
+    // -------------------------------------------------------------------
+
+    function test_withdraw_revertsWhenInsufficientShareAllowance() public {
+        _authorize(_defaultPolicy());
+
+        // Mint shares to agent but approve zero to gateway.
+        usdc.mint(depositor, 100 * ONE_USDC);
+        vm.prank(depositor);
+        usdc.approve(address(vault), 100 * ONE_USDC);
+        vm.prank(depositor);
+        vault.deposit(100 * ONE_USDC, agent);
+        // Do NOT approve gateway.
+
+        vm.prank(agent);
+        vm.expectRevert(); // ERC20 insufficient allowance revert
+        gateway.withdraw(
+            keccak256("o"),
+            100 * ONE_USDC,
+            address(vault),
+            uint64(block.timestamp + 60),
+            keccak256("i")
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // Reverts: zero shares
+    // -------------------------------------------------------------------
+
+    function test_withdraw_revertsOnZeroShares() public {
+        _authorize(_defaultPolicy());
+        vm.prank(agent);
+        vm.expectRevert(RobotMoneyGateway.InvalidAmount.selector);
+        gateway.withdraw(
+            keccak256("o"), 0, address(vault), uint64(block.timestamp + 60), keccak256("i")
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // Reverts: deadline checks
+    // -------------------------------------------------------------------
+
+    function test_withdraw_revertsOnExpiredDeadline() public {
+        _authorize(_defaultPolicy());
+        _mintSharesAndApprove(100 * ONE_USDC);
+        vm.prank(agent);
+        vm.expectRevert(RobotMoneyGateway.DeadlineExpired.selector);
+        gateway.withdraw(
+            keccak256("o"),
+            100 * ONE_USDC,
+            address(vault),
+            uint64(block.timestamp - 1),
+            keccak256("i")
+        );
+    }
+
+    function test_withdraw_revertsOnDeadlineTooFar() public {
+        _authorize(_defaultPolicy());
+        _mintSharesAndApprove(100 * ONE_USDC);
+        vm.prank(agent);
+        vm.expectRevert(RobotMoneyGateway.DeadlineTooFar.selector);
+        gateway.withdraw(
+            keccak256("o"),
+            100 * ONE_USDC,
+            address(vault),
+            uint64(block.timestamp + 601),
+            keccak256("i")
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // Reverts: policy validation — assetRecipient required when withdrawal enabled
+    // -------------------------------------------------------------------
+
+    function test_authorizeAgent_revertsWhenWithdrawEnabledButNoAssetRecipient() public {
+        IGateway.AgentPolicy memory p = _defaultPolicy();
+        p.assetRecipient = address(0);
+        // maxWithdrawPerPayment > 0 but no assetRecipient — must revert.
+        vm.prank(depositor);
+        vm.expectRevert(RobotMoneyGateway.InvalidAssetRecipient.selector);
+        gateway.authorizeAgent(agent, p);
+    }
+
+    // -------------------------------------------------------------------
+    // Reverts: idempotency
+    // -------------------------------------------------------------------
+
+    function test_withdraw_revertsOnReplay() public {
+        _authorize(_defaultPolicy());
+        uint256 shares = 100 * ONE_USDC;
+        _mintSharesAndApprove(shares);
+
+        bytes32 orderId = keccak256("w-replay");
+        bytes32 idem = keccak256("w-idem-replay");
+
+        vm.prank(agent);
+        gateway.withdraw(orderId, shares, address(vault), uint64(block.timestamp + 60), idem);
+
+        // Mint more shares and try the same orderId/idem again.
+        _mintSharesAndApprove(shares);
+        vm.prank(agent);
+        vm.expectRevert(RobotMoneyGateway.PaymentIdAlreadyUsed.selector);
+        gateway.withdraw(orderId, shares, address(vault), uint64(block.timestamp + 120), idem);
     }
 }
