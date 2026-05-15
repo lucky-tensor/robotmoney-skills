@@ -83,12 +83,13 @@ pre,
 
 /* Layout */
 main.admin-flow {
-  max-width: 64rem;
-  margin: 0 auto;
-  padding: 2.5rem 1.5rem 4rem;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 main.onboarding-wizard {
@@ -611,6 +612,24 @@ main.agents-gate {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: 0.5rem 0.75rem;
+}
+.account-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+}
+.account-panel-header h2,
+.account-panel-header p {
+  margin: 0;
+}
+.account-wallet-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 .dapp-shell {
   max-width: 72rem;

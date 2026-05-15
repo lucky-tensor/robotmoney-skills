@@ -2,7 +2,7 @@
  * AdminFlow — orchestrates the wallet-scoped My Account tabs.
  */
 import { useState } from "react";
-import { useAccount, useChainId, useReadContract } from "wagmi";
+import { useAccount, useChainId, useDisconnect, useReadContract } from "wagmi";
 import type { Address } from "viem";
 import { gatewayAbi } from "../lib/abi";
 import type { PreviewContext } from "../lib/preview";
@@ -27,6 +27,7 @@ type Props = Readonly<{
 
 export function AdminFlow(props: Props) {
   const { address, isConnected } = useAccount();
+  const { disconnect } = useDisconnect();
   const chainId = useChainId();
 
   const { data: usdcAddressData } = useReadContract({
@@ -74,6 +75,25 @@ export function AdminFlow(props: Props) {
 
   return (
     <main className="admin-flow" data-testid="my-account-panel">
+      <div className="account-panel-header">
+        <div>
+          <h2>My Account</h2>
+          <p className="hint">
+            Manage wallet-scoped permissions, deposits, withdrawals, and faucet access.
+          </p>
+        </div>
+        {isConnected && (
+          <div className="account-wallet-controls" data-testid="account-wallet-controls">
+            <code className="wallet-address" data-testid="my-account-address">
+              {address}
+            </code>
+            <button type="button" data-testid="my-account-disconnect" onClick={() => disconnect()}>
+              Disconnect
+            </button>
+          </div>
+        )}
+      </div>
+
       {gatewayVerificationState.status === "verified" && (
         <p data-testid="gateway-verification-ok" className="verification-ok">
           Gateway bytecode verified: <code>{gatewayVerificationState.computedHash}</code>
