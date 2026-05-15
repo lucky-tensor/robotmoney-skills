@@ -471,8 +471,8 @@ async fn handle_log(
                 decoded.vault.into_array(),
                 &decoded.name,
                 "stable-yield", // riskLabel removed from VaultRegistered (VaultRegistry.sol:67); use default
-                U256::ZERO, // depositCap removed
-                0i16, // VaultStatus::Active at registration
+                U256::ZERO,     // depositCap removed
+                0i16,           // VaultStatus::Active at registration
                 log.block_number as i64, // registeredAt removed; use block_number
                 log.block_number as i64,
                 log.tx_hash.0,
@@ -538,7 +538,7 @@ async fn handle_log(
                 log.block_number as i64,
                 log.log_index as i32,
                 log.tx_hash.0,
-                true,        // support bool removed; governance only records FOR votes
+                true, // support bool removed; governance only records FOR votes
                 decoded.power,
             )
             .await?;
