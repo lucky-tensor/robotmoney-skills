@@ -13,11 +13,7 @@ import { targetChainId } from "../lib/wagmi";
 import { getInjectedProvider, syncDevnetChain } from "../lib/syncDevnetChain";
 import type { VerificationState } from "../lib/useGatewayVerifier";
 import { useAgentRegistration } from "../lib/useVaultRegistration";
-import {
-  getCapturedEntries,
-  onCaptureUpdate,
-  type CaptureEntry,
-} from "../lib/error-capture";
+import { getCapturedEntries, onCaptureUpdate, type CaptureEntry } from "../lib/error-capture";
 
 interface DebugPageProps {
   readonly gatewayAddress: Address;

@@ -87,11 +87,7 @@ function App() {
           forkBlock={env.VITE_FORK_BLOCK_NUMBER}
         />
         <NavBar aboutOpen={aboutOpen} onToggleAbout={() => setAboutOpen((open) => !open)} />
-        <AboutModal
-          open={aboutOpen}
-          onClose={() => setAboutOpen(false)}
-          envClass={envClass}
-        />
+        <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} envClass={envClass} />
         <DebugPage
           gatewayAddress={gateway}
           vaultAddress={vault}
@@ -116,11 +112,7 @@ function App() {
         forkBlock={env.VITE_FORK_BLOCK_NUMBER}
       />
       <NavBar aboutOpen={aboutOpen} onToggleAbout={() => setAboutOpen((open) => !open)} />
-      <AboutModal
-        open={aboutOpen}
-        onClose={() => setAboutOpen(false)}
-        envClass={envClass}
-      />
+      <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} envClass={envClass} />
       <StatusHeader />
       <VerificationBanner state={verificationState} refresh={verificationRefresh} />
       <main className="dapp-shell">
