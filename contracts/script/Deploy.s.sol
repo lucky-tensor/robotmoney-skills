@@ -56,6 +56,17 @@ import {IGateway} from "../gateway/interfaces/IGateway.sol";
 ///        AGENT_MAX_WITHDRAW_PER_WINDOW   — uint256, default = 100_000 * 1e6
 ///        DEPLOYMENT_OUT         — output JSON path,
 ///                                 default = "deployments/<chain_id>.json"
+///        USE_PASSTHROUGH_ADAPTER — bool, default = false.
+///                                 When true, deploys a single `PassthroughAdapter`
+///                                 instead of the three real protocol adapters.
+///                                 Required on the Geth+Lighthouse smoke-test devnet
+///                                 because that chain boots from a genesis snapshot
+///                                 containing only warm-storage slots — real Aave,
+///                                 Compound, and Morpho contracts have bytecode but
+///                                 no on-chain state, so any call that returns a
+///                                 uint256 (e.g. `balanceOf`) would be ABI-decoded
+///                                 from an empty return and revert.  Set automatically
+///                                 by the smoke-test Rust harness.
 contract Deploy is Script {
     using stdJson for string;
 
@@ -69,6 +80,9 @@ contract Deploy is Script {
     ///      use the separate `MockVault` import directly.
     ///      `aaveAdapter`, `compoundAdapter`, and `morphoAdapter` are the
     ///      real protocol adapters registered with the vault at deploy time.
+    ///      When `USE_PASSTHROUGH_ADAPTER=true` all three adapter fields point
+    ///      to the same `PassthroughAdapter` instance (Geth devnet only — real
+    ///      protocol contracts have no on-chain state there).
     struct Deployed {
         address usdc;
         RobotMoneyVault vault;
@@ -81,6 +95,10 @@ contract Deploy is Script {
         address agent;
         address shareReceiver;
         bytes32 gatewayRuntimeHash;
+        /// @dev True when deployed with `USE_PASSTHROUGH_ADAPTER=true`.
+        ///      All three adapter fields share the same `PassthroughAdapter`
+        ///      address; only one `addAdapter` call is needed.
+        bool passthroughMode;
     }
 
     /// @notice Canonical Base mainnet USDC (FiatTokenProxy). The smoke-test
@@ -125,9 +143,14 @@ contract Deploy is Script {
         // runs the deploy script with the admin private key), so msg.sender on
         // the addAdapter calls is d.admin which holds ADMIN_ROLE.  No vm.prank
         // is required — and vm.prank is prohibited inside startBroadcast.
-        d.vault.addAdapter(address(d.aaveAdapter), 3_334);
-        d.vault.addAdapter(address(d.compoundAdapter), 3_333);
-        d.vault.addAdapter(address(d.morphoAdapter), 3_333);
+        if (d.passthroughMode) {
+            // Passthrough mode: single adapter covers 100% of capacity.
+            d.vault.addAdapter(address(d.aaveAdapter), 10_000);
+        } else {
+            d.vault.addAdapter(address(d.aaveAdapter), 3_334);
+            d.vault.addAdapter(address(d.compoundAdapter), 3_333);
+            d.vault.addAdapter(address(d.morphoAdapter), 3_333);
+        }
         vm.stopBroadcast();
 
         _writeDeploymentJson(d);
@@ -142,9 +165,13 @@ contract Deploy is Script {
         // In-process (no broadcast): addAdapter requires ADMIN_ROLE which is
         // held by d.admin. Use vm.prank to call it as d.admin.
         vm.startPrank(d.admin);
-        d.vault.addAdapter(address(d.aaveAdapter), 3_334);
-        d.vault.addAdapter(address(d.compoundAdapter), 3_333);
-        d.vault.addAdapter(address(d.morphoAdapter), 3_333);
+        if (d.passthroughMode) {
+            d.vault.addAdapter(address(d.aaveAdapter), 10_000);
+        } else {
+            d.vault.addAdapter(address(d.aaveAdapter), 3_334);
+            d.vault.addAdapter(address(d.compoundAdapter), 3_333);
+            d.vault.addAdapter(address(d.morphoAdapter), 3_333);
+        }
         vm.stopPrank();
     }
 
@@ -180,9 +207,13 @@ contract Deploy is Script {
         // In-process (no broadcast): addAdapter requires ADMIN_ROLE which is
         // held by d.admin. Use vm.prank to call it as d.admin.
         vm.startPrank(d.admin);
-        d.vault.addAdapter(address(d.aaveAdapter), 3_334);
-        d.vault.addAdapter(address(d.compoundAdapter), 3_333);
-        d.vault.addAdapter(address(d.morphoAdapter), 3_333);
+        if (d.passthroughMode) {
+            d.vault.addAdapter(address(d.aaveAdapter), 10_000);
+        } else {
+            d.vault.addAdapter(address(d.aaveAdapter), 3_334);
+            d.vault.addAdapter(address(d.compoundAdapter), 3_333);
+            d.vault.addAdapter(address(d.morphoAdapter), 3_333);
+        }
         vm.stopPrank();
     }
 
@@ -276,15 +307,35 @@ contract Deploy is Script {
             d.admin, // feeRecipient (fees are 0, any non-zero addr)
             d.admin // vaultAdmin — receives ADMIN_ROLE
         );
-        // Deploy real protocol adapters wired to the new vault.
-        // Protocol addresses are Base mainnet constants — the smoke-test devnet
-        // forks Base so these contracts already exist at these addresses.
+        // Deploy adapters wired to the new vault.
         // Registration (addAdapter) is done by the callers of _doDeploy —
         // see run(), runInProcess(), and runInProcessWith() — because the
         // caller context differs between broadcast and in-process test modes.
-        d.aaveAdapter = new AaveV3Adapter(AAVE_V3_POOL, d.usdc, AAVE_V3_A_TOKEN, address(d.vault));
-        d.compoundAdapter = new CompoundV3Adapter(COMPOUND_V3_COMET, d.usdc, address(d.vault));
-        d.morphoAdapter = new MorphoAdapter(MORPHO_GAUNTLET_USDC_PRIME, d.usdc, address(d.vault));
+        //
+        // USE_PASSTHROUGH_ADAPTER=true → deploy one PassthroughAdapter and
+        // alias all three typed fields to its address.  Required on the
+        // Geth+Lighthouse smoke-test devnet: that chain boots from a genesis
+        // snapshot restricted to warm-storage slots, so real protocol contracts
+        // (Aave/Compound/Morpho) have bytecode but zero storage.  Any call
+        // returning uint256 (e.g. `balanceOf`) decodes empty returndata and
+        // reverts, which would abort every deposit.  The Rust harness sets
+        // this env var automatically (see `run_forge_deploy_with_env` in
+        // testing/smoke-test/src/lib.rs).
+        d.passthroughMode = vm.envOr("USE_PASSTHROUGH_ADAPTER", false);
+        if (d.passthroughMode) {
+            PassthroughAdapter pt = new PassthroughAdapter(d.usdc, address(d.vault));
+            d.aaveAdapter = AaveV3Adapter(address(pt));
+            d.compoundAdapter = CompoundV3Adapter(address(pt));
+            d.morphoAdapter = MorphoAdapter(address(pt));
+        } else {
+            // Protocol addresses are Base mainnet constants — production or
+            // Anvil fork deployments where real protocol state is available.
+            d.aaveAdapter =
+                new AaveV3Adapter(AAVE_V3_POOL, d.usdc, AAVE_V3_A_TOKEN, address(d.vault));
+            d.compoundAdapter = new CompoundV3Adapter(COMPOUND_V3_COMET, d.usdc, address(d.vault));
+            d.morphoAdapter =
+                new MorphoAdapter(MORPHO_GAUNTLET_USDC_PRIME, d.usdc, address(d.vault));
+        }
         d.gateway = new RobotMoneyGateway(
             IERC20(d.usdc), IERC4626(address(d.vault)), d.admin, d.pauser, address(0)
         );
@@ -332,9 +383,15 @@ contract Deploy is Script {
         //    forge unit tests mint via the `TestERC20` helper directly.
         d.gatewayRuntimeHash = keccak256(address(d.gateway).code);
 
-        console2.log(
-            "RobotMoneyVault + AaveV3Adapter + CompoundV3Adapter + MorphoAdapter + RobotMoneyGateway deployed"
-        );
+        if (d.passthroughMode) {
+            console2.log(
+                "RobotMoneyVault + PassthroughAdapter (x3 alias) + RobotMoneyGateway deployed [USE_PASSTHROUGH_ADAPTER=true]"
+            );
+        } else {
+            console2.log(
+                "RobotMoneyVault + AaveV3Adapter + CompoundV3Adapter + MorphoAdapter + RobotMoneyGateway deployed"
+            );
+        }
         console2.log("  usdc             :", d.usdc);
         console2.log("  vault            :", address(d.vault));
         console2.log("  aave_adapter     :", address(d.aaveAdapter));

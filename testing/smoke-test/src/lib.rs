@@ -441,8 +441,18 @@ impl DappPorts {
 impl Fixture {
     /// Boot the Docker Geth+Lighthouse devnet, run the gateway deploy
     /// script, and fund the test EOAs.
+    ///
+    /// The Geth devnet boots from a genesis snapshot that contains only
+    /// warm-storage slots (produced by `anvil --dump-state`).  Real Aave,
+    /// Compound, and Morpho contracts have bytecode but no on-chain state at
+    /// the ingested addresses, so any call returning `uint256` (e.g.
+    /// `balanceOf`) would ABI-decode empty return-data and revert — aborting
+    /// every deposit.  We therefore deploy a single `PassthroughAdapter`
+    /// instead of the three real protocol adapters for smoke-test runs.
+    /// Fork-based integration tests (`ForkFixture`) use real adapters because
+    /// they fork Base mainnet where protocol state is present.
     pub fn new() -> Result<Self, HarnessError> {
-        Self::with_deploy_env(&[])
+        Self::with_deploy_env(&[("USE_PASSTHROUGH_ADAPTER", "true")])
     }
 
     /// Like [`Self::new`] but passes extra env vars to `forge script Deploy`.
