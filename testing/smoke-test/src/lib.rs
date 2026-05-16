@@ -834,10 +834,7 @@ impl Fixture {
             HARNESS_USDC_HOLDER_ADDRESS_HEX,
         )
         .inspect_err(|err| {
-            logging::error(
-                "smoke-test",
-                format!("forge deploy rm-token failed: {err}"),
-            );
+            logging::error("smoke-test", format!("forge deploy rm-token failed: {err}"));
             log_compose_state(
                 &compose_dir,
                 &compose_files_owned,
@@ -1176,11 +1173,7 @@ impl Fixture {
     /// deploy time by DeployRmToken.s.sol). The transfer is a vanilla ERC-20
     /// call — no Anvil cheats, no impersonation. The signature is recoverable
     /// and the `Transfer` event fires, matching production semantics (issue #365).
-    pub fn fund_rm_token(
-        &self,
-        recipient: Address,
-        amount: u128,
-    ) -> Result<String, HarnessError> {
+    pub fn fund_rm_token(&self, recipient: Address, amount: u128) -> Result<String, HarnessError> {
         self.cast_send(
             HARNESS_USDC_HOLDER_PRIVATE_KEY_HEX,
             self.rm_token(),
@@ -1838,15 +1831,18 @@ fn run_forge_deploy_rm_token(
     initial_holder: &str,
 ) -> Result<(), HarnessError> {
     let mut cmd = Command::new("forge");
-    cmd.args(["script", "contracts/script/DeployRmToken.s.sol:DeployRmToken"])
-        .args(["--rpc-url", rpc_url])
-        .args(["--private-key", DEPLOYER_PRIVATE_KEY_HEX])
-        .arg("--broadcast")
-        .arg("--slow")
-        .arg("-vvv")
-        .env("INITIAL_HOLDER", initial_holder)
-        .env("DEPLOYMENT_OUT", rm_token_out)
-        .current_dir(repo_root);
+    cmd.args([
+        "script",
+        "contracts/script/DeployRmToken.s.sol:DeployRmToken",
+    ])
+    .args(["--rpc-url", rpc_url])
+    .args(["--private-key", DEPLOYER_PRIVATE_KEY_HEX])
+    .arg("--broadcast")
+    .arg("--slow")
+    .arg("-vvv")
+    .env("INITIAL_HOLDER", initial_holder)
+    .env("DEPLOYMENT_OUT", rm_token_out)
+    .current_dir(repo_root);
     let out = cmd.output()?;
     logging::log_command_output("forge-rm-token", &out);
     if !out.status.success() {
