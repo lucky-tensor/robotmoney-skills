@@ -1,17 +1,24 @@
 # DeployTest
-[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/8d3063d04db80ac17c3412499340ecc0e610e041/contracts/test/Deploy.t.sol)
+[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/1421cc6201de54f6b9e3c222f9419f45c65b6f43/contracts/test/Deploy.t.sol)
 
 **Inherits:**
 Test
 
 Exercises the deploy script in-process and asserts the post-deploy
 invariants the operator and downstream tooling rely on (issue #10).
-The script now deploys RobotMoneyVault + PassthroughAdapter (issue #277)
-instead of MockVault. MockVault is retained only for gateway unit tests.
-The script always binds the gateway to an externally-supplied USDC
-token; this test deploys a `TestERC20` helper and passes its address
-in. The smoke-test devnet does the same with the canonical Base USDC
-proxy seeded into genesis alloc (issue #255).
+The script deploys RobotMoneyVault + AaveV3Adapter + CompoundV3Adapter
++ MorphoAdapter (issue #363) instead of MockVault or PassthroughAdapter.
+MockVault and PassthroughAdapter are retained only for their own unit
+tests.  The script always binds the gateway to an externally-supplied
+USDC token; this test deploys a `TestERC20` helper and passes its
+address in.  The smoke-test devnet does the same with the canonical
+Base USDC proxy seeded into genesis alloc (issue #255).
+Note: adapter constructors only check for address(0) — they do NOT
+require the protocol contracts to have bytecode. The in-process test
+therefore succeeds even though AAVE_V3_POOL et al. are not deployed
+in the forge unit-test environment. Actual protocol interaction is
+tested by the fork regression suite (VaultForkRegressions.t.sol) and
+the fork-e2e-rust harness.
 
 
 ## State Variables
