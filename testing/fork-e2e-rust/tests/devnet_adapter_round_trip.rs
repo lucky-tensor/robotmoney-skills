@@ -60,12 +60,9 @@ fn devnet_adapter_round_trip() {
 
     // Confirm the vault has real adapters registered (sanity guard so a
     // misconfigured fork doesn't silently succeed with a passthrough).
-    let adapter_count = scenarios::vault_read_u256(
-        &fx,
-        &user,
-        &IRobotMoneyVault::activeAdapterCountCall {},
-    )
-    .expect("vault.activeAdapterCount");
+    let adapter_count =
+        scenarios::vault_read_u256(&fx, &user, &IRobotMoneyVault::activeAdapterCountCall {})
+            .expect("vault.activeAdapterCount");
     assert!(
         adapter_count >= U256::from(3u64),
         "vault must have ≥3 active adapters for devnet round-trip; got {adapter_count}"
@@ -110,7 +107,11 @@ fn devnet_adapter_round_trip() {
         "maxRedeem returned 0 immediately after deposit"
     );
 
-    let to_redeem = if max_redeem < shares { max_redeem } else { shares };
+    let to_redeem = if max_redeem < shares {
+        max_redeem
+    } else {
+        shares
+    };
     scenarios::vault_redeem(&user, to_redeem, user.address, user.address).expect("redeem");
 
     let usdc_after = scenarios::usdc_read_u256(
@@ -122,9 +123,8 @@ fn devnet_adapter_round_trip() {
     )
     .expect("USDC.balanceOf after redeem");
 
-    let exit_fee_bps =
-        scenarios::vault_read_u256(&fx, &user, &IRobotMoneyVault::exitFeeBpsCall {})
-            .expect("exitFeeBps");
+    let exit_fee_bps = scenarios::vault_read_u256(&fx, &user, &IRobotMoneyVault::exitFeeBpsCall {})
+        .expect("exitFeeBps");
 
     let loss = usdc_before - usdc_after;
     // Allow exitFeeBps + 10 bps slack on the deposit, plus 1 wei rounding.
