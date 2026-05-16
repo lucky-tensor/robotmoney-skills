@@ -1,5 +1,5 @@
 # PortfolioRouter
-[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/e1269e8b8cad4814263c616cac976e46cf68e4a1/contracts/PortfolioRouter.sol)
+[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/8d3063d04db80ac17c3412499340ecc0e610e041/contracts/PortfolioRouter.sol)
 
 **Inherits:**
 AccessControl, ReentrancyGuard
@@ -390,6 +390,21 @@ No weight vector has been set; cannot deposit.
 ```solidity
 error NoWeightsSet();
 ```
+
+### VaultNotActive
+A vault's registry status is not Active; deposit is blocked.
+
+
+```solidity
+error VaultNotActive(address vault, VaultRegistry.VaultStatus status);
+```
+
+**Parameters**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`vault`|`address`| The vault address that is not Active.|
+|`status`|`VaultRegistry.VaultStatus`|The current non-Active status of the vault.|
 
 ## Structs
 ### LegPreview

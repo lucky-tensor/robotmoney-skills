@@ -1,5 +1,5 @@
 # RouterGovernance
-[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/e1269e8b8cad4814263c616cac976e46cf68e4a1/contracts/RouterGovernance.sol)
+[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/8d3063d04db80ac17c3412499340ecc0e610e041/contracts/RouterGovernance.sol)
 
 **Inherits:**
 AccessControl
@@ -7,10 +7,11 @@ AccessControl
 **Title:**
 RouterGovernance
 
-Narrow governance module that controls Portfolio Router target
-weights. Token holders (tracked as on-chain voting power assigned
-by the admin) may propose a new weight vector, vote, and execute
-after quorum is reached and the execution delay elapses.
+Admin-weighted MVP governance module that controls Portfolio Router
+target weights. ADMIN_ROLE assigns voting power to addresses, creates
+proposals, and executes after quorum is reached and the execution
+delay elapses. This is an MVP mock — voting power is admin-assigned,
+not derived from token holdings. Token-holder voting is a future goal.
 Design constraints (docs/architecture.md §2.3):
 - Controls router weights only; cannot govern vault internals,
 agent permissions, or protocol admin operations.
@@ -177,6 +178,8 @@ function setExecutionDelay(uint64 delay) external onlyRole(ADMIN_ROLE);
 
 Grant `power` voting weight to `voter`. Setting to 0 removes voting rights.
 Restricted to ADMIN_ROLE.
+NOTE: This is admin-assigned MVP governance — voting power is not derived
+from token holdings. Token-holder voting is a future goal.
 
 
 ```solidity
@@ -187,6 +190,8 @@ function setVotingPower(address voter, uint256 power) external onlyRole(ADMIN_RO
 
 Submit a new weight proposal. Restricted to ADMIN_ROLE.
 Only one proposal may be active or queued at a time.
+NOTE: Proposal creation is admin-only in this MVP mock.
+Public proposal submission is a future goal.
 
 
 ```solidity

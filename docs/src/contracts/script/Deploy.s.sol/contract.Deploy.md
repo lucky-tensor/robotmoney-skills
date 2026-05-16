@@ -1,5 +1,5 @@
 # Deploy
-[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/e1269e8b8cad4814263c616cac976e46cf68e4a1/contracts/script/Deploy.s.sol)
+[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/8d3063d04db80ac17c3412499340ecc0e610e041/contracts/script/Deploy.s.sol)
 
 **Inherits:**
 Script
@@ -34,9 +34,11 @@ crate). Forge unit tests deploy a
 `TestERC20` helper and pass its address
 via `runInProcessWithUsdc`.
 Optional env vars (with safe defaults):
-AGENT_VALID_UNTIL      — uint64, default = block.timestamp + 30 days
-AGENT_MAX_PER_PAYMENT  — uint256, default = 10_000 * 1e6 (USDC, 6dp)
-AGENT_MAX_PER_WINDOW   — uint256, default = 100_000 * 1e6
+AGENT_VALID_UNTIL               — uint64, default = block.timestamp + 30 days
+AGENT_MAX_PER_PAYMENT           — uint256, default = 10_000 * 1e6 (USDC, 6dp)
+AGENT_MAX_PER_WINDOW            — uint256, default = 100_000 * 1e6
+AGENT_MAX_WITHDRAW_PER_PAYMENT  — uint256, default = 10_000 * 1e6 (shares, 6dp)
+AGENT_MAX_WITHDRAW_PER_WINDOW   — uint256, default = 100_000 * 1e6
 DEPLOYMENT_OUT         — output JSON path,
 default = "deployments/<chain_id>.json"
 
@@ -68,6 +70,24 @@ Default per-window cap if `AGENT_MAX_PER_WINDOW` is unset.
 
 ```solidity
 uint256 public constant DEFAULT_MAX_PER_WINDOW = 100_000 * 1e6
+```
+
+
+### DEFAULT_MAX_WITHDRAW_PER_PAYMENT
+Default withdrawal per-payment cap if `AGENT_MAX_WITHDRAW_PER_PAYMENT` is unset.
+
+
+```solidity
+uint256 public constant DEFAULT_MAX_WITHDRAW_PER_PAYMENT = 10_000 * 1e6
+```
+
+
+### DEFAULT_MAX_WITHDRAW_PER_WINDOW
+Default withdrawal per-window cap if `AGENT_MAX_WITHDRAW_PER_WINDOW` is unset.
+
+
+```solidity
+uint256 public constant DEFAULT_MAX_WITHDRAW_PER_WINDOW = 100_000 * 1e6
 ```
 
 
@@ -216,6 +236,8 @@ struct Params {
     uint64 validUntil;
     uint256 maxPerPayment;
     uint256 maxPerWindow;
+    uint256 maxWithdrawPerPayment;
+    uint256 maxWithdrawPerWindow;
     /// @dev Address of the USDC token to bind the gateway to. Must be
     ///      non-zero and have code deployed. The smoke-test devnet sets
     ///      this to the canonical Base USDC ([`CANONICAL_BASE_USDC`]);

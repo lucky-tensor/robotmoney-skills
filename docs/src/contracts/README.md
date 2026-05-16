@@ -8,6 +8,7 @@
 - [test](/contracts/test)
 - [vaults](/contracts/vaults)
 - [PortfolioRouter](PortfolioRouter.sol/contract.PortfolioRouter.md)
+- [RmToken](RmToken.sol/contract.RmToken.md)
 - [RobotMoneyVault](RobotMoneyVault.sol/contract.RobotMoneyVault.md)
 - [RouterGovernance](RouterGovernance.sol/contract.RouterGovernance.md)
 - [VaultRegistry](VaultRegistry.sol/contract.VaultRegistry.md)

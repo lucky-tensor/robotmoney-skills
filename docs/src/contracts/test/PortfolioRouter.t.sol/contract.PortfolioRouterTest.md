@@ -1,5 +1,5 @@
 # PortfolioRouterTest
-[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/e1269e8b8cad4814263c616cac976e46cf68e4a1/contracts/test/PortfolioRouter.t.sol)
+[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/8d3063d04db80ac17c3412499340ecc0e610e041/contracts/test/PortfolioRouter.t.sol)
 
 **Inherits:**
 Test
@@ -309,6 +309,28 @@ function test_setRouterCap_revertsForUnauthorized() public;
 function test_setVaultCap_revertsOnZeroAddress() public;
 ```
 
+### test_deposit_revertsIfRegistryVaultIsPaused
+
+Deposit reverts when a vault in the weight list is Paused in the
+registry, even if the vault contract itself would still accept
+deposits.
+
+
+```solidity
+function test_deposit_revertsIfRegistryVaultIsPaused() public;
+```
+
+### test_deposit_revertsIfRegistryVaultIsRetired
+
+Deposit reverts when a vault in the weight list is Retired in the
+registry, even if the vault contract itself would still accept
+deposits.
+
+
+```solidity
+function test_deposit_revertsIfRegistryVaultIsRetired() public;
+```
+
 ### testFuzz_setWeights_singleVaultInvalidSum
 
 Any single-vault weight that is not 10000 must revert.
@@ -321,9 +343,31 @@ function testFuzz_setWeights_singleVaultInvalidSum(uint256 bps) public;
 ### testFuzz_deposit_proportionalSplit
 
 A two-vault deposit always splits proportionally (capped to avoid overflow).
+The first leg receives the floored BPS allocation; the final leg receives
+the floored allocation plus any rounding remainder so the router holds zero.
 
 
 ```solidity
 function testFuzz_deposit_proportionalSplit(uint256 amount, uint256 bpsA) public;
+```
+
+### test_deposit_noRouterDustOnUnevenSplit
+
+Deposit with an amount not divisible by leg count leaves zero
+USDC in the router (remainder is assigned to the final leg).
+
+
+```solidity
+function test_deposit_noRouterDustOnUnevenSplit() public;
+```
+
+### testFuzz_deposit_routerBalanceAlwaysZero
+
+Fuzz: arbitrary deposit amounts and two-leg weights — router
+balance is always zero after a successful deposit.
+
+
+```solidity
+function testFuzz_deposit_routerBalanceAlwaysZero(uint256 amount, uint256 bpsA) public;
 ```
 
