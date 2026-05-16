@@ -99,7 +99,10 @@ contract Deploy is Script {
     /// @notice Morpho Gauntlet USDC Prime ERC-4626 vault on Base.
     address public constant MORPHO_GAUNTLET_USDC_PRIME = 0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca;
     /// @notice Compound V3 (Comet) USDC market on Base.
-    address public constant COMPOUND_V3_COMET = 0xB125e6687D4313864e53df431d5425969c15eb28;
+    /// @dev Verified against `cast call <compound-adapter> "COMET()(address)"` on Base mainnet.
+    ///      The previously used address 0xB125e6687D4313864e53df431d5425969c15eb28
+    ///      (ending in 28) was a typo — the actual Comet ends in 2F.
+    address public constant COMPOUND_V3_COMET = 0xb125E6687d4313864e53df431d5425969c15Eb2F;
 
     /// @notice Default per-payment cap if `AGENT_MAX_PER_PAYMENT` is unset.
     uint256 public constant DEFAULT_MAX_PER_PAYMENT = 10_000 * 1e6;

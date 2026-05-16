@@ -51,7 +51,8 @@ pub const MORPHO_GAUNTLET_USDC_PRIME: Address =
 
 /// Compound V3 (Comet) USDC market on Base. The underlying venue for
 /// [`COMPOUND_V3_ADAPTER`] and newly deployed CompoundV3Adapter instances.
-pub const COMPOUND_V3_COMET: Address = address!("b125e6687d4313864e53df431d5425969c15eb28");
+/// Verified against `cast call <compound-adapter> "COMET()(address)"` on Base mainnet.
+pub const COMPOUND_V3_COMET: Address = address!("b125e6687d4313864e53df431d5425969c15eb2f");
 
 /// USDC whale on Base used for funding ephemeral test accounts via
 /// `anvil_impersonateAccount`. This address holds a large enough
