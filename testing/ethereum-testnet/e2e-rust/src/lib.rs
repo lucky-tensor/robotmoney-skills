@@ -96,8 +96,15 @@ pub struct Fixture {
 
 impl Fixture {
     /// Boot the devnet, build rmpc, write a keystore and config.
+    ///
+    /// Passes `USE_PASSTHROUGH_ADAPTER=true` to the forge deploy script so
+    /// the Geth+Lighthouse devnet uses a single `PassthroughAdapter` instead
+    /// of the real Aave/Compound/Morpho adapters.  See `smoke_test::Fixture::new`
+    /// for the full rationale (real protocol contracts have bytecode but zero
+    /// on-chain storage in the genesis snapshot, causing any `uint256`-returning
+    /// call to revert).
     pub fn new() -> Result<Self, HarnessError> {
-        Self::with_deploy_env(&[])
+        Self::with_deploy_env(&[("USE_PASSTHROUGH_ADAPTER", "true")])
     }
 
     /// Like [`Self::new`] but passes extra env vars to `forge script Deploy`.
