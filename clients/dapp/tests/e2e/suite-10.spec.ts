@@ -101,9 +101,9 @@ test.describe("Suite-10: Protocol layer — no wallet required", () => {
 
     // Each registered vault address must have a corresponding row in the dapp.
     for (const vaultAddr of registeredVaults) {
-      const row = page.getByTestId(`vault-list-row-${vaultAddr.toLowerCase()}`).or(
-        page.locator(`[data-vault-addr="${vaultAddr.toLowerCase()}"]`),
-      );
+      const row = page
+        .getByTestId(`vault-list-row-${vaultAddr.toLowerCase()}`)
+        .or(page.locator(`[data-vault-addr="${vaultAddr.toLowerCase()}"]`));
       await expect(
         row,
         `dapp must render a vault row for registered vault ${vaultAddr}`,
@@ -137,16 +137,14 @@ test.describe("Suite-10: Protocol layer — no wallet required", () => {
 
     for (let i = 0; i < tvlCount; i++) {
       const tvlText = await tvlCells.nth(i).textContent();
-      expect(
-        tvlText?.trim(),
-        `vault row ${i} TVL must not be blank`,
-      ).toBeTruthy();
+      expect(tvlText?.trim(), `vault row ${i} TVL must not be blank`).toBeTruthy();
     }
 
     const depCount = await depositorCells.count();
-    expect(depCount, "each registered vault must have a depositor count cell").toBeGreaterThanOrEqual(
-      registeredVaults.length,
-    );
+    expect(
+      depCount,
+      "each registered vault must have a depositor count cell",
+    ).toBeGreaterThanOrEqual(registeredVaults.length);
 
     for (let i = 0; i < depCount; i++) {
       const depText = await depositorCells.nth(i).textContent();
