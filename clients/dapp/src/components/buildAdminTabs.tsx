@@ -153,12 +153,7 @@ export function buildAdminTabs(a: BuildAdminTabsArgs): TabDef[] {
     tabs.push({
       id: "history",
       label: "Deposit History",
-      content: (
-        <HistoryPane
-          agent={a.agent as Address}
-          apiUrl={a.explorerApiUrl}
-        />
-      ),
+      content: <HistoryPane agent={a.agent as Address} apiUrl={a.explorerApiUrl} />,
     });
   }
 
