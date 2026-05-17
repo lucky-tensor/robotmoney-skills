@@ -135,18 +135,19 @@ jobs:
           echo "PAUSER_ADDRESS=$(echo "$ACCOUNTS" | jq -r '.[1]')" >> $GITHUB_ENV
           echo "AGENT_ADDRESS=$(echo "$ACCOUNTS" | jq -r '.[2]')" >> $GITHUB_ENV
           echo "SHARE_RECEIVER_ADDRESS=$(echo "$ACCOUNTS" | jq -r '.[3]')" >> $GITHUB_ENV
+          PRIVKEY=$(cast wallet private-key --mnemonic "test test test test test test test test test test test junk" --mnemonic-index 0)
+          echo "ANVIL_PRIVKEY=$PRIVKEY" >> $GITHUB_ENV
 
       - name: Deploy mock USDC
         run: |
           set -euo pipefail
-          PRIVKEY=$(cast wallet private-key --mnemonic "test test test test test test test test test test test junk" --mnemonic-index 0)
           DEPLOY_OUT=$(forge create contracts/test/helpers/TestERC20.sol:TestERC20 \
-            --broadcast --rpc-url http://127.0.0.1:8545 --private-key "$PRIVKEY" 2>&1)
+            --broadcast --rpc-url http://127.0.0.1:8545 --private-key "$ANVIL_PRIVKEY" 2>&1)
           USDC_ADDR=$(echo "$DEPLOY_OUT" | grep "Deployed to:" | awk '{print $NF}')
           echo "USDC_ADDRESS=$USDC_ADDR" >> $GITHUB_ENV
 
       - name: Deploy contracts on devnet
-        run: forge script contracts/script/Deploy.s.sol --broadcast --rpc-url http://127.0.0.1:8545
+        run: forge script contracts/script/Deploy.s.sol --broadcast --rpc-url http://127.0.0.1:8545 --private-key "$ANVIL_PRIVKEY"
 
       - name: Generate agent EOA + fund
         run: |
@@ -228,18 +229,19 @@ jobs:
           echo "PAUSER_ADDRESS=$(echo "$ACCOUNTS" | jq -r '.[1]')" >> $GITHUB_ENV
           echo "AGENT_ADDRESS=$(echo "$ACCOUNTS" | jq -r '.[2]')" >> $GITHUB_ENV
           echo "SHARE_RECEIVER_ADDRESS=$(echo "$ACCOUNTS" | jq -r '.[3]')" >> $GITHUB_ENV
+          PRIVKEY=$(cast wallet private-key --mnemonic "test test test test test test test test test test test junk" --mnemonic-index 0)
+          echo "ANVIL_PRIVKEY=$PRIVKEY" >> $GITHUB_ENV
 
       - name: Deploy mock USDC
         run: |
           set -euo pipefail
-          PRIVKEY=$(cast wallet private-key --mnemonic "test test test test test test test test test test test junk" --mnemonic-index 0)
           DEPLOY_OUT=$(forge create contracts/test/helpers/TestERC20.sol:TestERC20 \
-            --broadcast --rpc-url http://127.0.0.1:8545 --private-key "$PRIVKEY" 2>&1)
+            --broadcast --rpc-url http://127.0.0.1:8545 --private-key "$ANVIL_PRIVKEY" 2>&1)
           USDC_ADDR=$(echo "$DEPLOY_OUT" | grep "Deployed to:" | awk '{print $NF}')
           echo "USDC_ADDRESS=$USDC_ADDR" >> $GITHUB_ENV
 
       - name: Deploy contracts + fund agent on devnet
-        run: forge script contracts/script/Deploy.s.sol --broadcast --rpc-url http://127.0.0.1:8545
+        run: forge script contracts/script/Deploy.s.sol --broadcast --rpc-url http://127.0.0.1:8545 --private-key "$ANVIL_PRIVKEY"
 
       - name: Read-only isolation assertions
         run: cargo test --manifest-path testing/doctests/Cargo.toml --test opencode_read_only -- --nocapture
