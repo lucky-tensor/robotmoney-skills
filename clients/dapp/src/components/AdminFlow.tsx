@@ -74,6 +74,10 @@ export function AdminFlow(props: Props) {
     // from the explorer API (issue #321).
     explorerApiUrl: resolveExplorerApiUrl(props.flagEnv),
     rmTokenAddress: props.rmTokenAddress,
+    gatewayRuntimeHash:
+      gatewayVerificationState.status === "verified"
+        ? gatewayVerificationState.computedHash
+        : undefined,
   });
 
   return (

@@ -147,9 +147,9 @@ jobs:
           echo "USDC_ADDRESS=$USDC_ADDR" >> $GITHUB_ENV
 
       - name: Deploy contracts on devnet
-        env:
-          DEPLOYMENT_OUT: ${{ runner.temp }}/robotmoney-deployment-deposit.json
-        run: forge script contracts/script/Deploy.s.sol --broadcast --rpc-url http://127.0.0.1:8545 --private-key "$ANVIL_PRIVKEY"
+        run: |
+          mkdir -p deployments
+          forge script contracts/script/Deploy.s.sol --broadcast --rpc-url http://127.0.0.1:8545 --private-key "$ANVIL_PRIVKEY"
 
       - name: Generate agent EOA + fund
         run: |
@@ -243,9 +243,9 @@ jobs:
           echo "USDC_ADDRESS=$USDC_ADDR" >> $GITHUB_ENV
 
       - name: Deploy contracts + fund agent on devnet
-        env:
-          DEPLOYMENT_OUT: ${{ runner.temp }}/robotmoney-deployment-read.json
-        run: forge script contracts/script/Deploy.s.sol --broadcast --rpc-url http://127.0.0.1:8545 --private-key "$ANVIL_PRIVKEY"
+        run: |
+          mkdir -p deployments
+          forge script contracts/script/Deploy.s.sol --broadcast --rpc-url http://127.0.0.1:8545 --private-key "$ANVIL_PRIVKEY"
 
       - name: Read-only isolation assertions
         run: cargo test --manifest-path testing/doctests/Cargo.toml --test opencode_read_only -- --nocapture
