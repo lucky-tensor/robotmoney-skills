@@ -30,6 +30,13 @@ outer layer splits USDC across individual `RobotMoneyVault` contracts, each of
 which routes internally through `IStrategyAdapter` implementations. Vaults are
 the stable interface; adapters are internal and swappable. The gateway sits
 outside both layers as a permission and safety boundary for agent-signed writes.
+The vault-plus-adapter pattern is modeled directly on Yearn V3: a single
+ERC-4626 contract routes assets across pluggable strategy adapters, with a
+keeper-triggered rebalance correcting drift. The asymmetric pause model
+(EMERGENCY_ROLE pauses, ADMIN_ROLE unpauses) is also borrowed from Yearn's
+security design. Veda (BoringVault) was evaluated as an off-the-shelf
+provider for the Portfolio Router layer; the team chose to build in-house,
+diverging from Veda primarily by not issuing an outer share token.
 
 **Enzyme Finance** uses a two-contract model per fund: `VaultProxy` (persistent
 asset holder, ERC-20 shares) and `ComptrollerProxy` (accounting, fee accrual,
@@ -187,9 +194,11 @@ model applies.
 stays fully in USDC. `totalAssets()` is reported by adapters from live on-chain
 positions (Morpho, Aave, Compound). Share price is computed from live
 `totalAssets()` and supply via ERC-4626 math. No off-chain price feed.
-The planned protocol-asset and agent-token vaults accept USDC and swap into
-non-stable exposures (wETH/cbBTC/wSOL; agent tokens); those categories will
-require price oracles or DEX-based pricing and are deferred pending separate ADRs.
+The deployed prototype of the protocol-asset vault uses Uniswap V3 `slot0`
+pricing, which is manipulable; the PRD requires a Uniswap V3 TWAP oracle
+before that vault is Router-eligible. The agent-token vault faces the same
+requirement for its curated basket. Both categories are deferred pending
+dedicated ADRs and resolved rebalancing models.
 
 **Enzyme Finance** uses external price oracles for NAV calculation across
 multi-asset funds. NAV is updated periodically (not continuously), creating
@@ -211,6 +220,31 @@ denomination. Zero on-chain oracle dependency; this simplifies architecture
 but creates potential for off-chain price manipulation in the fee estimation
 path.
 
+### 2.6 Governance Model
+
+**Robot Money** governance controls Portfolio Router target weights across active
+vaults. The current deployed `RouterGovernance.sol` is an admin-weighted MVP
+mock: voting power is assigned by `ADMIN_ROLE`; proposal creation is
+`ADMIN_ROLE`-only. Token-holder voting against `$ROBOTMONEY` balances is
+explicitly a future goal. The governance surface is intentionally narrow — it
+covers only router weight updates and does not control vault internals,
+per-vault asset selection, fees, or individual agent policies.
+
+**Enzyme Finance** governance (Enzyme Council / Avantgarde Core) controls
+protocol-level releases and integrations. Individual fund managers control their
+own fund parameters — there is no outer cross-fund allocation vote equivalent to
+the Robot Money Portfolio Router weight vote.
+
+**Alvara Protocol** uses veALVA governance (20% quorum, 51% pass rate) to
+direct ALVA token rewards toward baskets each epoch. This is an incentive
+allocation vote, not an asset-weight vote. Individual basket managers retain
+full control of their basket composition.
+
+**Veda BoringVault** has no protocol-level governance for fund allocation.
+Strategy constraints are encoded in the Merkle tree by vault operators.
+
+**Zyfi** has no governance mechanism relevant to investment allocation.
+
 ---
 
 ## 3. Differentiating Design Decisions
@@ -222,11 +256,18 @@ stable-yield vault stays fully in USDC (Morpho/Aave/Compound), eliminating
 oracle risk, cross-asset liquidity risk, and price manipulation vectors. The
 planned protocol-asset vault (wETH/cbBTC/wSOL exposure) and agent-token vault
 (agent-economy token basket) accept USDC and swap into their target assets at
-deposit time, swapping back on withdrawal. Those vault categories require price
-oracles or DEX-based pricing and are explicitly deferred to future phases
-pending dedicated ADRs. The stable-yield vault can be included in router
-allocations today precisely because its redemption path carries no swap or
-oracle dependency.
+deposit time using Uniswap V3, swapping back on withdrawal. Those vaults are
+not Router-eligible until TWAP pricing and a resolved rebalancing model are in
+place. The stable-yield vault can be included in router allocations today
+precisely because its redemption path carries no swap or oracle dependency.
+
+The deposit-time equal-weight basket pattern of the protocol-asset and
+agent-token vaults is structurally similar to Alvara — USDC in, basket exposure
+out, proportional redemption on exit. The key differences are that Robot Money
+uses USDC as the single denominator (Alvara accepts any ERC-20), does not issue
+DEX-tradeable LP shares, and has no equivalent to the 5% ALVA protocol-token
+floor. For these two vault categories, Alvara is the closest comparable prior
+art in the market.
 
 ### 3.2 Synchronous Redemption as a Product Guarantee
 
@@ -267,11 +308,16 @@ do not publish equivalent constraints in their documentation.
 The Portfolio Router does not issue an outer share token. A portfolio
 position is a reporting concept computed from per-vault receipt balances.
 This avoids creating an unobservable outer claim or hidden custody layer.
+This was an explicit design decision made after evaluating Veda as an
+off-the-shelf provider: Veda issues an outer composite receipt; Robot Money
+does not. Depositors receive underlying vault receipts directly regardless
+of whether they deposit through the router or into a vault directly.
 
 Enzyme creates per-fund ERC-20 shares with full share-token accounting.
 Alvara LP tokens are ERC-20 and DEX-tradeable. Veda shares are ERC-20 but
-share-locked after deposit. Robot Money's design increases composability
-complexity but preserves per-vault observability.
+share-locked after deposit. Robot Money's design reduces secondary-market
+composability but preserves per-vault observability and avoids creating
+hidden custody.
 
 ### 3.6 Adapter Pattern vs. Direct Strategy
 
@@ -280,11 +326,17 @@ venue goes through an `IStrategyAdapter` that normalizes `deploy`,
 `withdraw`, `totalAssets`, and `rescueTokens`. Adapters are internal to one
 vault; mutating calls require the owning vault as `msg.sender`. This
 isolates venue-specific risk to the adapter and keeps vault accounting clean.
+This pattern is modeled directly on Yearn V3 strategies, which normalize
+each yield venue behind a common interface callable only by the owning vault.
 
 Enzyme routes through `IntegrationManager` (analogous) but exposes a richer
 surface including external positions and leverage. Veda's `Manager` module
 uses Merkle tree gating instead of a typed interface. Neither enforces the
-same caller-restriction pattern Robot Money uses.
+same caller-restriction pattern Robot Money uses. Giza and Zyfai — stable-yield
+aggregators on Base that allocate USDC across Aave, Compound, and Morpho — are
+named in the PRD as potential build-vs-buy alternatives to custom adapters; the
+current architecture supports either path by replacing a custom adapter with an
+`IStrategyAdapter` wrapper around a Giza or Zyfai position.
 
 ---
 
@@ -292,15 +344,20 @@ same caller-restriction pattern Robot Money uses.
 
 | Concern | Robot Money status | Comparable prior art |
 |---|---|---|
-| Multi-asset baskets | Out of scope for current vault family | Enzyme (multi-asset), Alvara (basket) |
-| Performance/management fees | Deferred to future phase | Enzyme (full fee suite), Alvara (mgmt fee built-in) |
+| Multi-asset basket vaults | Planned (protocol-asset, agent-token); not yet Router-eligible — pending TWAP oracle and rebalancing model | Enzyme (multi-asset), Alvara (basket) |
+| TWAP oracle for basket vaults | Required before Router eligibility; current prototype uses manipulable `slot0` pricing | Enzyme (Chainlink), Alvara (1inch DEX aggregator) |
+| Intra-vault rebalancing for baskets | TBD — trigger, target weights, and cost/slippage model are unresolved (PRD §3.15) | Alvara (single-tx atomic rebalance), Enzyme (manager-triggered) |
+| Agent-token shortlist governance | TBD — bribery model vs. RM-token inclusion vote unresolved (PRD §1.3) | Alvara (veALVA incentive vote), Enzyme (Asset Manager role) |
+| Router weight governance | Deployed as admin-weighted MVP mock; token-holder voting is a future goal | Alvara (veALVA epoch vote), Enzyme (Enzyme Council) |
+| Performance/management fees | Deferred to future phase requiring separate ADR | Enzyme (full fee suite), Alvara (mgmt fee built-in) |
 | DEX-tradeable LP shares | Not a design goal; per-vault receipts only | Alvara (DEX LP), some Enzyme funds |
-| Off-chain NAV computation | Not used; on-chain `totalAssets()` only | Veda (off-chain exchange rate + bounds) |
+| Off-chain NAV computation | Not used; on-chain `totalAssets()` only | Veda (off-chain exchange rate + safety bounds) |
 | Share lock period | None; synchronous redemption guaranteed | Veda (all shares locked after deposit) |
 | Gas abstraction | Not in scope | Zyfi (full paymaster service) |
 | Permissionless vault creation | Not in scope; vaults are protocol-registered | Alvara (permissionless basket launch) |
-| Agent-first access control | First-class via gateway | None in this comparison |
-| Admin timelock | Required by architecture | None documented at same strictness |
+| Build-vs-buy for stable-yield strategies | Custom adapters in-house; Giza/Zyfai named as alternatives — decision deferred (PRD §3.13) | Giza, Zyfai (managed Base aggregators) |
+| Agent-first access control | First-class via gateway; no comparable in this set | None in this comparison |
+| Admin timelock | Required by architecture for all five protocol contracts | None documented at same strictness |
 
 ---
 
