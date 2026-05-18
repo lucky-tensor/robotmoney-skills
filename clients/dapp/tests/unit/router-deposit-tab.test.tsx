@@ -43,12 +43,30 @@ type LegRaw = {
 };
 
 const activeLegsPrev: LegRaw[] = [
-  { vault: VAULT_A, weightBps: 6000n, legAmount: 6_000_000n, estShares: 5_950_000n, unavailable: false },
-  { vault: VAULT_B, weightBps: 4000n, legAmount: 4_000_000n, estShares: 3_980_000n, unavailable: false },
+  {
+    vault: VAULT_A,
+    weightBps: 6000n,
+    legAmount: 6_000_000n,
+    estShares: 5_950_000n,
+    unavailable: false,
+  },
+  {
+    vault: VAULT_B,
+    weightBps: 4000n,
+    legAmount: 4_000_000n,
+    estShares: 3_980_000n,
+    unavailable: false,
+  },
 ];
 
 const legsWithUnavailable: LegRaw[] = [
-  { vault: VAULT_A, weightBps: 6000n, legAmount: 6_000_000n, estShares: 5_950_000n, unavailable: false },
+  {
+    vault: VAULT_A,
+    weightBps: 6000n,
+    legAmount: 6_000_000n,
+    estShares: 5_950_000n,
+    unavailable: false,
+  },
   { vault: VAULT_B, weightBps: 4000n, legAmount: 4_000_000n, estShares: 0n, unavailable: true },
 ];
 
@@ -76,7 +94,8 @@ vi.mock("wagmi", () => ({
   useAccount: () => ({ address: mockState.address, isConnected: mockState.isConnected }),
   useReadContract: (opts: { functionName?: string }) => {
     if (opts.functionName === "allowance") return { data: mockState.allowance, refetch: vi.fn() };
-    if (opts.functionName === "previewDeposit") return { data: mockState.previewDepositLegs, error: null };
+    if (opts.functionName === "previewDeposit")
+      return { data: mockState.previewDepositLegs, error: null };
     if (opts.functionName === "activeVaults") return { data: mockState.activeVaults };
     return { data: undefined, error: null };
   },
@@ -99,13 +118,7 @@ vi.mock("wagmi", () => ({
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 function renderTab() {
-  return render(
-    <RouterDepositTab
-      routerAddress={ROUTER}
-      usdcAddress={USDC}
-      ctx={ctx}
-    />,
-  );
+  return render(<RouterDepositTab routerAddress={ROUTER} usdcAddress={USDC} ctx={ctx} />);
 }
 
 describe("RouterDepositTab shows per-leg split preview", () => {

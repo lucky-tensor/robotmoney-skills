@@ -159,11 +159,7 @@ vi.mock("wagmi", () => ({
 
 function renderTab() {
   return render(
-    <VaultSelectorDepositTab
-      usdcAddress={USDC}
-      registryAddress={REGISTRY}
-      ctx={ctx}
-    />,
+    <VaultSelectorDepositTab usdcAddress={USDC} registryAddress={REGISTRY} ctx={ctx} />,
   );
 }
 
