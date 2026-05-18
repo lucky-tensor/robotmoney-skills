@@ -24,6 +24,20 @@ within that family. The **Required control** column states what must
 be true in the shipped system. When a risk is accepted by design
 rather than mitigated, the row explains the explicit rationale.
 
+Best-in-class for Robot Money means:
+
+- depositor authority over agent policies is never replaced by operator
+  authority;
+- privileged protocol changes are delayed, observable, cancellable, and
+  executed only after independent signer review;
+- autonomous-agent loss is bounded on-chain for both deposits and
+  withdrawals;
+- safety-critical signing data comes from live chain reads, not the
+  explorer, cached UI state, or agent planner text;
+- new vault categories do not enter the Portfolio Router until their
+  oracle, liquidity, redemption, legal, and disclosure requirements are
+  specified and audited.
+
 This is not an audit attestation. It is a specification that informs
 audits, PR review, and deploy verification. Any change to the
 codebase, deploy scripts, or operational procedures that would
@@ -36,8 +50,8 @@ go through explicit approval.
 
 | Attack | Required control |
 |---|---|
-| Classic single-function reentrancy | `nonReentrant` guard from OZ `ReentrancyGuard` must be present on every external state-mutating function in the vault and gateway (`_deposit`, `_withdraw`, `rebalance`, `adminRebalance`, `emergencyWithdraw`, `emergencyWithdrawAdapter`). New functions must be reviewed for reentrancy before merge. |
-| Cross-function reentrancy | A single `ReentrancyGuard` instance must cover all external state-mutating paths on each contract. Balance reads must occur after all state changes (CEI ordering) on every code path. |
+| Classic single-function reentrancy | OZ `ReentrancyGuard` must protect every external state-mutating function that moves assets or calls an external contract in the vault, gateway, and Portfolio Router, including vault deposit/withdraw/rebalance/emergency paths, `RobotMoneyGateway.deposit`, `depositTo`, `withdraw`, and router deposit paths. New external mutating functions must be reviewed for reentrancy before merge. |
+| Cross-function reentrancy | A single `ReentrancyGuard` instance must cover all asset-moving external state-mutating paths on each contract. Effects must be written before external calls, residual allowances must be cleared after one-shot use, and post-call custody invariants must be checked on every path that temporarily holds USDC or receipt tokens. |
 | Read-only reentrancy (oracle/share-price during callback) | All adapter call paths that read balances of external contracts must be enumerated and verified to be free of callback surfaces that could be queried mid-state. This analysis must be published and kept current as adapters are added. |
 | ERC-721/1155 callback reentrancy | Vault contracts must not implement `onERC721Received` or `onERC1155Received`. The vault must hold only USDC and adapter receipt tokens. |
 | Compiler-level reentrancy bugs | Contracts must use Solidity ≥0.8 and OZ `ReentrancyGuard`. The Vyper `@nonreentrant` regression does not apply; this constraint must be re-evaluated if the toolchain changes. |
@@ -71,9 +85,9 @@ go through explicit approval.
 | Attack | Required control |
 |---|---|
 | Single-EOA admin compromise | No EOA may hold `ADMIN_ROLE` directly on any contract. `ADMIN_ROLE` must be held exclusively by the `TimelockController`. Agent and keeper roles must be separated from `ADMIN_ROLE`. |
-| PROPOSER_ROLE held by a plain EOA | The `TimelockController` PROPOSER_ROLE and EXECUTOR_ROLE must be held by a Safe multisig with a minimum threshold of 2-of-N signers. The `DeployTimelock.s.sol` script must verify at deploy time that `SAFE_ADDRESS` is a deployed contract (i.e. `code.length > 0`) and that calling `getThreshold()` returns a value ≥ 2. The Safe address and threshold must be recorded in this document at deploy time. |
+| PROPOSER_ROLE held by a plain EOA | The `TimelockController` PROPOSER_ROLE and CANCELLER_ROLE must be held by a Safe multisig with a minimum threshold of 2-of-N signers. EXECUTOR_ROLE should be open (`address(0)`) so any address can execute an already-delayed, already-authorized operation after the delay; if a restricted executor is used, it must be a Safe with threshold ≥ 2 and the liveness tradeoff must be documented. `DeployTimelock.s.sol` must verify at deploy time that every Safe address has deployed code and `getThreshold() >= 2`. The Safe address, threshold, executor policy, and canceller policy must be recorded in this document at deploy time. |
 | `ADMIN_ROLE` self-grant escalation | `ADMIN_ROLE` is its own admin by design. All role changes must route through the `TimelockController`. The Safe multisig must enforce quorum independently. |
-| Timelock bypass | A `TimelockController` must hold `ADMIN_ROLE` on all governed contracts. The minimum delay must be ≥ 48 hours for production. Admin operations must route through `schedule → delay → execute`; direct `ADMIN_ROLE` calls from any address must revert with `AccessControlUnauthorizedAccount`. The deployed timelock address, min delay, proposers, and executors must be verifiable via `rmpc get-timelock`. |
+| Timelock bypass | A `TimelockController` must hold `ADMIN_ROLE` on all governed contracts. The production delay for high-risk operations must be ≥ 48 hours; any lower-delay operation class must be explicitly enumerated with its rationale, maximum authority, and affected functions. Admin operations must route through `schedule → delay → execute`; direct `ADMIN_ROLE` calls from any address must revert with `AccessControlUnauthorizedAccount`. The deployed timelock address, min delay, proposers, executors, cancellers, pending operations, and operation salts must be verifiable via `rmpc get-timelock` and the dapp timelock panel. |
 | Pause-key abuse (denial of deposit) | The pause role must be separable from `ADMIN_ROLE`. Pause must halt deposits but must not be able to move funds. The pause role should be held by a lower-quorum guardian to allow fast response; the unpause role must require `ADMIN_ROLE` through the timelock. |
 | Emergency-role abuse to drain | `EMERGENCY_ROLE` must return funds to the vault only, never to an attacker-chosen address. `emergencyWithdraw` must use `try/catch` per adapter to prevent a single bad adapter from blocking recovery. |
 | Fee parameter manipulation above ceiling | `MAX_EXIT_FEE_BPS` must be `immutable`. `setExitFeeBps` must revert above this ceiling. |
@@ -81,7 +95,7 @@ go through explicit approval.
 | Fee-recipient swap to attacker address | `setFeeRecipient` must be admin-gated and routed through the timelock. The fee recipient must be verified to be a non-zero address. |
 | Multisig social engineering (Drift-class) | A signer playbook must be published and followed. Signers must independently simulate the operation before approving, review the calldata diff against the expected effect, and meet a minimum deliberation time. No signer may approve on the same device as the proposer. |
 | Signer-device compromise | All Safe signers must use hardware wallets. Software key signing is prohibited for any `ADMIN_ROLE` or `PROPOSER_ROLE` operation. |
-| Role separation drift | At deploy and at every admin operation, an off-chain assertion must confirm that pause and admin keys are held by distinct addresses. |
+| Role separation drift | At deploy and at every admin operation, an off-chain assertion must confirm that admin, pause, emergency, agent, proposer, canceller, and executor authorities satisfy their documented separation rules. No account may hold more than one of gateway `ADMIN_ROLE`, `PAUSER_ROLE`, or `AGENT_ROLE`. |
 
 ---
 
@@ -118,6 +132,8 @@ go through explicit approval.
 | Same-block propose-and-execute | All governance execution must include a mandatory delay between proposal and execution. This applies to both the `TimelockController` and any future token-governance module. |
 | Bribery / vote-buying markets | Acknowledged risk class. The governance design must document its stance on vote markets before the governance token ships. |
 | Treasury drain via malicious proposal | Treasury operations must be gated by the multisig-backed timelock. A treasury-drain proposal must be detectable and cancellable within the timelock delay window. |
+| Admin-weighted MVP vote capture | The current RouterGovernance module uses admin-assigned voting power. Until token-holder voting ships, voting-power assignment, quorum changes, voting-period changes, execution-delay changes, and proposal creation must be treated as privileged configuration and routed through the admin timelock. Ordinary vote casting and post-vote execution follow RouterGovernance's own voting period and execution delay; they must not grant authority over vault internals, fees, adapters, or agent policies. |
+| Router-weight governance parameter whiplash | Quorum threshold, voting period, execution delay, and fallback behavior must be bounded by immutable or timelocked minimums before mainnet scale. The dapp and `rmpc get-governance` must surface the active parameters before any vote or weight execution. |
 | MEV sandwich on rebalance | `rebalance()` must enforce a throttle (minimum interval, maximum bps per call). Large rebalances must use private orderflow or commit-reveal to prevent sandwich extraction. The acceptable sandwich loss threshold must be documented. |
 | MEV sandwich on user deposit/withdraw | Vault deposits and withdrawals must move USDC ↔ shares at internally computed ratios with no DEX slippage surface. Any future bucket-B/C leg that touches DEX liquidity must specify and enforce a slippage bound. |
 | JIT liquidity / inspection-and-front-run | The share-price computation must not expose a profitable front-run surface. This must be verified in the economic-model audit before bucket-B/C ships. |
@@ -130,7 +146,7 @@ go through explicit approval.
 |---|---|
 | Pre-0.8 integer overflow inheritance | All contracts must use Solidity ≥0.8. OZ dependency versions must be pinned in `foundry.toml` / `package.json`. Any dependency upgrade requires a PR with an explicit compatibility review. |
 | Unverified bytecode | All production contracts must be verified on BaseScan within one hour of deployment. The verified source must match the tagged commit in this repository. |
-| Compromised npm/cargo dependency | `cargo audit` must run in CI and block on high-severity findings. Solidity dependencies must be pinned to exact versions. Any dependency update requires an explicit review comment in the PR. |
+| Compromised npm/cargo dependency | `cargo audit`, npm/Bun dependency audit, and lockfile-integrity checks must run in CI and block on high-severity findings. Solidity, Rust, JS, and GitHub Actions dependencies must be pinned to exact versions or immutable SHAs. Any dependency update requires an explicit review comment in the PR. |
 | Compiler-bug exposure | Before each production deployment, the Solidity known-bug list for the compiler version in use must be reviewed and any applicable bugs documented and addressed. |
 | Adapter target contract upgrade | Compound v3 and Aave v3 are upgradeable by their own governance. This is an accepted upstream-trust assumption. A monitoring process must alert on upstream governance proposals that affect our adapter interfaces. |
 | Token-rebase or fee-on-transfer upstream change | USDC is upgradeable by Circle. A monitoring process must alert on Circle upgrade proposals. The vault must have a documented pause-and-review procedure if USDC semantics change. |
@@ -155,17 +171,20 @@ This section maps onto `docs/architecture.md` §15.
 
 | Attack | Required control |
 |---|---|
-| Prompt injection of agent planner causing unsafe deposit | The planner must not be able to sign. The gateway must enforce role, caps, code hash, amount, deadline, and receiver policy independently of any agent-side state. |
-| Agent key exposure | Agent keys must be constrained to the `AGENT_ROLE` deposit path. Loss budget must equal the configured per-window cap, not total vault assets. |
-| Client host compromise | The signer API must be narrow and accept only known calldata shapes. On-chain caps are the backstop regardless of client state. |
-| Local state rollback | Idempotency keys and window caps must be enforced on-chain, not in local state. |
+| Prompt injection of agent planner causing unsafe asset movement | The planner must not be able to sign. The gateway must enforce role, amount/share caps, destination/source allowlists, deadline, idempotency, share receiver, asset recipient, and pause state independently of any agent-side state. `rmpc` must verify chain id, runtime code hash, and configured addresses before building calldata. |
+| Agent key exposure | Agent keys must be constrained to gateway `AGENT_ROLE` paths only. Loss budget must equal the configured deposit cap plus the configured withdrawal share cap and any receipt-token allowance the depositor deliberately grants to the gateway, not total vault assets. If caps are epoch-fixed rather than rolling, the documented loss budget must account for the maximum boundary burst. Withdrawn USDC must be sent only to the depositor-configured asset recipient. |
+| Client host compromise | The signer API must be narrow and accept only known calldata shapes for gateway deposits, routed deposits, withdrawals, policy reads, and approved admin/operator commands. On-chain caps, allowlists, recipients, and deadlines are the backstop regardless of client state. |
+| Local state rollback | Idempotency keys, cap usage, policy expiry, destination/source allowlists, share receiver, and asset recipient must be enforced on-chain, not in local state. |
 | Malicious or stale RPC | `rmpc` must verify chain-id and gateway code hash on every operation. Multi-RPC comparison must be supported for high-value operations. |
 | Software-key extraction | HSM, KMS, Secure Enclave, or TPM is the required signing backend for production. Software key signing must require an explicit opt-in flag and must be prohibited in production config. |
 | Pause abuse via agent role | The agent role must not be able to trigger pause. Role separation must be enforced at the contract level, not by convention. |
-| Fixed-window boundary burst | Window cap sizing must follow a documented rule. Rolling window is preferred over fixed window for production. |
+| Fixed-window boundary burst | Window-cap sizing must account for the fact that an epoch-aligned fixed window can permit nearly two windows of capacity around a boundary. Rolling windows or token buckets are preferred for high-value policies, but fixed windows are acceptable when the policy UI, `rmpc` output, and risk disclosure show the maximum boundary-burst exposure. |
 | Replay of signed transaction across chains | Chain-id check must be present in `rmpc` and enforced by EIP-155 signing. |
 | Replay within chain (nonce reuse) | Per-agent nonce file lock must prevent concurrent invocation. `ErrConcurrentInvocation` must be the documented error path. |
 | Race between concurrent agent tasks | The nonce lock must be the single serialization point. No other coordination mechanism should be introduced without an explicit ADR. |
+| Idempotency domain collision | Gateway idempotency identifiers must domain-separate operation kind (`deposit`, `depositTo`, `withdraw`), chain id, gateway address, agent, order id, amount/shares, destination/source, receiver/recipient, and caller-provided idempotency key. A routed deposit and a withdrawal must never be able to consume each other's idempotency namespace. |
+| Agent withdrawal redirect | Gateway-mediated withdrawals must verify source vault, receipt allowance, receipt balance, max shares per payment, max shares per window, previewed minimum assets out, deadline, and policy-configured asset recipient before signing and before execution. The agent must never choose the USDC recipient at execution time. |
+| Receipt-token allowance overhang | Dapp and `rmpc` must display current gateway receipt-token allowance and recommend bounded allowances aligned with the policy withdrawal cap. Revoking an agent policy must be paired in the UI/runbook with revoking any receipt-token allowance that could otherwise be reused if the agent is re-authorized. |
 | Signer-backend MITM | Trust collapses to the signer device. Hardware signer attestation is the accepted mitigation. |
 
 ---
@@ -174,9 +193,9 @@ This section maps onto `docs/architecture.md` §15.
 
 | Attack | Required control |
 |---|---|
-| Frontend JS injection (Bybit/Safe-class) | The dapp must be deployed with a strict Content Security Policy and Subresource Integrity hashes on all script tags. The hosting model must be IPFS-pinned or use content-hash deploys. The canonical deployment procedure must be documented and enforced. |
+| Frontend JS injection (Bybit/Safe-class) | The dapp must be deployed with a strict Content Security Policy that disallows inline scripts and eval. Public production builds must be static, content-addressed or content-hash deployed, and reproducible from a signed tag. Third-party or CDN scripts are prohibited by default; if an exception is approved, Subresource Integrity hashes are required. The canonical deployment procedure must be documented and enforced. |
 | Build-pipeline compromise | Dapp release artifacts must be reproducibly buildable from a tagged commit. Release tags must be signed. Provenance attestation is required before public launch. |
-| DNS hijack / phishing clone domain | Official domain(s) must be documented, DNSSEC-enabled, and an ENS record must point to the IPFS-pinned deployment. A canonical domain list must be published. |
+| DNS hijack / phishing clone domain | Official domain(s) must be documented, registrar-locked, DNSSEC-enabled where supported by the registrar/TLD, and monitored for record changes. If IPFS/content-addressed hosting is used, an ENS record must point to the pinned deployment. A canonical domain list must be published. |
 | TLS/cert mis-issuance | HSTS preload must be enabled on all dapp domains. |
 | XSS in dapp | A Content Security Policy that disallows inline scripts and eval must be enforced. This must be verified in CI before public launch. |
 | CSRF on backend signing endpoint | There must be no backend signing endpoint. Signing is client-side or agent-side only. |
@@ -193,8 +212,8 @@ This section maps onto `docs/architecture.md` §15.
 | Attack | Required control |
 |---|---|
 | Base sequencer censorship | Force-inclusion via L1 must be documented in the user playbook. This is an accepted Base L2 risk. |
-| Base sequencer reorg | A minimum confirmation depth must be documented and enforced by `rmpc` before reporting transaction finality. |
-| L1 reorg affecting L2 finality | Same as above. The confirmation depth policy must account for L1 finality. |
+| Base sequencer reorg | A minimum confirmation-depth policy must be documented per operation class and enforced by `rmpc` before reporting transaction finality. High-value admin and governance operations must distinguish "L2 included" from "L1 finalized." |
+| L1 reorg affecting L2 finality | Same as above. The confirmation-depth policy must account for L1 finality and must be surfaced in `rmpc` JSON output and dapp status copy. |
 | RPC provider outage | `rmpc` must support multiple RPC endpoints with automatic failover. The operator config must document the required redundancy. |
 | Mempool-leak exposing pending agent intents | Agent deposits are irreversible by design and carry no slippage surface on the vault leg; public mempool is accepted for MVP. When bucket-B/C legs ship, private orderflow submission must be evaluated. |
 | Time/clock skew on signer | Signing must use EVM block context, not wall time, for all deadline and expiry computations. |
@@ -258,17 +277,18 @@ automated tests. The following rules apply to all test layers.
 |---|---|---|
 | Forge unit tests | `vm.prank` only | May impersonate the Safe address to test contract-level role enforcement in isolation. Must not use `vm.prank` as a substitute for real Safe quorum verification. |
 | Forge fork / integration tests | **No mocking** | Must deploy a real Safe proxy via the canonical `SafeProxyFactory` on the pinned Base mainnet fork. Must assemble the Safe transaction struct, sign with two test private keys using EIP-712, and call `Safe.execTransaction()`. The TimelockController must not be replaced with a stub. |
-| rmpc CLI integration tests | **No mocking** | Must run against a devnet where a real Safe proxy holds `PROPOSER_ROLE` on the `TimelockController`. `rmpc get-timelock` output must be validated against on-chain state. |
+| rmpc CLI integration tests | **No mocking** | Must run against a devnet where a real Safe proxy holds `PROPOSER_ROLE` and CANCELLER_ROLE on the `TimelockController`. `rmpc get-timelock` output must be validated against on-chain state, including whether EXECUTOR_ROLE is open or Safe-restricted. |
 | Dapp e2e (Playwright) | **No mocking** | Must run against the full-stack devnet with a real Safe and TimelockController deployed. |
 
 ### Required test coverage for multisig + admin paths
 
-Every test suite that touches `ADMIN_ROLE`, `PROPOSER_ROLE`, or `EXECUTOR_ROLE`
+Every test suite that touches `ADMIN_ROLE`, `PROPOSER_ROLE`, CANCELLER_ROLE, or `EXECUTOR_ROLE`
 must include all of the following categories:
 
 **Happy paths (must pass for all five governed contracts)**
 - Full round-trip: Safe quorum met → `TimelockController.schedule()` → delay elapsed → `TimelockController.execute()` → ADMIN_ROLE operation applied
-- `rmpc get-timelock` returns correct proposers, executors, min delay, and pending operation after scheduling
+- `rmpc get-timelock` returns correct proposers, cancellers, executor policy, min delay, and pending operation after scheduling
+- Open executor, if configured: a non-Safe address can execute a ready operation after the delay but cannot schedule or cancel it
 
 **Sad paths (must revert with the expected error)**
 - Quorum not met: one signature from the 2-of-N Safe reverts inside `Safe.execTransaction()` before reaching the timelock
@@ -277,10 +297,12 @@ must include all of the following categories:
 - Replay: re-executing an already-executed operation reverts
 - Cancellation: a cancelled operation cannot be executed
 - Direct bypass: calling a governed contract ADMIN_ROLE function directly (not through Safe + timelock) reverts with `AccessControlUnauthorizedAccount`
+- Unauthorized schedule/cancel: an address without Safe quorum cannot schedule or cancel an operation
 
 **Deploy-time assertions (must fail fast)**
-- `DeployTimelock.s.sol` must revert with a descriptive error when `SAFE_ADDRESS` has no deployed code
-- `DeployTimelock.s.sol` must revert with a descriptive error when the Safe at `SAFE_ADDRESS` has `getThreshold() < 2`
+- `DeployTimelock.s.sol` must revert with a descriptive error when any configured Safe address has no deployed code
+- `DeployTimelock.s.sol` must revert with a descriptive error when any configured Safe has `getThreshold() < 2`
+- `DeployTimelock.s.sol` must emit or record whether EXECUTOR_ROLE is open (`address(0)`) or Safe-restricted
 
 ### Safe infrastructure
 
