@@ -6,8 +6,7 @@ pragma solidity ^0.8.24;
 import {Script} from "forge-std/Script.sol";
 import {console2} from "forge-std/console2.sol";
 
-import {TimelockController} from
-    "@openzeppelin/contracts/governance/TimelockController.sol";
+import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
 import {RobotMoneyVault} from "../RobotMoneyVault.sol";
@@ -116,10 +115,7 @@ contract DeployTimelock is Script {
         require(d.minDelay > 0, "TIMELOCK_MIN_DELAY=0");
     }
 
-    function _deployAndWire(Deployed memory d)
-        internal
-        returns (TimelockController timelock)
-    {
+    function _deployAndWire(Deployed memory d) internal returns (TimelockController timelock) {
         // 1. Deploy TimelockController.
         //    proposers = [safe], executors = [safe], admin = address(0)
         //    admin = address(0) means the timelock is self-administered
@@ -196,7 +192,7 @@ contract DeployTimelock is Script {
         );
     }
 
-    function _logResult(Deployed memory d) internal view {
+    function _logResult(Deployed memory d) internal pure {
         console2.log("TimelockController deployed and ADMIN_ROLE transferred on all five contracts");
         console2.log("  timelock    :", address(d.timelock));
         console2.log("  safe        :", d.safe);

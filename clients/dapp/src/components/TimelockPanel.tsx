@@ -116,6 +116,12 @@ export interface TimelockPanelProps {
    * When not provided, the panel shows the min delay and role info only.
    */
   readonly pendingOpIds?: readonly `0x${string}`[];
+  /**
+   * Current wall-clock time in **milliseconds** (i.e. `Date.now()`).
+   * Injected at the call site so this component stays testable and
+   * pure w.r.t. the real clock (react-guide §Prime directives).
+   */
+  readonly now: number;
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -155,6 +161,7 @@ export function TimelockPanel({
   timelockAddress,
   safeAddress,
   pendingOpIds = [],
+  now,
 }: TimelockPanelProps) {
   const { data: blockNumber } = useBlockNumber({ watch: false });
 
@@ -205,14 +212,11 @@ export function TimelockPanel({
   });
 
   // Current wall-clock time (seconds) for "time remaining" display.
-  const [nowSecs, setNowSecs] = useState(BigInt(Math.floor(Date.now() / 1000)));
+  // `now` is injected as a prop (react-guide §Prime directives — no Date.now in render).
+  const [nowSecs, setNowSecs] = useState(BigInt(Math.floor(now / 1000)));
   useEffect(() => {
-    const id = setInterval(
-      () => setNowSecs(BigInt(Math.floor(Date.now() / 1000))),
-      10_000,
-    );
-    return () => clearInterval(id);
-  }, []);
+    setNowSecs(BigInt(Math.floor(now / 1000)));
+  }, [now]);
 
   // Derive display values.
   const minDelay = staticData?.[0]?.result as bigint | undefined;
@@ -247,20 +251,14 @@ export function TimelockPanel({
           <div className="timelock-info">
             <span className="timelock-label">Minimum delay</span>
             <span className="timelock-value">
-              {minDelay !== undefined
-                ? formatDuration(minDelay)
-                : "unavailable"}
+              {minDelay !== undefined ? formatDuration(minDelay) : "unavailable"}
             </span>
           </div>
 
           {/* Safe role membership */}
           <div className="timelock-info">
-            <span className="timelock-label">
-              Safe proposer ({safeAddress.slice(0, 8)}…)
-            </span>
-            <span
-              className={`timelock-badge ${safeIsProposer ? "badge-ok" : "badge-warn"}`}
-            >
+            <span className="timelock-label">Safe proposer ({safeAddress.slice(0, 8)}…)</span>
+            <span className={`timelock-badge ${safeIsProposer ? "badge-ok" : "badge-warn"}`}>
               {safeIsProposer === undefined
                 ? "—"
                 : safeIsProposer
@@ -270,12 +268,8 @@ export function TimelockPanel({
           </div>
 
           <div className="timelock-info">
-            <span className="timelock-label">
-              Safe executor ({safeAddress.slice(0, 8)}…)
-            </span>
-            <span
-              className={`timelock-badge ${safeIsExecutor ? "badge-ok" : "badge-warn"}`}
-            >
+            <span className="timelock-label">Safe executor ({safeAddress.slice(0, 8)}…)</span>
+            <span className={`timelock-badge ${safeIsExecutor ? "badge-ok" : "badge-warn"}`}>
               {safeIsExecutor === undefined
                 ? "—"
                 : safeIsExecutor
@@ -301,14 +295,9 @@ export function TimelockPanel({
                 {pendingOps.map((op) => {
                   const remainingSecs = op.readyTimestamp - nowSecs;
                   const isReady = remainingSecs <= 0n;
-                  const readyDate = new Date(
-                    Number(op.readyTimestamp) * 1000,
-                  ).toUTCString();
+                  const readyDate = new Date(Number(op.readyTimestamp) * 1000).toUTCString();
                   return (
-                    <tr
-                      key={op.operationId}
-                      className={isReady ? "op-ready" : "op-waiting"}
-                    >
+                    <tr key={op.operationId} className={isReady ? "op-ready" : "op-waiting"}>
                       <td className="op-id">
                         <code>{op.operationId}</code>
                       </td>

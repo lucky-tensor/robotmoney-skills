@@ -70,9 +70,9 @@ contract DeployTimelockTest is Test {
         governance = new RouterGovernance(
             address(router),
             address(script),
-            7 days,   // votingPeriod
-            1 days,   // executionDelay
-            1         // quorumThreshold
+            7 days, // votingPeriod
+            1 days, // executionDelay
+            1 // quorumThreshold
         );
 
         d = script.runInProcess(
@@ -138,15 +138,13 @@ contract DeployTimelockTest is Test {
 
     function test_safe_holdsProposerRole() public view {
         assertTrue(
-            d.timelock.hasRole(d.timelock.PROPOSER_ROLE(), safe),
-            "safe missing PROPOSER_ROLE"
+            d.timelock.hasRole(d.timelock.PROPOSER_ROLE(), safe), "safe missing PROPOSER_ROLE"
         );
     }
 
     function test_safe_holdsExecutorRole() public view {
         assertTrue(
-            d.timelock.hasRole(d.timelock.EXECUTOR_ROLE(), safe),
-            "safe missing EXECUTOR_ROLE"
+            d.timelock.hasRole(d.timelock.EXECUTOR_ROLE(), safe), "safe missing EXECUTOR_ROLE"
         );
     }
 
@@ -161,16 +159,12 @@ contract DeployTimelockTest is Test {
     ///         first; registerVault is simpler to use here.
     function test_directAdminCall_revertsFromSafe() public {
         VaultRegistry.VaultMetadata memory meta = VaultRegistry.VaultMetadata({
-            name: "Test Vault",
-            asset: address(usdc),
-            registeredAt: block.timestamp
+            name: "Test Vault", asset: address(usdc), registeredAt: block.timestamp
         });
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                safe,
-                ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, safe, ADMIN_ROLE
             )
         );
         vm.prank(safe);
@@ -181,16 +175,12 @@ contract DeployTimelockTest is Test {
     ///         ADMIN_ROLE gated functions.
     function test_directAdminCall_revertsFromStranger() public {
         VaultRegistry.VaultMetadata memory meta = VaultRegistry.VaultMetadata({
-            name: "Test Vault",
-            asset: address(usdc),
-            registeredAt: block.timestamp
+            name: "Test Vault", asset: address(usdc), registeredAt: block.timestamp
         });
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                stranger,
-                ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, stranger, ADMIN_ROLE
             )
         );
         vm.prank(stranger);
@@ -205,32 +195,28 @@ contract DeployTimelockTest is Test {
     function test_timelockRouted_registerVault_succeedsAfterDelay() public {
         address newVault = makeAddr("newVault");
         VaultRegistry.VaultMetadata memory meta = VaultRegistry.VaultMetadata({
-            name: "Timelocked Vault",
-            asset: address(usdc),
-            registeredAt: block.timestamp
+            name: "Timelocked Vault", asset: address(usdc), registeredAt: block.timestamp
         });
 
-        bytes memory callData =
-            abi.encodeCall(VaultRegistry.registerVault, (newVault, meta));
+        bytes memory callData = abi.encodeCall(VaultRegistry.registerVault, (newVault, meta));
 
         bytes32 predecessor = bytes32(0);
         bytes32 salt = keccak256("test-salt-1");
 
         // Schedule from the Safe (PROPOSER_ROLE).
         vm.prank(safe);
-        d.timelock.schedule(
-            address(registry), // target
-            0,                 // value
-            callData,
-            predecessor,
-            salt,
-            MIN_DELAY
-        );
+        d.timelock
+            .schedule(
+                address(registry), // target
+                0, // value
+                callData,
+                predecessor,
+                salt,
+                MIN_DELAY
+            );
 
         // Compute operation id.
-        bytes32 opId = d.timelock.hashOperation(
-            address(registry), 0, callData, predecessor, salt
-        );
+        bytes32 opId = d.timelock.hashOperation(address(registry), 0, callData, predecessor, salt);
 
         // Pre-delay: operation is in Waiting state — execute must revert.
         assertEq(
@@ -275,21 +261,13 @@ contract DeployTimelockTest is Test {
     ///         TimelockController, mine the delay, execute, and verify the
     ///         new address has ADMIN_ROLE on VaultRegistry.
     function test_timelockRouted_adminRoleGrant_succeedsAfterDelay() public {
-        bytes memory callData =
-            abi.encodeCall(IAccessControl.grantRole, (ADMIN_ROLE, newAdmin));
+        bytes memory callData = abi.encodeCall(IAccessControl.grantRole, (ADMIN_ROLE, newAdmin));
 
         bytes32 predecessor = bytes32(0);
         bytes32 salt = keccak256("test-admin-grant");
 
         vm.prank(safe);
-        d.timelock.schedule(
-            address(registry),
-            0,
-            callData,
-            predecessor,
-            salt,
-            MIN_DELAY
-        );
+        d.timelock.schedule(address(registry), 0, callData, predecessor, salt, MIN_DELAY);
 
         vm.warp(block.timestamp + MIN_DELAY + 1);
 
