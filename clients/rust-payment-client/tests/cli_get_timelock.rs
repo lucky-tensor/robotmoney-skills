@@ -36,8 +36,7 @@ const EXECUTOR_ROLE: B256 =
     b256!("d8aa0f3194971a2a116679f7c2090f6939c8d4e01a2a8d7e41d55e5351469e63");
 
 /// Operation id used in the pending-op mock.
-const OP_ID: B256 =
-    b256!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+const OP_ID: B256 = b256!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 
 /// Minimum delay in seconds (2 days).
 const MIN_DELAY_SECS: u64 = 172_800;
@@ -126,7 +125,9 @@ impl TimelockFixture {
 
         let runtime_hash = format!(
             "0x{}",
-            ahex::encode(keccak256(&[0x60u8, 0x80, 0x60, 0x40, 0x52, 0xfe, 0xfe, 0xfe]))
+            ahex::encode(keccak256(&[
+                0x60u8, 0x80, 0x60, 0x40, 0x52, 0xfe, 0xfe, 0xfe
+            ]))
         );
         let config_path = tmp.path().join("rmpc.toml");
         let toml = format!(
@@ -305,7 +306,11 @@ async fn get_timelock_clean_envelope_with_pending_op() {
     // ── Run command and assert ────────────────────────────────────────────────
     let fix = TimelockFixture::build(&server.url(), chain_id, TIMELOCK);
     let out = rmpc()
-        .args(["get-timelock", "--config", fix.config_path.to_str().unwrap()])
+        .args([
+            "get-timelock",
+            "--config",
+            fix.config_path.to_str().unwrap(),
+        ])
         .assert()
         .success()
         .get_output()
@@ -366,9 +371,9 @@ async fn get_timelock_clean_envelope_with_pending_op() {
 #[test]
 fn get_timelock_fails_fast_without_timelock_address() {
     const TEST_PRIVKEY: [u8; 32] = [
-        0xac, 0x09, 0x74, 0xbe, 0xc3, 0x9a, 0x17, 0xe3, 0x6b, 0xa4, 0xa6, 0xb4, 0xd2, 0x38,
-        0xff, 0x94, 0x4b, 0xac, 0xb4, 0x78, 0xcb, 0xed, 0x5e, 0xfc, 0xae, 0x78, 0x4d, 0x7b,
-        0xf4, 0xf2, 0xff, 0x80,
+        0xac, 0x09, 0x74, 0xbe, 0xc3, 0x9a, 0x17, 0xe3, 0x6b, 0xa4, 0xa6, 0xb4, 0xd2, 0x38, 0xff,
+        0x94, 0x4b, 0xac, 0xb4, 0x78, 0xcb, 0xed, 0x5e, 0xfc, 0xae, 0x78, 0x4d, 0x7b, 0xf4, 0xf2,
+        0xff, 0x80,
     ];
     const TEST_PASSPHRASE: &[u8] = b"correct horse battery staple";
 
