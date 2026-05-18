@@ -125,7 +125,7 @@ impl TimelockFixture {
 
         let runtime_hash = format!(
             "0x{}",
-            ahex::encode(keccak256(&[
+            ahex::encode(keccak256([
                 0x60u8, 0x80, 0x60, 0x40, 0x52, 0xfe, 0xfe, 0xfe
             ]))
         );
