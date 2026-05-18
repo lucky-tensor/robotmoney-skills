@@ -13,6 +13,7 @@ pub mod get_deposit;
 pub mod get_gateway;
 pub mod get_governance;
 pub mod get_roles;
+pub mod get_timelock;
 pub mod get_router;
 pub mod get_tx;
 pub mod get_vault;
