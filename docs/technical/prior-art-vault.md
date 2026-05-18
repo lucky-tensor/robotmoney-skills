@@ -12,7 +12,8 @@ Veda (BoringVault), Alvara Protocol, and Zyfi.
 | **Purpose** | USDC treasury for human depositors and autonomous agents | On-chain asset management vaults for fund managers | Minimal, auditable yield vaults | Permissionless multi-asset basket funds | Gas abstraction / paymaster service on zkSync |
 | **Chain** | Base (8453) | Ethereum + others | Ethereum-compatible | Ethereum, Avalanche, Base | zkSync Era |
 | **Share token** | ERC-4626 rmUSDC (vault-specific receipt) | ERC-20 per fund | ERC-20 (share-locked after deposit) | ERC-20 LP (tradeable on DEXs) | None — sponsorship, not investment |
-| **Primary asset** | USDC only | Any ERC-20 denomination | Any ERC-20 | Any ERC-20 basket | ETH (dev sponsorship) + any ERC-20 (user fee) |
+| **Deposit asset** | USDC (all vaults) | Any ERC-20 denomination | Any ERC-20 | Any ERC-20 basket | ETH (dev sponsorship) + any ERC-20 (user fee) |
+| **Exposure** | USDC yield (stable vault); wETH/cbBTC/wSOL (protocol vault); agent tokens (agent vault) | Matches denomination asset or held basket | Matches deposit asset | Multi-asset basket | N/A |
 | **Contract standard** | ERC-4626 + OZ AccessControl v5 | Custom VaultProxy + ComptrollerProxy | Custom BoringVault (~100 LOC) | ERC-7621 basket token standard | zkSync native paymaster interface |
 | **Upgradability** | Non-proxy, direct deployment | Proxy per fund, release migrations | Non-upgradeable core | Not specified | Audited non-upgradeable vault |
 | **Fees** | Exit fee only (mgmt/perf deferred) | Management, performance, entrance, exit | Externally managed via Accountant rate | Management (% of TVL, on-chain) | Gas sponsorship ratio + token markup |
@@ -49,6 +50,14 @@ holding unlimited ERC-20 assets. LP tokens (ERC-20) represent depositor shares
 and are freely tradeable on DEXs. Basket managers adjust composition in
 real-time with single-transaction rebalancing. There is no outer router; each
 basket is a standalone fund.
+
+ERC-7621 standard note: the spec was proposed and authored entirely by Alvara
+team members and merged to Draft status in April 2024. As of May 2026 it
+remains Draft, with no other teams having shipped independent implementations.
+Adoption signals beyond Alvara are thin — no migrations from Set Protocol,
+Index Coop, or Reserve Protocol have materialized. The standard is worth
+monitoring but carries meaningful ecosystem-adoption risk relative to
+established standards like ERC-4626.
 
 **Zyfi** is not a yield vault — it is a gas abstraction layer. Its `Vault`
 contract holds developer-deposited ETH for transaction sponsorship. The
@@ -174,10 +183,13 @@ model applies.
 
 ### 2.5 Oracle and Pricing
 
-**Robot Money** avoids price oracles for the current USDC-only stable-yield
-vault. `totalAssets()` is reported by adapters from live on-chain positions
-(Morpho, Aave, Compound). Share price is computed from live `totalAssets()` and
-supply via ERC-4626 math. No off-chain price feed.
+**Robot Money** avoids price oracles for the current stable-yield vault, which
+stays fully in USDC. `totalAssets()` is reported by adapters from live on-chain
+positions (Morpho, Aave, Compound). Share price is computed from live
+`totalAssets()` and supply via ERC-4626 math. No off-chain price feed.
+The planned protocol-asset and agent-token vaults accept USDC and swap into
+non-stable exposures (wETH/cbBTC/wSOL; agent tokens); those categories will
+require price oracles or DEX-based pricing and are deferred pending separate ADRs.
 
 **Enzyme Finance** uses external price oracles for NAV calculation across
 multi-asset funds. NAV is updated periodically (not continuously), creating
@@ -203,13 +215,18 @@ path.
 
 ## 3. Differentiating Design Decisions
 
-### 3.1 Single-Asset USDC Focus
+### 3.1 USDC as Deposit Denomination Across All Vaults
 
-Robot Money is explicitly USDC-only for its current vault family. This
-eliminates oracle risk, cross-asset liquidity risk, and price manipulation
-vectors that affect Enzyme, Alvara, and any multi-asset vault. The trade-off
-is narrower scope — no exposure to yield-bearing non-stables, protocol tokens,
-or RWAs without future vault categories and dedicated ADRs.
+All Robot Money vaults accept USDC as the deposit asset. The current deployed
+stable-yield vault stays fully in USDC (Morpho/Aave/Compound), eliminating
+oracle risk, cross-asset liquidity risk, and price manipulation vectors. The
+planned protocol-asset vault (wETH/cbBTC/wSOL exposure) and agent-token vault
+(agent-economy token basket) accept USDC and swap into their target assets at
+deposit time, swapping back on withdrawal. Those vault categories require price
+oracles or DEX-based pricing and are explicitly deferred to future phases
+pending dedicated ADRs. The stable-yield vault can be included in router
+allocations today precisely because its redemption path carries no swap or
+oracle dependency.
 
 ### 3.2 Synchronous Redemption as a Product Guarantee
 
