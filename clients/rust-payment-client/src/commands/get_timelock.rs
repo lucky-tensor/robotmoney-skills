@@ -172,8 +172,15 @@ async fn read_timelock(
 
     // Fetch proposers and executors via RoleGranted/RoleRevoked log scan.
     if let Some(pr) = proposer_role {
-        match fetch_role_members(rpc, timelock, pr, granted_topic0, revoked_topic0, &block_tag)
-            .await
+        match fetch_role_members(
+            rpc,
+            timelock,
+            pr,
+            granted_topic0,
+            revoked_topic0,
+            &block_tag,
+        )
+        .await
         {
             Ok(members) => {
                 b.data_mut().proposers = members.iter().map(|a| format!("{a:#x}")).collect()
@@ -183,8 +190,15 @@ async fn read_timelock(
     }
 
     if let Some(er) = executor_role {
-        match fetch_role_members(rpc, timelock, er, granted_topic0, revoked_topic0, &block_tag)
-            .await
+        match fetch_role_members(
+            rpc,
+            timelock,
+            er,
+            granted_topic0,
+            revoked_topic0,
+            &block_tag,
+        )
+        .await
         {
             Ok(members) => {
                 b.data_mut().executors = members.iter().map(|a| format!("{a:#x}")).collect()
@@ -194,9 +208,8 @@ async fn read_timelock(
     }
 
     // Pending operations via CallScheduled log scan.
-    let scheduled_topic0 = keccak256(
-        b"CallScheduled(bytes32,uint256,address,uint256,bytes,bytes32,uint256)",
-    );
+    let scheduled_topic0 =
+        keccak256(b"CallScheduled(bytes32,uint256,address,uint256,bytes,bytes32,uint256)");
     match fetch_pending_ops(rpc, timelock, scheduled_topic0, &block_tag).await {
         Ok(ops) => b.data_mut().pending_ops = ops,
         Err(e) => b.record_err("pending_ops".to_string(), e),
