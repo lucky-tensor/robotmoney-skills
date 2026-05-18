@@ -124,17 +124,13 @@ contract DeployTimelock is Script {
         // An EOA at SAFE_ADDRESS would let a single private key control all
         // ADMIN_ROLE operations — defeating the multisig security model.
         require(
-            d.safe.code.length > 0,
-            "SAFE_ADDRESS is an EOA: deploy a Safe multisig contract first"
+            d.safe.code.length > 0, "SAFE_ADDRESS is an EOA: deploy a Safe multisig contract first"
         );
 
         // AC: The Safe at SAFE_ADDRESS must have threshold >= 2.
         // A 1-of-N threshold provides no meaningful quorum protection.
         uint256 threshold = ISafeMinimal(d.safe).getThreshold();
-        require(
-            threshold >= 2,
-            "SAFE_ADDRESS threshold < 2: configure at least 2-of-N quorum"
-        );
+        require(threshold >= 2, "SAFE_ADDRESS threshold < 2: configure at least 2-of-N quorum");
     }
 
     function _deployAndWire(Deployed memory d) internal returns (TimelockController timelock) {

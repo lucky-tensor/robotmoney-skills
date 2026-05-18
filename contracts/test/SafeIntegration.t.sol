@@ -114,17 +114,14 @@ contract SafeIntegrationTest is Test {
     // ─── Base mainnet addresses ────────────────────────────────────────────────
 
     /// @dev Safe ProxyFactory on Base mainnet (same address across EVM chains).
-    address internal constant SAFE_PROXY_FACTORY =
-        0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67;
+    address internal constant SAFE_PROXY_FACTORY = 0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67;
 
     /// @dev Safe L2 singleton (implementation) on Base mainnet.
     ///      This is the SafeL2.sol variant that emits extra events for L2 indexers.
-    address internal constant SAFE_SINGLETON_L2 =
-        0x29fcB43b46531BcA003ddC8FCB67FFE91900C762;
+    address internal constant SAFE_SINGLETON_L2 = 0x29fcB43b46531BcA003ddC8FCB67FFE91900C762;
 
     /// @dev Safe Compatibility Fallback Handler on Base mainnet.
-    address internal constant SAFE_FALLBACK_HANDLER =
-        0xfd0732Dc9E303f09fCEf3a7388Ad10A83459Ec99;
+    address internal constant SAFE_FALLBACK_HANDLER = 0xfd0732Dc9E303f09fCEf3a7388Ad10A83459Ec99;
 
     // ─── Role constant ────────────────────────────────────────────────────────
 
@@ -222,13 +219,7 @@ contract SafeIntegrationTest is Test {
 
         router = new PortfolioRouter(address(usdc), address(registry), deployer);
 
-        governance = new RouterGovernance(
-            address(router),
-            deployer,
-            7 days,
-            1 days,
-            1
-        );
+        governance = new RouterGovernance(address(router), deployer, 7 days, 1 days, 1);
 
         // Deploy 2-of-3 Safe proxy via the canonical factory on Base mainnet.
         // Owners must be sorted ascending for the Safe setup call.
@@ -248,9 +239,8 @@ contract SafeIntegrationTest is Test {
             )
         );
 
-        address safeProxy = ISafeProxyFactory(SAFE_PROXY_FACTORY).createProxyWithNonce(
-            SAFE_SINGLETON_L2, safeSetup, uint256(keccak256("safe-salt-422"))
-        );
+        address safeProxy = ISafeProxyFactory(SAFE_PROXY_FACTORY)
+            .createProxyWithNonce(SAFE_SINGLETON_L2, safeSetup, uint256(keccak256("safe-salt-422")));
         safe = ISafe(safeProxy);
 
         // Verify Safe deployed correctly.
@@ -343,11 +333,7 @@ contract SafeIntegrationTest is Test {
     }
 
     /// @dev Sign `txHash` with a single non-owner key and return the 65-byte sig.
-    function _signOne(uint256 pk, bytes32 txHash)
-        internal
-        view
-        returns (bytes memory sig65)
-    {
+    function _signOne(uint256 pk, bytes32 txHash) internal view returns (bytes memory sig65) {
         (uint8 v_, bytes32 r_, bytes32 s_) = vm.sign(pk, txHash);
         sig65 = abi.encodePacked(r_, s_, v_);
     }
@@ -401,8 +387,7 @@ contract SafeIntegrationTest is Test {
 
         // Schedule: Safe calls timelock.schedule(...)
         bytes memory scheduleCall = abi.encodeCall(
-            d.timelock.schedule,
-            (target, 0, callData, predecessor, salt, MIN_DELAY)
+            d.timelock.schedule, (target, 0, callData, predecessor, salt, MIN_DELAY)
         );
 
         bytes32 scheduleTxHash = safe.getTransactionHash(
@@ -425,10 +410,8 @@ contract SafeIntegrationTest is Test {
         vm.warp(block.timestamp + MIN_DELAY + 1);
 
         // Execute: Safe calls timelock.execute(...)
-        bytes memory executeCall = abi.encodeCall(
-            d.timelock.execute,
-            (target, 0, callData, predecessor, salt)
-        );
+        bytes memory executeCall =
+            abi.encodeCall(d.timelock.execute, (target, 0, callData, predecessor, salt));
 
         bytes32 executeTxHash = safe.getTransactionHash(
             address(d.timelock),
@@ -466,9 +449,7 @@ contract SafeIntegrationTest is Test {
 
         address newVault = makeAddr("newVault");
         VaultRegistry.VaultMetadata memory meta = VaultRegistry.VaultMetadata({
-            name: "Test Vault",
-            asset: address(usdc),
-            registeredAt: block.timestamp
+            name: "Test Vault", asset: address(usdc), registeredAt: block.timestamp
         });
         bytes memory callData = abi.encodeCall(VaultRegistry.registerVault, (newVault, meta));
 
@@ -512,8 +493,7 @@ contract SafeIntegrationTest is Test {
         if (!_forkAvailable()) return;
 
         address newAdmin = makeAddr("newAdmin");
-        bytes memory callData =
-            abi.encodeCall(IAccessControl.grantRole, (ADMIN_ROLE, newAdmin));
+        bytes memory callData = abi.encodeCall(IAccessControl.grantRole, (ADMIN_ROLE, newAdmin));
         _scheduleAndExecute(address(gateway), callData);
 
         assertTrue(
@@ -535,9 +515,7 @@ contract SafeIntegrationTest is Test {
             (
                 makeAddr("vault"),
                 VaultRegistry.VaultMetadata({
-                    name: "x",
-                    asset: address(usdc),
-                    registeredAt: block.timestamp
+                    name: "x", asset: address(usdc), registeredAt: block.timestamp
                 })
             )
         );
@@ -547,15 +525,6 @@ contract SafeIntegrationTest is Test {
         );
 
         bytes32 txHash = safe.getTransactionHash(
-            address(d.timelock), 0, scheduleCall, 0, 0, 0, 0, address(0),
-            payable(address(0)), safe.nonce()
-        );
-        bytes memory sigs = _buildOneOwnerSig(txHash);
-
-        // Safe.execTransaction reverts (or returns false) when quorum not met.
-        // The Safe contract reverts with GS020 (not enough valid signatures).
-        vm.expectRevert();
-        safe.execTransaction(
             address(d.timelock),
             0,
             scheduleCall,
@@ -565,7 +534,15 @@ contract SafeIntegrationTest is Test {
             0,
             address(0),
             payable(address(0)),
-            sigs
+            safe.nonce()
+        );
+        bytes memory sigs = _buildOneOwnerSig(txHash);
+
+        // Safe.execTransaction reverts (or returns false) when quorum not met.
+        // The Safe contract reverts with GS020 (not enough valid signatures).
+        vm.expectRevert();
+        safe.execTransaction(
+            address(d.timelock), 0, scheduleCall, 0, 0, 0, 0, address(0), payable(address(0)), sigs
         );
     }
 
@@ -582,9 +559,7 @@ contract SafeIntegrationTest is Test {
             (
                 makeAddr("vault2"),
                 VaultRegistry.VaultMetadata({
-                    name: "y",
-                    asset: address(usdc),
-                    registeredAt: block.timestamp
+                    name: "y", asset: address(usdc), registeredAt: block.timestamp
                 })
             )
         );
@@ -594,13 +569,6 @@ contract SafeIntegrationTest is Test {
         );
 
         bytes32 txHash = safe.getTransactionHash(
-            address(d.timelock), 0, scheduleCall, 0, 0, 0, 0, address(0),
-            payable(address(0)), safe.nonce()
-        );
-        bytes memory sigs = _buildWrongSignerSigs(txHash);
-
-        vm.expectRevert();
-        safe.execTransaction(
             address(d.timelock),
             0,
             scheduleCall,
@@ -610,7 +578,13 @@ contract SafeIntegrationTest is Test {
             0,
             address(0),
             payable(address(0)),
-            sigs
+            safe.nonce()
+        );
+        bytes memory sigs = _buildWrongSignerSigs(txHash);
+
+        vm.expectRevert();
+        safe.execTransaction(
+            address(d.timelock), 0, scheduleCall, 0, 0, 0, 0, address(0), payable(address(0)), sigs
         );
     }
 
@@ -624,9 +598,7 @@ contract SafeIntegrationTest is Test {
 
         address newVault = makeAddr("vaultForDelay");
         VaultRegistry.VaultMetadata memory meta = VaultRegistry.VaultMetadata({
-            name: "Delay Test",
-            asset: address(usdc),
-            registeredAt: block.timestamp
+            name: "Delay Test", asset: address(usdc), registeredAt: block.timestamp
         });
         bytes memory callData = abi.encodeCall(VaultRegistry.registerVault, (newVault, meta));
         bytes32 predecessor = bytes32(0);
@@ -634,26 +606,47 @@ contract SafeIntegrationTest is Test {
 
         // Schedule via Safe.
         bytes memory scheduleCall = abi.encodeCall(
-            d.timelock.schedule,
-            (address(registry), 0, callData, predecessor, salt, MIN_DELAY)
+            d.timelock.schedule, (address(registry), 0, callData, predecessor, salt, MIN_DELAY)
         );
         bytes32 scheduleTxHash = safe.getTransactionHash(
-            address(d.timelock), 0, scheduleCall, 0, 0, 0, 0, address(0),
-            payable(address(0)), safe.nonce()
+            address(d.timelock),
+            0,
+            scheduleCall,
+            0,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            safe.nonce()
         );
         safe.execTransaction(
-            address(d.timelock), 0, scheduleCall, 0, 0, 0, 0, address(0),
-            payable(address(0)), _buildTwoOwnerSigs(scheduleTxHash)
+            address(d.timelock),
+            0,
+            scheduleCall,
+            0,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            _buildTwoOwnerSigs(scheduleTxHash)
         );
 
         // Attempt execute before delay — must revert.
-        bytes memory executeCall = abi.encodeCall(
-            d.timelock.execute,
-            (address(registry), 0, callData, predecessor, salt)
-        );
+        bytes memory executeCall =
+            abi.encodeCall(d.timelock.execute, (address(registry), 0, callData, predecessor, salt));
         bytes32 executeTxHash = safe.getTransactionHash(
-            address(d.timelock), 0, executeCall, 0, 0, 0, 0, address(0),
-            payable(address(0)), safe.nonce()
+            address(d.timelock),
+            0,
+            executeCall,
+            0,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            safe.nonce()
         );
         // The Safe transaction itself succeeds (the Safe doesn't know about the delay),
         // but the inner timelock.execute() call must fail.
@@ -662,8 +655,16 @@ contract SafeIntegrationTest is Test {
         // up as a Safe GS013 revert.
         vm.expectRevert();
         safe.execTransaction(
-            address(d.timelock), 0, executeCall, 0, 0, 0, 0, address(0),
-            payable(address(0)), _buildTwoOwnerSigs(executeTxHash)
+            address(d.timelock),
+            0,
+            executeCall,
+            0,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            _buildTwoOwnerSigs(executeTxHash)
         );
     }
 
@@ -677,9 +678,7 @@ contract SafeIntegrationTest is Test {
 
         address newVault = makeAddr("vaultForReplay");
         VaultRegistry.VaultMetadata memory meta = VaultRegistry.VaultMetadata({
-            name: "Replay Test",
-            asset: address(usdc),
-            registeredAt: block.timestamp
+            name: "Replay Test", asset: address(usdc), registeredAt: block.timestamp
         });
         bytes memory callData = abi.encodeCall(VaultRegistry.registerVault, (newVault, meta));
         bytes32 predecessor = bytes32(0);
@@ -687,46 +686,91 @@ contract SafeIntegrationTest is Test {
 
         // First: schedule.
         bytes memory scheduleCall = abi.encodeCall(
-            d.timelock.schedule,
-            (address(registry), 0, callData, predecessor, salt, MIN_DELAY)
+            d.timelock.schedule, (address(registry), 0, callData, predecessor, salt, MIN_DELAY)
         );
         bytes32 scheduleTxHash = safe.getTransactionHash(
-            address(d.timelock), 0, scheduleCall, 0, 0, 0, 0, address(0),
-            payable(address(0)), safe.nonce()
+            address(d.timelock),
+            0,
+            scheduleCall,
+            0,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            safe.nonce()
         );
         safe.execTransaction(
-            address(d.timelock), 0, scheduleCall, 0, 0, 0, 0, address(0),
-            payable(address(0)), _buildTwoOwnerSigs(scheduleTxHash)
+            address(d.timelock),
+            0,
+            scheduleCall,
+            0,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            _buildTwoOwnerSigs(scheduleTxHash)
         );
 
         // Advance past delay.
         vm.warp(block.timestamp + MIN_DELAY + 1);
 
         // Execute (first time — should succeed).
-        bytes memory executeCall = abi.encodeCall(
-            d.timelock.execute,
-            (address(registry), 0, callData, predecessor, salt)
-        );
+        bytes memory executeCall =
+            abi.encodeCall(d.timelock.execute, (address(registry), 0, callData, predecessor, salt));
         bytes32 execTxHash1 = safe.getTransactionHash(
-            address(d.timelock), 0, executeCall, 0, 0, 0, 0, address(0),
-            payable(address(0)), safe.nonce()
+            address(d.timelock),
+            0,
+            executeCall,
+            0,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            safe.nonce()
         );
         bool ok = safe.execTransaction(
-            address(d.timelock), 0, executeCall, 0, 0, 0, 0, address(0),
-            payable(address(0)), _buildTwoOwnerSigs(execTxHash1)
+            address(d.timelock),
+            0,
+            executeCall,
+            0,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            _buildTwoOwnerSigs(execTxHash1)
         );
         assertTrue(ok, "first execute should succeed");
         assertEq(registry.vaultCount(), 1, "vault should be registered");
 
         // Attempt replay (second execute with same params) — must revert.
         bytes32 execTxHash2 = safe.getTransactionHash(
-            address(d.timelock), 0, executeCall, 0, 0, 0, 0, address(0),
-            payable(address(0)), safe.nonce()
+            address(d.timelock),
+            0,
+            executeCall,
+            0,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            safe.nonce()
         );
         vm.expectRevert();
         safe.execTransaction(
-            address(d.timelock), 0, executeCall, 0, 0, 0, 0, address(0),
-            payable(address(0)), _buildTwoOwnerSigs(execTxHash2)
+            address(d.timelock),
+            0,
+            executeCall,
+            0,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            _buildTwoOwnerSigs(execTxHash2)
         );
     }
 
@@ -740,18 +784,14 @@ contract SafeIntegrationTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                address(safe),
-                ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, address(safe), ADMIN_ROLE
             )
         );
         vm.prank(address(safe));
         registry.registerVault(
             makeAddr("x"),
             VaultRegistry.VaultMetadata({
-                name: "x",
-                asset: address(usdc),
-                registeredAt: block.timestamp
+                name: "x", asset: address(usdc), registeredAt: block.timestamp
             })
         );
     }
@@ -762,9 +802,7 @@ contract SafeIntegrationTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                address(safe),
-                ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, address(safe), ADMIN_ROLE
             )
         );
         vm.prank(address(safe));
@@ -777,9 +815,7 @@ contract SafeIntegrationTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                address(safe),
-                ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, address(safe), ADMIN_ROLE
             )
         );
         vm.prank(address(safe));
@@ -792,9 +828,7 @@ contract SafeIntegrationTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                address(safe),
-                ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, address(safe), ADMIN_ROLE
             )
         );
         vm.prank(address(safe));
@@ -807,9 +841,7 @@ contract SafeIntegrationTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                address(safe),
-                ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, address(safe), ADMIN_ROLE
             )
         );
         vm.prank(address(safe));
@@ -824,18 +856,14 @@ contract SafeIntegrationTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                stranger,
-                ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, stranger, ADMIN_ROLE
             )
         );
         vm.prank(stranger);
         registry.registerVault(
             makeAddr("v"),
             VaultRegistry.VaultMetadata({
-                name: "v",
-                asset: address(usdc),
-                registeredAt: block.timestamp
+                name: "v", asset: address(usdc), registeredAt: block.timestamp
             })
         );
     }
@@ -850,29 +878,41 @@ contract SafeIntegrationTest is Test {
 
         address newVault = makeAddr("vaultForCancel");
         VaultRegistry.VaultMetadata memory meta = VaultRegistry.VaultMetadata({
-            name: "Cancel Test",
-            asset: address(usdc),
-            registeredAt: block.timestamp
+            name: "Cancel Test", asset: address(usdc), registeredAt: block.timestamp
         });
         bytes memory callData = abi.encodeCall(VaultRegistry.registerVault, (newVault, meta));
         bytes32 predecessor = bytes32(0);
         bytes32 salt = keccak256("cancel-salt");
 
-        bytes32 opId =
-            d.timelock.hashOperation(address(registry), 0, callData, predecessor, salt);
+        bytes32 opId = d.timelock.hashOperation(address(registry), 0, callData, predecessor, salt);
 
         // Schedule via Safe.
         bytes memory scheduleCall = abi.encodeCall(
-            d.timelock.schedule,
-            (address(registry), 0, callData, predecessor, salt, MIN_DELAY)
+            d.timelock.schedule, (address(registry), 0, callData, predecessor, salt, MIN_DELAY)
         );
         bytes32 scheduleTxHash = safe.getTransactionHash(
-            address(d.timelock), 0, scheduleCall, 0, 0, 0, 0, address(0),
-            payable(address(0)), safe.nonce()
+            address(d.timelock),
+            0,
+            scheduleCall,
+            0,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            safe.nonce()
         );
         safe.execTransaction(
-            address(d.timelock), 0, scheduleCall, 0, 0, 0, 0, address(0),
-            payable(address(0)), _buildTwoOwnerSigs(scheduleTxHash)
+            address(d.timelock),
+            0,
+            scheduleCall,
+            0,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            _buildTwoOwnerSigs(scheduleTxHash)
         );
 
         // Cancel via Safe (CANCELLER_ROLE is held by the TimelockController admin —
@@ -894,18 +934,32 @@ contract SafeIntegrationTest is Test {
         // Advance past delay — attempt execute should revert.
         vm.warp(block.timestamp + MIN_DELAY + 1);
 
-        bytes memory executeCall = abi.encodeCall(
-            d.timelock.execute,
-            (address(registry), 0, callData, predecessor, salt)
-        );
+        bytes memory executeCall =
+            abi.encodeCall(d.timelock.execute, (address(registry), 0, callData, predecessor, salt));
         bytes32 executeTxHash = safe.getTransactionHash(
-            address(d.timelock), 0, executeCall, 0, 0, 0, 0, address(0),
-            payable(address(0)), safe.nonce()
+            address(d.timelock),
+            0,
+            executeCall,
+            0,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            safe.nonce()
         );
         vm.expectRevert();
         safe.execTransaction(
-            address(d.timelock), 0, executeCall, 0, 0, 0, 0, address(0),
-            payable(address(0)), _buildTwoOwnerSigs(executeTxHash)
+            address(d.timelock),
+            0,
+            executeCall,
+            0,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            _buildTwoOwnerSigs(executeTxHash)
         );
     }
 }

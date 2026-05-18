@@ -372,9 +372,7 @@ contract DeployTimelockTest is Test {
         // Confirm this address is truly an EOA (no bytecode).
         assertEq(eoaSafe.code.length, 0, "pre-condition: address must be an EOA");
 
-        vm.expectRevert(
-            bytes("SAFE_ADDRESS is an EOA: deploy a Safe multisig contract first")
-        );
+        vm.expectRevert(bytes("SAFE_ADDRESS is an EOA: deploy a Safe multisig contract first"));
         script.runInProcess(
             address(registry),
             address(registry),
@@ -396,9 +394,7 @@ contract DeployTimelockTest is Test {
     function test_deploy_revertsWhenSafeThresholdTooLow() public {
         MockLowThresholdSafe lowSafe = new MockLowThresholdSafe();
 
-        vm.expectRevert(
-            bytes("SAFE_ADDRESS threshold < 2: configure at least 2-of-N quorum")
-        );
+        vm.expectRevert(bytes("SAFE_ADDRESS threshold < 2: configure at least 2-of-N quorum"));
         script.runInProcess(
             address(registry),
             address(registry),
