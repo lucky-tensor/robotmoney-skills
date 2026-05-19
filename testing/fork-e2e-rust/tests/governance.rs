@@ -244,11 +244,7 @@ fn register_vault(
 /// Required for vaults that do not implement `IPrototypeAware` (issue #447):
 /// `PortfolioRouter._requireRouterEligible` reverts with
 /// `VaultEligibilityNotAttested` until the ADMIN_ROLE caller opts the vault in.
-fn attest_non_prototype(
-    admin: &rmpc_fork_e2e::Account<'_>,
-    router: Address,
-    vault: Address,
-) {
+fn attest_non_prototype(admin: &rmpc_fork_e2e::Account<'_>, router: Address, vault: Address) {
     admin
         .send(
             router,
