@@ -1,5 +1,5 @@
 # ProtocolAssetVault
-[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/60eddc5d5c695082281a4a0584160a58dfe2e50e/contracts/vaults/ProtocolAssetVault.sol)
+[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/4657e0998ea86d624b2c44e64051b74c4f3664c9/contracts/vaults/ProtocolAssetVault.sol)
 
 **Inherits:**
 [BasketVault](/contracts/vaults/BasketVault.sol/abstract.BasketVault.md)

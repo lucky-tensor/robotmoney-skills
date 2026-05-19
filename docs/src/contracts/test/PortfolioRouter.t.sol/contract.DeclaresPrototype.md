@@ -1,5 +1,5 @@
 # DeclaresPrototype
-[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/60eddc5d5c695082281a4a0584160a58dfe2e50e/contracts/test/PortfolioRouter.t.sol)
+[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/4657e0998ea86d624b2c44e64051b74c4f3664c9/contracts/test/PortfolioRouter.t.sol)
 
 Smallest possible contract that re-exports the same `isPrototype()`
 signature `BasketVault` ships with, so the router gate can be
