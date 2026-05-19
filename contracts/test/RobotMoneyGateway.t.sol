@@ -1243,6 +1243,47 @@ contract GatewayWithdrawTest is Test {
         );
     }
 
+    // View helper `effectiveWithdrawWindowGross` returns 0 for an agent that
+    // has never withdrawn (windowStart == 0 branch).
+    function test_effectiveWithdrawWindowGross_zeroForUntouchedAgent() public view {
+        assertEq(
+            gateway.effectiveWithdrawWindowGross(agent),
+            0,
+            "untouched agent must report zero rolling-window gross"
+        );
+    }
+
+    // View helper `effectiveWithdrawWindowGross` returns 0 after the rolling
+    // window has fully expired (expired-anchor branch).
+    function test_effectiveWithdrawWindowGross_zeroAfterWindowExpires() public {
+        _authorize(_defaultPolicy());
+        uint256 shares = MAX_WITHDRAW_PER_PAYMENT;
+        _mintSharesAndApprove(shares);
+
+        vm.prank(agent);
+        gateway.withdraw(
+            keccak256("o-expire"),
+            shares,
+            address(vault),
+            uint64(block.timestamp + 60),
+            keccak256("i-expire")
+        );
+        assertEq(
+            gateway.effectiveWithdrawWindowGross(agent),
+            shares,
+            "in-window gross must reflect the draw"
+        );
+
+        // Advance past WINDOW_SECONDS — the rolling window is now expired
+        // and the view must report zero usage.
+        vm.warp(block.timestamp + gateway.WINDOW_SECONDS());
+        assertEq(
+            gateway.effectiveWithdrawWindowGross(agent),
+            0,
+            "expired rolling window must report zero gross"
+        );
+    }
+
     // Inside a single rolling window, any withdrawal pattern up to the cap
     // must continue to succeed (#449 acceptance criterion).
     function test_withdraw_rollingWindow_intraWindowPatternStillSucceeds() public {

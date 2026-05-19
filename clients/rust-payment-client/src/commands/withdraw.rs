@@ -15,7 +15,7 @@
 //!    d. agent policy active + not expired
 //!    e. shares <= agent maxWithdrawPerPayment (withdrawal-specific cap)
 //!    f. effectiveWithdrawWindowGross + shares <= maxWithdrawPerWindow
-//!       (issue #449: rolling-window cap; preserves loss-budget at boundaries)
+//!    (issue #449: rolling-window cap; preserves loss-budget at boundaries)
 //!    g. vault.paused() == false
 //!    h. vault.allowance(agent, gateway) >= shares
 //!    i. vault.balanceOf(agent) >= shares
