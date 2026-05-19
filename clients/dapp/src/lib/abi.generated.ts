@@ -2858,6 +2858,25 @@ export const routerAbiGenerated = [
   },
   {
     type: "function",
+    name: "isRouterEligible",
+    inputs: [
+      {
+        name: "vault",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "eligible",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "previewDeposit",
     inputs: [
       {
@@ -2898,6 +2917,25 @@ export const routerAbiGenerated = [
             internalType: "bool",
           },
         ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "prototypeOverride",
+    inputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
       },
     ],
     stateMutability: "view",
@@ -2963,6 +3001,24 @@ export const routerAbiGenerated = [
       },
     ],
     stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "setPrototypeOverride",
+    inputs: [
+      {
+        name: "vault",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "allowed",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
     type: "function",
@@ -3063,6 +3119,31 @@ export const routerAbiGenerated = [
       },
     ],
     stateMutability: "view",
+  },
+  {
+    type: "event",
+    name: "PrototypeOverrideSet",
+    inputs: [
+      {
+        name: "vault",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "oldValue",
+        type: "bool",
+        indexed: false,
+        internalType: "bool",
+      },
+      {
+        name: "newValue",
+        type: "bool",
+        indexed: false,
+        internalType: "bool",
+      },
+    ],
+    anonymous: false,
   },
   {
     type: "event",
@@ -3335,8 +3416,46 @@ export const routerAbiGenerated = [
   },
   {
     type: "error",
+    name: "VaultAssetMismatch",
+    inputs: [
+      {
+        name: "vault",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "vaultAsset",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "VaultAssetUnreadable",
+    inputs: [
+      {
+        name: "vault",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+  },
+  {
+    type: "error",
     name: "VaultCapExceeded",
     inputs: [],
+  },
+  {
+    type: "error",
+    name: "VaultIsPrototype",
+    inputs: [
+      {
+        name: "vault",
+        type: "address",
+        internalType: "address",
+      },
+    ],
   },
   {
     type: "error",

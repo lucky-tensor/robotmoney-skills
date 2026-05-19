@@ -1,5 +1,5 @@
 # DeployTimelockTest
-[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/b447b3c942571522a243df98942e1c4f5c32d4e3/contracts/test/DeployTimelock.t.sol)
+[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/75c9d821b281975c99c1bcf5090a766acfe071b0/contracts/test/DeployTimelock.t.sol)
 
 **Inherits:**
 Test
@@ -44,7 +44,7 @@ address internal admin = makeAddr("admin")
 ### safe
 
 ```solidity
-address internal safe = makeAddr("safe")
+address internal safe
 ```
 
 
@@ -66,6 +66,20 @@ address internal newAdmin = makeAddr("newAdmin")
 
 ```solidity
 TestERC20 internal usdc
+```
+
+
+### vault
+
+```solidity
+RobotMoneyVault internal vault
+```
+
+
+### gateway
+
+```solidity
+RobotMoneyGateway internal gateway
 ```
 
 
@@ -134,6 +148,26 @@ function test_timelock_holdsAdminRoleOnRouter() public view;
 
 ```solidity
 function test_timelock_holdsAdminRoleOnGovernance() public view;
+```
+
+### test_timelock_holdsAdminRoleOnVault
+
+After DeployTimelock, the TimelockController holds ADMIN_ROLE on
+the real RobotMoneyVault instance (not a registry placeholder).
+
+
+```solidity
+function test_timelock_holdsAdminRoleOnVault() public view;
+```
+
+### test_timelock_holdsAdminRoleOnGateway
+
+After DeployTimelock, the TimelockController holds ADMIN_ROLE on
+the real RobotMoneyGateway instance (not a registry placeholder).
+
+
+```solidity
+function test_timelock_holdsAdminRoleOnGateway() public view;
 ```
 
 ### test_deployer_noLongerHasAdminRoleOnRegistry
@@ -239,5 +273,30 @@ function test_deploy_revertsOnZeroSafe() public;
 
 ```solidity
 function test_deploy_revertsOnZeroMinDelay() public;
+```
+
+### test_deploy_revertsWhenSafeIsEOA
+
+DeployTimelock.s.sol aborts when SAFE_ADDRESS has no deployed code.
+
+We pass a freshly-minted address that has no bytecode.  The script's
+new `code.length` guard should revert before attempting any state writes.
+
+
+```solidity
+function test_deploy_revertsWhenSafeIsEOA() public;
+```
+
+### test_deploy_revertsWhenSafeThresholdTooLow
+
+DeployTimelock.s.sol aborts when the Safe at SAFE_ADDRESS has threshold < 2.
+
+We deploy a `MockLowThresholdSafe` that returns `1` from `getThreshold()`.
+Passing a 1-of-N Safe as PROPOSER would reduce multisig security to a
+single-key model.
+
+
+```solidity
+function test_deploy_revertsWhenSafeThresholdTooLow() public;
 ```
 

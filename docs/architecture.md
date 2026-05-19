@@ -443,8 +443,7 @@ Credential boundary:
 - it does not persist production private keys;
 - browser-generated software credentials are fork/devnet-only,
   feature-gated, immediately exported, clearly labeled unsafe for
-  production, and rejected by `rmpc` on non-fork chains unless an
-  explicit unsafe override is supplied.
+  production, and rejected by `rmpc` for Base mainnet write commands.
 
 Every admin or policy signing prompt must decode target, function,
 arguments, role/policy effect, and risk class before invoking the
@@ -635,7 +634,7 @@ this architecture:
 | Protocol revenue and buyback-and-burn execution | Resolved: deferred to a future phase alongside management fee and swap-fee-share. | Require a separate ADR; when implemented, add a narrow revenue collector plus buyback executor with indexed events and admin bounds. |
 | On-chain admin timelock | Resolved: required. `docs/security-model.md` §4 deferred this until bucket-B/C governance landed; VaultRegistry, PortfolioRouter, and RouterGovernance are now in the codebase. All five protocol contracts must transfer `ADMIN_ROLE` to an OZ `TimelockController` before mainnet scale. | Deploy `TimelockController`; transfer `ADMIN_ROLE` on all five contracts to it; configure existing Safe as proposer and canceller; prefer open execution unless a restricted Safe executor is explicitly justified. See §4.5 and issue #414. |
 | Production JSON-RPC provider | Safety-critical reads depend on provider correctness and availability. | Support configured primary plus documented fallback; defer multi-RPC consensus until a specific risk justifies it. |
-| Production signer vendor | Architecture prefers non-exportable hardware/KMS keys but no vendor is chosen. | Keep signer backend trait stable; ship software only for dev/low-value use until a production operator picks HSM/KMS. |
+| Production signer vendor | Architecture requires a production-grade HSM/KMS/device-bound signer for Base mainnet writes, but no vendor is chosen. | Keep signer backend trait stable; refuse software-keystore signing on Base mainnet until a production operator picks HSM/KMS. |
 | Dapp hosting and CSP | Security model flags XSS/build compromise as unresolved. | Require static hosting with strict CSP, pinned dependencies, and release provenance before public mainnet use. |
 | Email/notification provider | No product or technical doc selects one. | Leave out until a concrete notification workflow is specified. |
 
