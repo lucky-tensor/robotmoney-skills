@@ -567,9 +567,7 @@ contract PortfolioRouterTest is Test {
         vm.prank(admin);
         vm.expectRevert(
             abi.encodeWithSelector(
-                PortfolioRouter.VaultAssetMismatch.selector,
-                address(badVault),
-                address(otherAsset)
+                PortfolioRouter.VaultAssetMismatch.selector, address(badVault), address(otherAsset)
             )
         );
         router.setWeights(vaults, bps);
@@ -629,9 +627,7 @@ contract PortfolioRouterTest is Test {
         vm.prank(depositor);
         vm.expectRevert(
             abi.encodeWithSelector(
-                PortfolioRouter.VaultAssetMismatch.selector,
-                address(vaultA),
-                address(otherAsset)
+                PortfolioRouter.VaultAssetMismatch.selector, address(vaultA), address(otherAsset)
             )
         );
         router.deposit(amount, new uint256[](0));
@@ -651,9 +647,7 @@ contract PortfolioRouterTest is Test {
         vm.prank(depositor);
         vm.expectRevert(
             abi.encodeWithSelector(
-                PortfolioRouter.VaultAssetMismatch.selector,
-                address(vaultB),
-                address(otherAsset)
+                PortfolioRouter.VaultAssetMismatch.selector, address(vaultB), address(otherAsset)
             )
         );
         router.depositFor(depositor, amount, new uint256[](0));
