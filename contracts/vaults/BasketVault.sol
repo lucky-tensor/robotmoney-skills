@@ -635,6 +635,13 @@ abstract contract BasketVault is ERC4626, AccessControl, Pausable, ReentrancyGua
     ///      `EmergencyUnwindLossCapExceeded` revert so off-chain consumers see
     ///      a stable error surface regardless of the underlying router's
     ///      slippage revert format.
+    // slither-disable-start reentrancy-balance
+    // The caller (`emergencyUnwindWithOverride`) holds the contract-level
+    // `nonReentrant` guard, so the pre-call `balanceOf` read cannot be observed
+    // by a reentrant call before the swap completes. The post-call comparison
+    // against `appliedFloor` uses the router's freshly-returned `received`
+    // amount, not the stale `bal`, so the "stale balance used after the call"
+    // pattern flagged by slither is a false positive here.
     function _emergencyUnwindAssetWithCap(AssetInfo memory assetInfo, uint256 appliedFloor)
         internal
     {
@@ -657,4 +664,5 @@ abstract contract BasketVault is ERC4626, AccessControl, Pausable, ReentrancyGua
         }
         emit Swapped(assetInfo.token, address(_USDC), bal, received);
     }
+    // slither-disable-end reentrancy-balance
 }
