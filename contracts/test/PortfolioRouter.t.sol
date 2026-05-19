@@ -1078,8 +1078,7 @@ contract PortfolioRouterTest is Test {
     ///         pricing. Acts as a docs-grep regression so a future edit
     ///         cannot silently remove the warning that anchors the gate.
     function test_docs_warningPresentForPrototypeBasketVaults() public view {
-        string memory body =
-            vm.readFile("./docs/code-reviews/review-codex-20260518-234945.md");
+        string memory body = vm.readFile("./docs/code-reviews/review-codex-20260518-234945.md");
         // Sentinel string lives in §3 remediation status of the canonical
         // doc. If a doc edit removes the warning, this test fails and
         // forces the editor to either re-introduce the warning or

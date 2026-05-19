@@ -266,10 +266,7 @@ contract PortfolioRouter is AccessControl, ReentrancyGuard {
     ///                prototype status.
     /// @param allowed New override value. `true` lifts the prototype gate
     ///                for this single vault; `false` re-engages it.
-    function setPrototypeOverride(address vault, bool allowed)
-        external
-        onlyRole(ADMIN_ROLE)
-    {
+    function setPrototypeOverride(address vault, bool allowed) external onlyRole(ADMIN_ROLE) {
         if (vault == address(0)) revert ZeroAddress();
         emit PrototypeOverrideSet(vault, prototypeOverride[vault], allowed);
         prototypeOverride[vault] = allowed;
