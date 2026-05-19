@@ -415,9 +415,9 @@ abstract contract BasketVault is ERC4626, AccessControl, Pausable, ReentrancyGua
         // Verify pool actually pairs this token with USDC.
         address t0 = IUniswapV3Pool(pool_).token0();
         address t1 = IUniswapV3Pool(pool_).token1();
-        if (
-            !((t0 == token_ && t1 == address(_USDC)) || (t1 == token_ && t0 == address(_USDC)))
-        ) revert PoolTokenMismatch();
+        if (!((t0 == token_ && t1 == address(_USDC)) || (t1 == token_ && t0 == address(_USDC)))) {
+            revert PoolTokenMismatch();
+        }
         assets.push(AssetInfo({token: token_, pool: pool_, swapFee: swapFee_, active: true}));
         emit AssetAdded(assets.length - 1, token_, pool_, swapFee_);
     }
