@@ -1,3 +1,5 @@
+// Canonical: none — generated ABI bindings; regenerated from contracts/
+
 // THIS FILE IS AUTO-GENERATED — DO NOT EDIT BY HAND.
 // Re-generate with: bash .github/scripts/generate_abi_bindings.sh
 // Source: contracts/out/ (Foundry build artifacts)
