@@ -396,11 +396,12 @@ and the intra-vault rebalancing model.
 
 Flagged for narrative value (SP500 perp via Hyperliquid, commodities).
 Requires separate legal, oracle, liquidation, disclosure, and redemption
-work before inclusion in Portfolio Router allocations (§3.14).
+work before inclusion in Portfolio Router allocations (a business/launch
+decision tracked outside this repository).
 
 # Robot Money — Open Questions
 
-Unresolved questions derived from reading the three source documents kept locally under `docs/papers/`:
+Unresolved **product and engineering** questions derived from reading the three source documents kept locally under `docs/papers/`:
 
 - `Robot-Money-Whitepaper-v01` (Protocol Specification v0.1, February 2026)
 - `robot_money_plan_v4` (Gen Ventures × ZHC plan)
@@ -408,27 +409,27 @@ Unresolved questions derived from reading the three source documents kept locall
 
 > **Source docs are confidential and local-only.** The PDF/docx originals and their verbatim markdown conversions are not committed to this repository (see `.gitignore`). This document is the public surface; quotations and section references below are the only public reflection of the source-doc contents.
 
-The docs were authored at different moments with different scopes and were not reconciled before being collected here. This document tracks only the questions that are **still open**.
+This document tracks only the questions that are **still open and product/engineering-owned** — governance, contract, and UX design decisions.
 
-> **Resolved items live elsewhere.** The cross-document contradictions surfaced from the source papers were resolved in the 2026-05-26 pass, with each decision checked against the deployed code. The decisions and their code evidence are recorded in **issue #470**, and are stated as facts in the PRD body and `docs/architecture.md` (§2–4, §10). They are no longer repeated here. Section numbers below are preserved from the original document so existing cross-references stay valid; removed numbers (§1.1, §1.2, §1.6, §1.7, §1.8, §3.11, §3.12, §3.13) were resolved or folded elsewhere.
-
-Each item is tagged **[Product]** (defines how the system works — governance, contract, or UX design the product team owns) or **[Business]** (legal, pricing, tokenomics, ops, or go-to-market decisions that do not block product design).
+> **Out of scope here:** resolved contradictions and their code evidence live in **issue #470** (and are asserted as facts in the PRD body and `docs/architecture.md` §2–4, §10). Business, legal, pricing, tokenomics, agent-persona, audit, multi-chain, and other go-to-market/launch decisions are **tracked outside this repository** and are intentionally not listed here.
+>
+> Section numbers are preserved from the original document so existing cross-references stay valid; numbers no longer present here (§1.1, §1.2, §1.6–§1.8, §2, §3.3, §3.6, §3.11–§3.14) were resolved (#470) or moved to the external business tracker.
 
 ---
 
 ## 1. Cross-document contradictions (open)
 
-All **[Product]**. Single governance token (was §1.1), multi-vault + Portfolio Router (was §1.2/§1.6), vault-first/Base launch (was §1.7), and the treasury-access wedge (was §1.8) are resolved — see issue #470.
+Single governance token (was §1.1), multi-vault + Portfolio Router (was §1.2/§1.6), vault-first/Base launch (was §1.7), and the treasury-access wedge (was §1.8) are resolved — see issue #470.
 
-### 1.3 Agent-token shortlist ownership — [Product]
+### 1.3 Agent-token shortlist ownership
 
 For the current product the agent-token vault shortlist is admin/protocol-curated (`contracts/vaults/AgentTokenVault.sol`). Unresolved is the long-term model: admin curation vs. `$RM`-token inclusion proposals vs. the designed-in bribery flow (agents lobby/pay `$RM` to push their token into the vault). The source PRD's inclusion-proposal / quorum / displacement / 15-token-cap machinery only applies if a bottom-up model is chosen. **Status: TBD** — out of current router-weight governance scope.
 
-### 1.4 Shortlist vote mechanic — [Product]
+### 1.4 Shortlist vote mechanic
 
 The implemented vote is bps allocation across active vaults for Portfolio Router weights (resolved, issue #470). Unresolved is the mechanic for any *future agent-token shortlist* vote: ranked-choice over the shortlist (whitepaper) vs. token-level bps allocation (source PRD). **Status: TBD**, pending the §1.3 ownership decision.
 
-### 1.5 Governance tiers — [Product]
+### 1.5 Governance tiers
 
 No tier system exists today; `RouterGovernance` is flat (admin-assigned voting power now, RM-balance-linear later). The source PRD's four tiers (Observer / Participant / Analyst / Strategist) plus a 14-day activity gate are unbuilt.
 
@@ -436,69 +437,43 @@ No tier system exists today; `RouterGovernance` is flat (admin-assigned voting p
 
 ---
 
-## 2. Pre-launch decisions still open
-
-All **[Business]** (legal, pricing, tokenomics, ops, GTM). Resolved ones — stablecoin = USDC, no agent-identity requirement, no `$RM v2`, build-in-house genesis infrastructure — are in issue #470.
-
-- **Legal entity structure.** Vault management likely constitutes fund management; may need an offshore foundation (Cayman, BVI) or a DAO legal wrapper (Wyoming, Marshall Islands). Counsel review pre-launch. **TBD.**
-- **Performance fee.** Whether to add a performance fee (e.g. 20% of gains above a hurdle) on top of the management fee. **TBD;** current scope ships exit-fee-only disclosure.
-- **Deposit-cap amounts.** Caps are required at the vault, Portfolio Router, and agent-policy levels (mechanism built); the exact launch cap amounts are **TBD.**
-- **Agent persona.** Identity, hosting, posting infrastructure, and ongoing cost. **TBD.**
-- **Tokenomics.** Supply, initial allocation, launch terms, Clanker fee terms, and buyback mechanics. **TBD** (see §3.3). The token *shape* — a single `$ROBOTMONEY` governance token — is decided (issue #470).
-- **Audit budget and timeline.** **TBD.**
-- **Multi-chain expansion.** Launch chain is Base; whether/when to deploy cross-chain (CCIP, LayerZero) to Polygon, Ethereum mainnet, Peaq, etc. is a deferred future decision, not a launch blocker.
-
----
-
 ## 3. Gaps — questions none of the docs answer
 
-Topics that are load-bearing for the protocol but not addressed in any source document. Each is tagged [Product] or [Business]. The structural gaps that have since been decided — production chain = Base (was §3.11), the multi-vault wrapping mechanism = Portfolio Router rather than a meta-vault (was §3.12), and build-in-house vs. providers (was §3.13) — are recorded in issue #470.
+Product/engineering topics that are load-bearing for the protocol but not addressed in any source document. The structural gaps that have since been decided — production chain = Base (was §3.11), wrapping mechanism = Portfolio Router rather than a meta-vault (was §3.12), and build-in-house vs. providers (was §3.13) — are recorded in issue #470. Business-owned gaps (prop-wallet accounting, CFO Feed economics, RWA feasibility) are tracked outside this repository.
 
-### 3.1 Quant filter operationalization — [Product]
+### 3.1 Quant filter operationalization
 
 The thresholds are defined ($10M mcap, 90 days, $100K volume, 500 holders) but not the *measurement methodology*: which oracle/aggregator, what averaging window, how disputes are resolved. The PRD mentions "CoinGecko + on-chain" with "consensus required if sources disagree" but does not specify rules. **TBD.** Not needed for the router-weight vote; required before agent-token shortlist governance ships.
 
-### 3.2 Agent-token vault trading authority — [Product]
+### 3.2 Agent-token vault trading authority
 
 The whitepaper says the agent trades agent-economy tokens using on-chain signals (volume, holder distribution, treasury health, developer activity), but no doc specifies the trading strategy, position-sizing rules, stop-loss enforcement, or how losses are reported in NAV in real time. Trading authority, strategy, position sizing, and reporting remain **TBD** and are out of scope for Portfolio Router weight governance.
 
-### 3.3 Prop wallet seeding and accounting — [Business]
-
-The whitepaper says the prop wallet is "seeded from Clanker launch fees" but does not quantify expected initial capital, nor specify how the prop wallet's PnL accounting handles unrealized gains, mark-to-market reporting, or tax-lot identification for buyback triggers. **TBD** — tied to token launch and Clanker terms (§2).
-
-### 3.4 Multisig composition and trust — [Product]
+### 3.4 Multisig composition and trust
 
 Vote results that drive weight updates must be executed under admin authority held by a multisig/timelock. No doc names signers, defines challenge-window dispute resolution, or specifies what happens if signers disagree with the published tally. **TBD.**
 
-### 3.5 Vault upgrade and retirement path — [Product]
+### 3.5 Vault upgrade and retirement path
 
 The whitepaper says "no upgradeability — immutable contract," while Plan v4 and the PRD describe progressive expansion. The multi-vault architecture reduces pressure to mutate one monolithic vault — new exposure types can ship as new vaults and become active router destinations — but the exact upgradeability, migration, and retirement mechanics per vault and per router contract remain **TBD.**
 
-### 3.6 Agent CFO Feed economics — [Business]
-
-The PRD describes a content product (registration, posting, upvoting, comments) with no fee model; hosting, RPC, IPFS, and moderation costs are not allocated. **TBD / out of current scope** — the CFO Feed is not part of the application-completeness target.
-
-### 3.7 Withdrawal mechanics under basket-vault drawdown — [Product]
+### 3.7 Withdrawal mechanics under basket-vault drawdown
 
 The default product promise is synchronous withdrawal at NAV minus exit fee. No doc specifies what happens when a basket vault holds positions that cannot be unwound synchronously and a depositor wants to exit — forced sale, queued withdrawal, or NAV haircut. Vaults that cannot support synchronous redemption must be labeled separately and excluded from Portfolio Router allocations until the promise changes. Agent-token vault drawdown mechanics remain **TBD.**
 
-### 3.8 Inclusion-attack economic bounds — [Product]
+### 3.8 Inclusion-attack economic bounds
 
 The whitepaper argues the inclusion attack is self-punishing because attackers' `$RM` loses value if their token underperforms, but the magnitude is not modeled: how much `$RM` must an attacker hold to swing allocation, vs. the vault buy pressure produced, vs. expected `$RM` loss from underperformance? Without numbers, "self-punishing" is an assertion, not a proof. **TBD** — applicable only if/when RM governance controls agent-token inclusion or per-vault asset selection.
 
-### 3.9 Quorum cliff — [Product]
+### 3.9 Quorum cliff
 
 If the vote falls just below quorum, the default allocation executes; if just above, voted weights execute. No doc addresses smoothing (e.g. a continuous blend between voted and default weights as quorum scales) to avoid governance whiplash. **TBD** — router-weight voting still needs quorum, cadence, threshold, execution, and fallback rules.
 
-### 3.10 Failure modes for the protocol agent itself — [Product]
+### 3.10 Failure modes for the protocol agent itself
 
 A protocol agent that publishes shortlists, runs the default allocation, executes rebalances, and posts the public narrative is a single point of failure. No doc addresses what happens if it goes offline, is compromised, hallucinates a bad allocation, or its operator steps away; there is no agent-of-last-resort or emergency pause that names a controller. Partially avoided for current scope (the only specified vote is RM-token router weights, not protocol-agent-run shortlist selection), but agent-token shortlist and protocol-agent responsibilities remain **TBD.**
 
-### 3.14 RWA vault feasibility — [Business]
-
-The product owner mentioned an RWA vault built around a Hyperliquid SP500 perp position, possibly extended to commodities — primarily a "story-telling" exposure. None of the source papers describe RWA, and the mechanics are non-trivial: a perp is not a spot RWA, and exposing depositors to perp funding/liquidation risk under a "vault" framing has user-protection implications. **TBD / future** — RWA or thematic vaults are allowed by the product taxonomy but require separate legal, liquidation, oracle, and user-disclosure work before inclusion in Portfolio Router allocations.
-
-### 3.15 Intra-vault rebalancing when the basket changes — [Product]
+### 3.15 Intra-vault rebalancing when the basket changes
 
 Basket vaults (protocol-asset and agent-token) allocate new deposits equally across active assets at deposit time. Existing positions are not touched when an asset is added or removed, creating drift. Three sub-questions are open:
 
@@ -512,11 +487,9 @@ Vault-level rebalancing is distinct from Portfolio Router weight updates, which 
 
 ## 4. Suggested resolution order
 
-The resolved architecture, Portfolio Router scope, Base launch chain, build-in-house decision, and router-weight governance scope (issue #470) are no longer in this list. Remaining open decisions, ordered:
+The resolved architecture, Portfolio Router scope, Base launch chain, build-in-house decision, and router-weight governance scope (issue #470) are out of this list, as are all business/launch decisions (tracked externally). Remaining open product/engineering decisions, ordered:
 
-1. **Tokenomics and RM vote mechanics** [Business/Product] — supply, launch terms, Clanker terms, voting power, quorum, cadence, execution, fallback rules, and buyback mechanics (§2, §3.3, §3.9).
-2. **Portfolio Router implementation details** [Product] — contract API, preview semantics, failure behavior, receipt delivery, cap model, and vote-to-weight execution.
-3. **Agent-token vault internals** [Product] — shortlist ownership and inclusion rules, the shortlist vote mechanic, trading authority, position sizing, attack economics, whether tiers are needed, and intra-vault rebalancing trigger/target/cost (§1.3, §1.4, §1.5, §3.1, §3.2, §3.8, §3.10, §3.15).
-4. **Launch controls and trust** [Product/Business] — multisig composition and challenge windows, upgrade/migration/retirement rules (§3.4, §3.5), plus legal entity and launch cap amounts (§2).
-5. **RWA/thematic vault feasibility** [Business] — legal, oracle, liquidation, disclosure, and redemption mechanics before any RWA vault is made active in the Portfolio Router (§3.14).
-6. **Future product surfaces** [Business] — CFO Feed economics, agent persona, and multi-chain expansion (§2, §3.6).
+1. **RM vote mechanics** — voting power, quorum, cadence, execution, and fallback rules for the router-weight vote (§3.9).
+2. **Portfolio Router implementation details** — contract API, preview semantics, failure behavior, receipt delivery, cap model, and vote-to-weight execution.
+3. **Agent-token vault internals** — shortlist ownership and inclusion rules, the shortlist vote mechanic, trading authority, position sizing, attack economics, whether tiers are needed, and intra-vault rebalancing trigger/target/cost (§1.3, §1.4, §1.5, §3.1, §3.2, §3.8, §3.10, §3.15).
+4. **Launch controls and trust** — multisig composition and challenge windows, and upgrade/migration/retirement rules (§3.4, §3.5).
