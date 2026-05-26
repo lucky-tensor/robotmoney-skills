@@ -409,73 +409,31 @@ Unresolved **product and engineering** questions derived from reading the three 
 
 > **Source docs are confidential and local-only.** The PDF/docx originals and their verbatim markdown conversions are not committed to this repository (see `.gitignore`). This document is the public surface; quotations and section references below are the only public reflection of the source-doc contents.
 
-This document tracks only the questions that are **still open and product/engineering-owned** — governance, contract, and UX design decisions.
+This document tracks only the questions that are **still open and product/engineering-owned**, grouped by topic. Items are tagged with their original `§x.y` identifier, retained as a stable anchor so existing cross-references from other docs still resolve; the identifiers no longer imply order.
 
-> **Out of scope here:** resolved contradictions and their code evidence live in **issue #470** (and are asserted as facts in the PRD body and `docs/architecture.md` §2–4, §10). Business, legal, pricing, tokenomics, agent-persona, audit, multi-chain, and other go-to-market/launch decisions are **tracked outside this repository** and are intentionally not listed here.
->
-> Section numbers are preserved from the original document so existing cross-references stay valid; numbers no longer present here (§1.1, §1.2, §1.6–§1.8, §2, §3.3, §3.6, §3.11–§3.14) were resolved (#470) or moved to the external business tracker.
+> **Out of scope here:** resolved contradictions and their code evidence live in **issue #470** (and are asserted as facts in the PRD body and `docs/architecture.md` §2–4, §10). Business, legal, pricing, tokenomics, agent-persona, audit, multi-chain, and other go-to-market/launch decisions are **tracked outside this repository**.
 
 ---
 
-## 1. Cross-document contradictions (open)
+## 1. Product topics
 
-Single governance token (was §1.1), multi-vault + Portfolio Router (was §1.2/§1.6), vault-first/Base launch (was §1.7), and the treasury-access wedge (was §1.8) are resolved — see issue #470.
+### 1.A Governance and voting
 
-### 1.3 Agent-token shortlist ownership
+**Router-weight vote rules (§3.9).** The implemented router-weight vote still needs quorum, cadence, threshold, execution, and fallback rules. In particular, no doc addresses the quorum cliff — if the vote falls just below quorum the default allocation executes; just above, voted weights execute — nor any smoothing (e.g. a continuous blend between voted and default weights as quorum scales) to avoid week-to-week governance whiplash. **TBD.**
 
-For the current product the agent-token vault shortlist is admin/protocol-curated (`contracts/vaults/AgentTokenVault.sol`). Unresolved is the long-term model: admin curation vs. `$RM`-token inclusion proposals vs. the designed-in bribery flow (agents lobby/pay `$RM` to push their token into the vault). The source PRD's inclusion-proposal / quorum / displacement / 15-token-cap machinery only applies if a bottom-up model is chosen. **Status: TBD** — out of current router-weight governance scope.
+**Governance tiers (§1.5).** No tier system exists today; `RouterGovernance` is flat (admin-assigned voting power now, RM-balance-linear later). The source PRD's four tiers (Observer / Participant / Analyst / Strategist) plus a 14-day activity gate are unbuilt. **Open question for the product owner:** do governance tiers and an activity gate matter to the MVP at all, or only to a future agent-token shortlist surface? Until ruled on, treat tiers as out of current scope but undecided as product direction — do not build the four-tier machinery.
 
-### 1.4 Shortlist vote mechanic
+**Agent-token shortlist ownership (§1.3).** For the current product the agent-token vault shortlist is admin/protocol-curated (`contracts/vaults/AgentTokenVault.sol`). Unresolved is the long-term model: admin curation vs. `$RM`-token inclusion proposals vs. the designed-in bribery flow (agents lobby/pay `$RM` to push their token into the vault). The source PRD's inclusion-proposal / quorum / displacement / 15-token-cap machinery only applies if a bottom-up model is chosen. **TBD** — out of current router-weight governance scope.
 
-The implemented vote is bps allocation across active vaults for Portfolio Router weights (resolved, issue #470). Unresolved is the mechanic for any *future agent-token shortlist* vote: ranked-choice over the shortlist (whitepaper) vs. token-level bps allocation (source PRD). **Status: TBD**, pending the §1.3 ownership decision.
+**Shortlist vote mechanic (§1.4).** The implemented vote is bps allocation across active vaults for Portfolio Router weights (resolved, issue #470). Unresolved is the mechanic for any *future agent-token shortlist* vote: ranked-choice over the shortlist (whitepaper) vs. token-level bps allocation (source PRD). **TBD**, pending the §1.3 ownership decision.
 
-### 1.5 Governance tiers
+### 1.B Agent-token vault internals
 
-No tier system exists today; `RouterGovernance` is flat (admin-assigned voting power now, RM-balance-linear later). The source PRD's four tiers (Observer / Participant / Analyst / Strategist) plus a 14-day activity gate are unbuilt.
+**Token eligibility / quant-filter methodology (§3.1).** The thresholds are defined ($10M mcap, 90 days, $100K volume, 500 holders) but not the *measurement methodology*: which oracle/aggregator, what averaging window, how disputes are resolved. The PRD mentions "CoinGecko + on-chain" with "consensus required if sources disagree" but does not specify rules. **TBD.** Not needed for the router-weight vote; required before agent-token shortlist governance ships.
 
-**Open question for the product owner:** Do governance tiers and an activity gate matter to the MVP at all, or only to a future agent-token shortlist surface? Until ruled on, treat tiers as out of current scope but undecided as product direction — do not build the four-tier machinery.
+**Trading authority and strategy (§3.2).** The whitepaper says the agent trades agent-economy tokens using on-chain signals (volume, holder distribution, treasury health, developer activity), but no doc specifies the trading strategy, position-sizing rules, stop-loss enforcement, or how losses are reported in NAV in real time. Trading authority, strategy, position sizing, and reporting remain **TBD** and are out of scope for Portfolio Router weight governance.
 
----
-
-## 3. Gaps — questions none of the docs answer
-
-Product/engineering topics that are load-bearing for the protocol but not addressed in any source document. The structural gaps that have since been decided — production chain = Base (was §3.11), wrapping mechanism = Portfolio Router rather than a meta-vault (was §3.12), and build-in-house vs. providers (was §3.13) — are recorded in issue #470. Business-owned gaps (prop-wallet accounting, CFO Feed economics, RWA feasibility) are tracked outside this repository.
-
-### 3.1 Quant filter operationalization
-
-The thresholds are defined ($10M mcap, 90 days, $100K volume, 500 holders) but not the *measurement methodology*: which oracle/aggregator, what averaging window, how disputes are resolved. The PRD mentions "CoinGecko + on-chain" with "consensus required if sources disagree" but does not specify rules. **TBD.** Not needed for the router-weight vote; required before agent-token shortlist governance ships.
-
-### 3.2 Agent-token vault trading authority
-
-The whitepaper says the agent trades agent-economy tokens using on-chain signals (volume, holder distribution, treasury health, developer activity), but no doc specifies the trading strategy, position-sizing rules, stop-loss enforcement, or how losses are reported in NAV in real time. Trading authority, strategy, position sizing, and reporting remain **TBD** and are out of scope for Portfolio Router weight governance.
-
-### 3.4 Multisig composition and trust
-
-Vote results that drive weight updates must be executed under admin authority held by a multisig/timelock. No doc names signers, defines challenge-window dispute resolution, or specifies what happens if signers disagree with the published tally. **TBD.**
-
-### 3.5 Vault upgrade and retirement path
-
-The whitepaper says "no upgradeability — immutable contract," while Plan v4 and the PRD describe progressive expansion. The multi-vault architecture reduces pressure to mutate one monolithic vault — new exposure types can ship as new vaults and become active router destinations — but the exact upgradeability, migration, and retirement mechanics per vault and per router contract remain **TBD.**
-
-### 3.7 Withdrawal mechanics under basket-vault drawdown
-
-The default product promise is synchronous withdrawal at NAV minus exit fee. No doc specifies what happens when a basket vault holds positions that cannot be unwound synchronously and a depositor wants to exit — forced sale, queued withdrawal, or NAV haircut. Vaults that cannot support synchronous redemption must be labeled separately and excluded from Portfolio Router allocations until the promise changes. Agent-token vault drawdown mechanics remain **TBD.**
-
-### 3.8 Inclusion-attack economic bounds
-
-The whitepaper argues the inclusion attack is self-punishing because attackers' `$RM` loses value if their token underperforms, but the magnitude is not modeled: how much `$RM` must an attacker hold to swing allocation, vs. the vault buy pressure produced, vs. expected `$RM` loss from underperformance? Without numbers, "self-punishing" is an assertion, not a proof. **TBD** — applicable only if/when RM governance controls agent-token inclusion or per-vault asset selection.
-
-### 3.9 Quorum cliff
-
-If the vote falls just below quorum, the default allocation executes; if just above, voted weights execute. No doc addresses smoothing (e.g. a continuous blend between voted and default weights as quorum scales) to avoid governance whiplash. **TBD** — router-weight voting still needs quorum, cadence, threshold, execution, and fallback rules.
-
-### 3.10 Failure modes for the protocol agent itself
-
-A protocol agent that publishes shortlists, runs the default allocation, executes rebalances, and posts the public narrative is a single point of failure. No doc addresses what happens if it goes offline, is compromised, hallucinates a bad allocation, or its operator steps away; there is no agent-of-last-resort or emergency pause that names a controller. Partially avoided for current scope (the only specified vote is RM-token router weights, not protocol-agent-run shortlist selection), but agent-token shortlist and protocol-agent responsibilities remain **TBD.**
-
-### 3.15 Intra-vault rebalancing when the basket changes
-
-Basket vaults (protocol-asset and agent-token) allocate new deposits equally across active assets at deposit time. Existing positions are not touched when an asset is added or removed, creating drift. Three sub-questions are open:
+**Intra-vault rebalancing (§3.15).** Basket vaults (protocol-asset and agent-token) allocate new deposits equally across active assets at deposit time; existing positions are not touched when an asset is added or removed, creating drift. Three sub-questions are open:
 
 - **Who triggers rebalancing?** Admin-initiated (keeper calls a rebalance function), keeper-automated on a cadence, or depositor-self-service.
 - **What is the target?** Equal weight across current active assets, or a governed weight vector (which would require the basket to adopt router-weight-style governance)?
@@ -483,13 +441,31 @@ Basket vaults (protocol-asset and agent-token) allocate new deposits equally acr
 
 Vault-level rebalancing is distinct from Portfolio Router weight updates, which allocate across vaults rather than within one. **TBD.** The prototype routes only new deposits into equal-weight positions; a `rebalance()` admin function and its cost-disclosure model must be specified before the agent-token vault can meet the PRD's transparent-performance requirement.
 
+### 1.C Vault lifecycle and redemption
+
+**Upgrade, migration, and retirement (§3.5).** The whitepaper says "no upgradeability — immutable contract," while Plan v4 and the PRD describe progressive expansion. The multi-vault architecture reduces pressure to mutate one monolithic vault — new exposure types can ship as new vaults and become active router destinations — but the exact upgradeability, migration, and retirement mechanics per vault and per router contract remain **TBD.**
+
+**Withdrawal under basket-vault drawdown (§3.7).** The default product promise is synchronous withdrawal at NAV minus exit fee. No doc specifies what happens when a basket vault holds positions that cannot be unwound synchronously and a depositor wants to exit — forced sale, queued withdrawal, or NAV haircut. Vaults that cannot support synchronous redemption must be labeled separately and excluded from Portfolio Router allocations until the promise changes. Agent-token vault drawdown mechanics remain **TBD.**
+
+### 1.D Operational trust and safety
+
+**Multisig composition and trust (§3.4).** Vote results that drive weight updates must be executed under admin authority held by a multisig/timelock. No doc names signers, defines challenge-window dispute resolution, or specifies what happens if signers disagree with the published tally. **TBD.**
+
+**Protocol-agent failure modes (§3.10).** A protocol agent that publishes shortlists, runs the default allocation, executes rebalances, and posts the public narrative is a single point of failure. No doc addresses what happens if it goes offline, is compromised, hallucinates a bad allocation, or its operator steps away; there is no agent-of-last-resort or emergency pause that names a controller. Partially avoided for current scope (the only specified vote is RM-token router weights, not protocol-agent-run shortlist selection), but agent-token shortlist and protocol-agent responsibilities remain **TBD.**
+
 ---
 
-## 4. Suggested resolution order
+## 2. General research questions
 
-The resolved architecture, Portfolio Router scope, Base launch chain, build-in-house decision, and router-weight governance scope (issue #470) are out of this list, as are all business/launch decisions (tracked externally). Remaining open product/engineering decisions, ordered:
+Open-ended modeling and analysis that must be studied before the related product topic can be decided.
 
-1. **RM vote mechanics** — voting power, quorum, cadence, execution, and fallback rules for the router-weight vote (§3.9).
-2. **Portfolio Router implementation details** — contract API, preview semantics, failure behavior, receipt delivery, cap model, and vote-to-weight execution.
-3. **Agent-token vault internals** — shortlist ownership and inclusion rules, the shortlist vote mechanic, trading authority, position sizing, attack economics, whether tiers are needed, and intra-vault rebalancing trigger/target/cost (§1.3, §1.4, §1.5, §3.1, §3.2, §3.8, §3.10, §3.15).
-4. **Launch controls and trust** — multisig composition and challenge windows, and upgrade/migration/retirement rules (§3.4, §3.5).
+**Inclusion-attack economic bounds (§3.8).** The whitepaper argues the inclusion attack is self-punishing because attackers' `$RM` loses value if their token underperforms, but the magnitude is not modeled: how much `$RM` must an attacker hold to swing allocation, vs. the vault buy pressure produced, vs. expected `$RM` loss from underperformance? Without numbers, "self-punishing" is an assertion, not a proof. Requires economic modeling; applicable once RM governance controls agent-token inclusion or per-vault asset selection (§1.3). **Research open.**
+
+---
+
+## 3. Suggested resolution order
+
+1. **Router-weight vote rules** — quorum, cadence, threshold, execution, fallback (§3.9).
+2. **Portfolio Router implementation details** — contract API, preview semantics, failure behavior, receipt delivery, cap model, vote-to-weight execution.
+3. **Agent-token vault internals** — shortlist ownership and vote mechanic, whether tiers are needed, token eligibility methodology, trading authority, intra-vault rebalancing, and the inclusion-attack modeling that gates them (§1.3, §1.4, §1.5, §3.1, §3.2, §3.8, §3.15).
+4. **Vault lifecycle and operational trust** — upgrade/migration/retirement, basket-drawdown withdrawal, multisig composition, and protocol-agent failure modes (§3.4, §3.5, §3.7, §3.10).
