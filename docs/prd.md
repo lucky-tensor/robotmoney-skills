@@ -333,7 +333,7 @@ risk label, fee structure, accepted asset, withdrawal model, and status.
 | Management fee | Not implemented in current phase |
 | Swap-fee share | Not implemented in current phase |
 | Withdrawal | Synchronous; single transaction |
-| TVL cap | Configurable; launch cap TBD (see §2, §3.4) |
+| TVL cap | Configurable; launch cap amount is a business/ops decision tracked outside this repository |
 | Per-deposit cap | Configurable |
 | Status | Deployed on Base mainnet |
 
@@ -411,7 +411,7 @@ Unresolved **product and engineering** questions derived from reading the three 
 
 This document tracks only the questions that are **still open and product/engineering-owned**, grouped by topic. Items are tagged with their original `§x.y` identifier, retained as a stable anchor so existing cross-references from other docs still resolve; the identifiers no longer imply order.
 
-> **Out of scope here:** resolved contradictions and their code evidence live in **issue #470** (and are asserted as facts in the PRD body and `docs/architecture.md` §2–4, §10). Business, legal, pricing, tokenomics, agent-persona, audit, multi-chain, and other go-to-market/launch decisions are **tracked outside this repository**.
+> **Out of scope here:** resolved contradictions and their code evidence live in **issue #470** (and are asserted as facts in the PRD body and `docs/architecture.md` §2–4, §10). This now includes the admin-multisig mechanism (was §3.4): a canonical Safe (≥2-of-N) holds proposer/executor on an OZ `TimelockController` that holds `ADMIN_ROLE` on all five contracts — see `contracts/script/DeployTimelock.s.sol`, `docs/architecture.md` §10, and issues #414/#422; signer identities remain an ops decision. Business, legal, pricing, tokenomics, agent-persona, audit, multi-chain, and other go-to-market/launch decisions are **tracked outside this repository**.
 
 ---
 
@@ -449,8 +449,6 @@ Vault-level rebalancing is distinct from Portfolio Router weight updates, which 
 
 ### 1.D Operational trust and safety
 
-**Multisig composition and trust (§3.4).** Vote results that drive weight updates must be executed under admin authority held by a multisig/timelock. No doc names signers, defines challenge-window dispute resolution, or specifies what happens if signers disagree with the published tally. **TBD.**
-
 **Protocol-agent failure modes (§3.10).** A protocol agent that publishes shortlists, runs the default allocation, executes rebalances, and posts the public narrative is a single point of failure. No doc addresses what happens if it goes offline, is compromised, hallucinates a bad allocation, or its operator steps away; there is no agent-of-last-resort or emergency pause that names a controller. Partially avoided for current scope (the only specified vote is RM-token router weights, not protocol-agent-run shortlist selection), but agent-token shortlist and protocol-agent responsibilities remain **TBD.**
 
 ---
@@ -468,4 +466,4 @@ Open-ended modeling and analysis that must be studied before the related product
 1. **Router-weight vote rules** — quorum, cadence, threshold, execution, fallback (§3.9).
 2. **Portfolio Router implementation details** — contract API, preview semantics, failure behavior, receipt delivery, cap model, vote-to-weight execution.
 3. **Agent-token vault internals** — shortlist ownership and vote mechanic, whether tiers are needed, token eligibility methodology, trading authority, intra-vault rebalancing, and the inclusion-attack modeling that gates them (§1.3, §1.4, §1.5, §3.1, §3.2, §3.8, §3.15).
-4. **Vault lifecycle and operational trust** — upgrade/migration/retirement, basket-drawdown withdrawal, multisig composition, and protocol-agent failure modes (§3.4, §3.5, §3.7, §3.10).
+4. **Vault lifecycle and operational trust** — upgrade/migration/retirement, basket-drawdown withdrawal, and protocol-agent failure modes (§3.5, §3.7, §3.10).
