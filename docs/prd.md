@@ -419,7 +419,7 @@ This document tracks only the questions that are **still open and product/engine
 
 ### 1.A Governance and voting
 
-**Router-weight vote rules (§3.9).** The implemented router-weight vote still needs quorum, cadence, threshold, execution, and fallback rules. In particular, no doc addresses the quorum cliff — if the vote falls just below quorum the default allocation executes; just above, voted weights execute — nor any smoothing (e.g. a continuous blend between voted and default weights as quorum scales) to avoid week-to-week governance whiplash. **TBD.**
+**Router-weight vote rules (§3.9).** *Largely implemented.* `contracts/RouterGovernance.sol` has a configurable `votingPeriod` (cadence), `executionDelay`, and `quorumThreshold`; a proposal that fails quorum becomes `Defeated` and cannot execute (`QuorumNotReached`), so weights hold at the status quo — the implicit fallback. **Open residual:** whether to add governance-whiplash smoothing (a continuous blend between voted and default weights as quorum scales) or an explicit default-weight vector below quorum, rather than the current status-quo hold. A design preference, not a missing mechanism.
 
 **Governance tiers (§1.5).** No tier system exists today; `RouterGovernance` is flat (admin-assigned voting power now, RM-balance-linear later). The source PRD's four tiers (Observer / Participant / Analyst / Strategist) plus a 14-day activity gate are unbuilt. **Open question for the product owner:** do governance tiers and an activity gate matter to the MVP at all, or only to a future agent-token shortlist surface? Until ruled on, treat tiers as out of current scope but undecided as product direction — do not build the four-tier machinery.
 
@@ -443,13 +443,9 @@ Vault-level rebalancing is distinct from Portfolio Router weight updates, which 
 
 ### 1.C Vault lifecycle and redemption
 
-**Upgrade, migration, and retirement (§3.5).** The whitepaper says "no upgradeability — immutable contract," while Plan v4 and the PRD describe progressive expansion. The multi-vault architecture reduces pressure to mutate one monolithic vault — new exposure types can ship as new vaults and become active router destinations — but the exact upgradeability, migration, and retirement mechanics per vault and per router contract remain **TBD.**
+**Vault retirement and depositor migration (§3.5).** *Lifecycle resolved.* `contracts/VaultRegistry.sol` has an `Active`/`Paused`/`Retired` status (`setVaultStatus`), and `contracts/PortfolioRouter.sol` excludes non-Active vaults from deposits and previews; the "immutable vault vs. progressive expansion" tension is answered by shipping new exposure as new vaults rather than mutating one. **Open residual:** depositor migration when a vault is retired — retirement is a one-way status and existing depositors can still withdraw, but there is no forced or assisted migration path out of a retiring vault; whether one is needed is unresolved.
 
-**Withdrawal under basket-vault drawdown (§3.7).** The default product promise is synchronous withdrawal at NAV minus exit fee. No doc specifies what happens when a basket vault holds positions that cannot be unwound synchronously and a depositor wants to exit — forced sale, queued withdrawal, or NAV haircut. Vaults that cannot support synchronous redemption must be labeled separately and excluded from Portfolio Router allocations until the promise changes. Agent-token vault drawdown mechanics remain **TBD.**
-
-### 1.D Operational trust and safety
-
-**Protocol-agent failure modes (§3.10).** A protocol agent that publishes shortlists, runs the default allocation, executes rebalances, and posts the public narrative is a single point of failure. No doc addresses what happens if it goes offline, is compromised, hallucinates a bad allocation, or its operator steps away; there is no agent-of-last-resort or emergency pause that names a controller. Partially avoided for current scope (the only specified vote is RM-token router weights, not protocol-agent-run shortlist selection), but agent-token shortlist and protocol-agent responsibilities remain **TBD.**
+**Withdrawal under basket-vault drawdown (§3.7).** *Exclusion resolved.* Vaults that cannot guarantee synchronous redemption self-declare via `isPrototype()`, and `contracts/PortfolioRouter.sol` excludes them from allocation and previews; basket vaults are gated out this way today. **Open residual:** the explicit redemption policy for a basket vault *in drawdown* — forced sale vs. queued withdrawal vs. NAV haircut — must be specified before any basket vault can drop the prototype gate and become router-eligible.
 
 ---
 
@@ -459,11 +455,14 @@ Open-ended modeling and analysis that must be studied before the related product
 
 **Inclusion-attack economic bounds (§3.8).** The whitepaper argues the inclusion attack is self-punishing because attackers' `$RM` loses value if their token underperforms, but the magnitude is not modeled: how much `$RM` must an attacker hold to swing allocation, vs. the vault buy pressure produced, vs. expected `$RM` loss from underperformance? Without numbers, "self-punishing" is an assertion, not a proof. Requires economic modeling; applicable once RM governance controls agent-token inclusion or per-vault asset selection (§1.3). **Research open.**
 
+**Protocol-agent resilience and failure modes (§3.10).** This is a research and assurance topic, not a product-feature decision. Vault-level safety controls already exist — `RobotMoneyVault` and `BasketVault` expose `EMERGENCY_ROLE` pause, emergency unwind, and shutdown. What remains open is the *off-chain* protocol agent (publishes shortlists, runs the default allocation, posts the public narrative) as a single point of failure: offline, compromise, hallucinated allocation, or operator departure. The likely requirement is a standing research project with **periodic audits** of agent behavior and operator key custody, rather than a contract feature. Out of scope while the only on-chain vote is RM-token router weights. **Research open.**
+
 ---
 
 ## 3. Suggested resolution order
 
-1. **Router-weight vote rules** — quorum, cadence, threshold, execution, fallback (§3.9).
+1. **Router-weight vote rules** — close the smoothing / default-weight-vector residual; the core quorum/cadence/threshold/execution path is built (§3.9).
 2. **Portfolio Router implementation details** — contract API, preview semantics, failure behavior, receipt delivery, cap model, vote-to-weight execution.
 3. **Agent-token vault internals** — shortlist ownership and vote mechanic, whether tiers are needed, token eligibility methodology, trading authority, intra-vault rebalancing, and the inclusion-attack modeling that gates them (§1.3, §1.4, §1.5, §3.1, §3.2, §3.8, §3.15).
-4. **Vault lifecycle and operational trust** — upgrade/migration/retirement, basket-drawdown withdrawal, and protocol-agent failure modes (§3.5, §3.7, §3.10).
+4. **Vault lifecycle** — depositor migration on retirement and basket-drawdown redemption policy; the status lifecycle and prototype exclusion are built (§3.5, §3.7).
+5. **Research tracks** — inclusion-attack economic modeling (§3.8) and protocol-agent resilience / periodic audits (§3.10).
