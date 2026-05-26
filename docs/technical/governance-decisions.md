@@ -129,7 +129,7 @@ gate, no delegation mechanism is specified for this phase.
 - `RM.totalSupply()` — ERC-20 standard; must return the total supply at the
   snapshot block to calculate the 5 % quorum denominator.
 
-**No tiers.** `docs/prd.md` §1.6 records the TBD status of
+**No tiers.** `docs/prd.md` §1.5 records the open status of
 Observer/Participant/Analyst/Strategist tiers. No tier system or CFO Feed
 activity gate is specified for router-weight voting.
 
