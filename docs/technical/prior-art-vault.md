@@ -355,7 +355,7 @@ current architecture supports either path by replacing a custom adapter with an
 | Share lock period | None; synchronous redemption guaranteed | Veda (all shares locked after deposit) |
 | Gas abstraction | Not in scope | Zyfi (full paymaster service) |
 | Permissionless vault creation | Not in scope; vaults are protocol-registered | Alvara (permissionless basket launch) |
-| Build-vs-buy for stable-yield strategies | Custom adapters in-house; Giza/Zyfai named as alternatives — decision deferred (PRD §3.13) | Giza, Zyfai (managed Base aggregators) |
+| Build-vs-buy for stable-yield strategies | Custom adapters in-house (decided, issue #470); Giza/Zyfai named as alternatives if revisited per strategy | Giza, Zyfai (managed Base aggregators) |
 | Agent-first access control | First-class via gateway; no comparable in this set | None in this comparison |
 | Admin timelock | Required by architecture for all five protocol contracts | None documented at same strictness |
 
