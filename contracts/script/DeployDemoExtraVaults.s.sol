@@ -264,8 +264,9 @@ contract DeployDemoExtraVaults is Script {
         try vm.envString("DEPLOYMENT_OUT") returns (string memory s) {
             outPath = s;
         } catch {
-            outPath =
-                string.concat("deployments/demo-extra-vaults-", vm.toString(block.chainid), ".json");
+            outPath = string.concat(
+                "deployments/demo-extra-vaults-", vm.toString(block.chainid), ".json"
+            );
         }
 
         string memory obj = "demo_extra_vaults_deployment";
