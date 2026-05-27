@@ -16,12 +16,7 @@
  *   - the resolved tx hash is the one returned by the provider
  */
 import { describe, expect, it, vi } from "vitest";
-import {
-  keccak256,
-  parseTransaction,
-  type Address,
-  type Hex,
-} from "viem";
+import { keccak256, parseTransaction, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { dripEth, type Eip1193Like } from "../../src/lib/faucetClient";
 import { FAUCET_DRIP_AMOUNT_ETH } from "../../src/lib/chainClassifier";

@@ -27,11 +27,7 @@ import {
   FAUCET_DRIP_AMOUNT_RM,
   FAUCET_DRIP_AMOUNT_USDC,
 } from "../../src/lib/chainClassifier";
-import type {
-  DripEthArgs,
-  DripRmTokenArgs,
-  DripUsdcArgs,
-} from "../../src/lib/faucetClient";
+import type { DripEthArgs, DripRmTokenArgs, DripUsdcArgs } from "../../src/lib/faucetClient";
 
 const USDC = "0x4444444444444444444444444444444444444444" as const;
 const RM_TOKEN = "0x5555555555555555555555555555555555555555" as const;
