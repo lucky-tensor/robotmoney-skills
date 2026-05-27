@@ -346,8 +346,8 @@ current architecture supports either path by replacing a custom adapter with an
 |---|---|---|
 | Multi-asset basket vaults | Planned (protocol-asset, agent-token); not yet Router-eligible — pending TWAP oracle and rebalancing model | Enzyme (multi-asset), Alvara (basket) |
 | TWAP oracle for basket vaults | Required before Router eligibility; current prototype uses manipulable `slot0` pricing | Enzyme (Chainlink), Alvara (1inch DEX aggregator) |
-| Intra-vault rebalancing for baskets | TBD — trigger, target weights, and cost/slippage model are unresolved (PRD §3.15) | Alvara (single-tx atomic rebalance), Enzyme (manager-triggered) |
-| Agent-token shortlist governance | TBD — bribery model vs. RM-token inclusion vote unresolved (PRD §1.3) | Alvara (veALVA incentive vote), Enzyme (Asset Manager role) |
+| Intra-vault rebalancing for baskets | TBD — trigger, target weights, and cost/slippage model are unresolved (`docs/development/open-questions.md` §3.15) | Alvara (single-tx atomic rebalance), Enzyme (manager-triggered) |
+| Agent-token shortlist governance | TBD — bribery model vs. RM-token inclusion vote unresolved (`docs/development/open-questions.md` §1.3) | Alvara (veALVA incentive vote), Enzyme (Asset Manager role) |
 | Router weight governance | Deployed as admin-weighted MVP mock; token-holder voting is a future goal | Alvara (veALVA epoch vote), Enzyme (Enzyme Council) |
 | Performance/management fees | Deferred to future phase requiring separate ADR | Enzyme (full fee suite), Alvara (mgmt fee built-in) |
 | DEX-tradeable LP shares | Not a design goal; per-vault receipts only | Alvara (DEX LP), some Enzyme funds |

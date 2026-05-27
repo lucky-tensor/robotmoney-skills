@@ -134,7 +134,7 @@ and `AgentTokenVault` (admin-curated agent-economy tokens) subclasses.
 These are prototypes (`isPrototype()` returns `true` at the base) and
 remain excluded from production Portfolio Router weights until each
 subclass certifies pool cardinality, per-asset TWAP windows, and an
-intra-vault rebalancing model (PRD §3.15).
+intra-vault rebalancing model (`docs/development/open-questions.md` §3.15).
 
 Future vault categories include thematic/RWA vaults. Those need
 separate execution, oracle, liquidity, legal, and disclosure

@@ -11,7 +11,7 @@ PROTOTYPE ERC-4626 USDC vault holding a basket of agent-economy tokens
 curated by ADMIN_ROLE. Swaps in/out via Uniswap V3.
 The shortlist is admin-controlled for this prototype. In production this
 will be replaced by on-chain RM-token governance or a bribery mechanism
-(see docs/prd.md open questions §1.3, §1.4, §3.2).
+(see docs/development/open-questions.md §1.3, §1.4, §3.2).
 Depositors receive rmAGENT shares. Basket contents change only when
 admin adds or removes assets. Existing positions are unaffected until
 the vault is rebalanced or the user redeems.
