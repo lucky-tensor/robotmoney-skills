@@ -52,22 +52,13 @@ Vault-level rebalancing is distinct from Portfolio Router weight updates, which 
 
 **Withdrawal under basket-vault drawdown (§3.7).** *Exclusion resolved.* Vaults that cannot guarantee synchronous redemption self-declare via `isPrototype()`, and `contracts/PortfolioRouter.sol` excludes them from allocation and previews; basket vaults are gated out this way today. **Open residual:** the explicit redemption policy for a basket vault *in drawdown* — forced sale vs. queued withdrawal vs. NAV haircut — must be specified before any basket vault can drop the prototype gate and become router-eligible.
 
----
-
-## 2. General research questions
-
-Open-ended modeling and analysis that must be studied before the related product topic can be decided.
-
-**Inclusion-attack economic bounds (§3.8).** The whitepaper argues the inclusion attack is self-punishing because attackers' `$RM` loses value if their token underperforms, but the magnitude is not modeled: how much `$RM` must an attacker hold to swing allocation, vs. the vault buy pressure produced, vs. expected `$RM` loss from underperformance? Without numbers, "self-punishing" is an assertion, not a proof. Requires economic modeling; applicable once RM governance controls agent-token inclusion or per-vault asset selection (§1.3). **Research open.**
-
-**Protocol-agent resilience and failure modes (§3.10).** This is a research and assurance topic, not a product-feature decision. Vault-level safety controls already exist — `RobotMoneyVault` and `BasketVault` expose `EMERGENCY_ROLE` pause, emergency unwind, and shutdown. What remains open is the *off-chain* protocol agent (publishes shortlists, runs the default allocation, posts the public narrative) as a single point of failure: offline, compromise, hallucinated allocation, or operator departure. The likely requirement is a standing research project with **periodic audits** of agent behavior and operator key custody, rather than a contract feature. Out of scope while the only on-chain vote is RM-token router weights. **Research open.**
+> **Research questions** (open-ended modeling and assurance, not product/engineering decisions) live in `docs/technical/research-questions.md` — currently the inclusion-attack economic bounds (§3.8) and protocol-agent resilience (§3.10).
 
 ---
 
-## 3. Suggested resolution order
+## 2. Suggested resolution order
 
 1. **Router-weight vote rules** — close the smoothing / default-weight-vector residual; the core quorum/cadence/threshold/execution path is built (§3.9).
 2. **Portfolio Router implementation details** — contract API, preview semantics, failure behavior, receipt delivery, cap model, vote-to-weight execution.
-3. **Agent-token vault internals** — shortlist ownership and vote mechanic, whether tiers are needed, token eligibility methodology, trading authority, intra-vault rebalancing, and the inclusion-attack modeling that gates them (§1.3, §1.4, §1.5, §3.1, §3.2, §3.8, §3.15).
+3. **Agent-token vault internals** — shortlist ownership and vote mechanic, whether tiers are needed, token eligibility methodology, trading authority, and intra-vault rebalancing, gated by the inclusion-attack modeling in `docs/technical/research-questions.md` §3.8 (§1.3, §1.4, §1.5, §3.1, §3.2, §3.15).
 4. **Vault lifecycle** — depositor migration on retirement and basket-drawdown redemption policy; the status lifecycle and prototype exclusion are built (§3.5, §3.7).
-5. **Research tracks** — inclusion-attack economic modeling (§3.8) and protocol-agent resilience / periodic audits (§3.10).
