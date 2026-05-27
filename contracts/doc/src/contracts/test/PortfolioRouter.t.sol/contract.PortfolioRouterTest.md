@@ -1,5 +1,5 @@
 # PortfolioRouterTest
-[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/6ff4c445ad1cd2f918eebf812e95386b19961307/contracts/test/PortfolioRouter.t.sol)
+[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/5b027c4d9e5c2cad1ce180455be7d916e37f430a/contracts/test/PortfolioRouter.t.sol)
 
 **Inherits:**
 Test
@@ -562,5 +562,50 @@ un-opted-in vault, true once the registry flag is flipped.
 
 ```solidity
 function test_isRouterEligible_followsRegistryFlag() public;
+```
+
+### _registerRwaPlaceholder
+
+Register a fourth vault matching the demo's RWA/Thematic
+placeholder shape: present in the registry but non-Active
+(Paused) and never marked router-eligible. Returns the vault.
+
+
+```solidity
+function _registerRwaPlaceholder() internal returns (MockRouterVault rwa);
+```
+
+### test_previewDeposit_skipsRwaPlaceholder
+
+AC (issue #479): with the RWA/Thematic placeholder present in
+the registry as a non-Active, non-router-eligible entry,
+`previewDeposit` returns only the weighted (Active, eligible)
+legs and does not surface or revert on the RWA leg.
+
+
+```solidity
+function test_previewDeposit_skipsRwaPlaceholder() public;
+```
+
+### test_deposit_succeedsWithRwaPlaceholderPresent
+
+AC (issue #479): `deposit` succeeds and splits across the
+Active weighted vaults while the non-Active RWA placeholder
+sits inertly in the registry — no revert, no flow to RWA.
+
+
+```solidity
+function test_deposit_succeedsWithRwaPlaceholderPresent() public;
+```
+
+### test_rwaPlaceholder_isNonActiveAndIneligible
+
+AC (issue #479): the RWA placeholder reports the expected
+non-Active status and stays router-ineligible — the two
+signals the dapp and Router read to keep it out of flow.
+
+
+```solidity
+function test_rwaPlaceholder_isNonActiveAndIneligible() public;
 ```
 
