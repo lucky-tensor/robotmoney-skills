@@ -96,7 +96,7 @@ jobs:
   generated-docs-freshness:
     name: generated-docs-freshness
     # WHY THIS JOB EXISTS
-    # docs/src/contracts/ is machine-generated output from `forge doc`. It carries
+    # contracts/doc/src/contracts/ is machine-generated output from `forge doc`. It carries
     # a top-of-file banner marking it as generated. Without a staleness check, a
     # developer who adds NatSpec to a contract and forgets to commit the regenerated
     # markdown will leave the docs stale — and a later `forge doc` run will silently
