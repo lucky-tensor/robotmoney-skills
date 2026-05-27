@@ -1,5 +1,9 @@
 # Robot Money — Smart Contract Reference
 
+> This is a hand-curated overview (system diagram, roles, caps, and how the
+> pieces fit). For the generated per-contract / per-symbol NatSpec reference,
+> see `contracts/doc/` (produced by `forge doc`).
+
 > Scope: verified source code for the four Robot Money contracts deployed on Base mainnet. All contracts are verified on BaseScan. Source files are in `contracts/` at the repo root. Compiler: `v0.8.24+commit.e11b9ed9`, optimization 200 runs, EVM Cancun. The previous version of this document was a reverse-engineering exercise from ABIs; this version is authoritative from source.
 
 ---

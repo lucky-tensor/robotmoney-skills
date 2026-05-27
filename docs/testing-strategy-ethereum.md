@@ -1,6 +1,6 @@
 # Ethereum Local Testnet Guide (Deneb/PoS - Pure Docker)
 
-This document describes how to build, run, and debug a faithful Post-Merge Ethereum local testnet based on the logic implemented in `source/docker-testnet/ethereum-testnet/config/`.
+This document describes how to build, run, and debug a faithful Post-Merge Ethereum local testnet based on the logic implemented in `testing/ethereum-testnet/config/`.
 
 ## Architecture Overview
 
@@ -72,7 +72,7 @@ The entire network is controlled via one command. The configuration ensures:
 
 ### Key Command
 ```bash
-cd source/docker-testnet/ethereum-testnet/config
+cd testing/ethereum-testnet/config
 docker compose down -v && docker compose up -d --build
 ```
 *Note: The `-v` is critical to ensure a fresh genesis timestamp on every restart.*
