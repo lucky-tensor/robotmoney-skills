@@ -296,7 +296,7 @@ Giza and Zyfai are yield optimization protocols on Base that allocate
 USDC across Aave, Compound, and Morpho by utilization-driven or
 off-chain-optimized weight models. Both are candidates for the stable-yield
 vault's adapter layer if the team revisits the decision to maintain
-custom adapters in-house (build-in-house is decided; see issue #470). The current architecture is built
+custom adapters in-house (build-in-house is decided). The current architecture is built
 to support either model: swapping a custom adapter for a Giza- or
 Zyfai-managed allocation requires only deploying a new IStrategyAdapter
 wrapper, not changing the vault contract.
@@ -411,7 +411,7 @@ Unresolved **product and engineering** questions derived from reading the three 
 
 This document tracks only the questions that are **still open and product/engineering-owned**, grouped by topic. Items are tagged with their original `§x.y` identifier, retained as a stable anchor so existing cross-references from other docs still resolve; the identifiers no longer imply order.
 
-> **Out of scope here:** resolved contradictions and their code evidence live in **issue #470** (and are asserted as facts in the PRD body and `docs/architecture.md` §2–4, §10). This now includes the admin-multisig mechanism (was §3.4): a canonical Safe (≥2-of-N) holds proposer/executor on an OZ `TimelockController` that holds `ADMIN_ROLE` on all five contracts — see `contracts/script/DeployTimelock.s.sol`, `docs/architecture.md` §10, and issues #414/#422; signer identities remain an ops decision. Business, legal, pricing, tokenomics, agent-persona, audit, multi-chain, and other go-to-market/launch decisions are **tracked outside this repository**.
+> **Out of scope here:** resolved contradictions and their code evidence are tracked outside this document and asserted as facts in the PRD body and `docs/architecture.md` §2–4, §10. This now includes the admin-multisig mechanism (was §3.4): a canonical Safe (≥2-of-N) holds proposer/executor on an OZ `TimelockController` that holds `ADMIN_ROLE` on all five contracts — see `contracts/script/DeployTimelock.s.sol` and `docs/architecture.md` §10; signer identities remain an ops decision. Business, legal, pricing, tokenomics, agent-persona, audit, multi-chain, and other go-to-market/launch decisions are **tracked outside this repository**.
 
 ---
 
@@ -425,7 +425,7 @@ This document tracks only the questions that are **still open and product/engine
 
 **Agent-token shortlist ownership (§1.3).** For the current product the agent-token vault shortlist is admin/protocol-curated (`contracts/vaults/AgentTokenVault.sol`). Unresolved is the long-term model: admin curation vs. `$RM`-token inclusion proposals vs. the designed-in bribery flow (agents lobby/pay `$RM` to push their token into the vault). The source PRD's inclusion-proposal / quorum / displacement / 15-token-cap machinery only applies if a bottom-up model is chosen. **TBD** — out of current router-weight governance scope.
 
-**Shortlist vote mechanic (§1.4).** The implemented vote is bps allocation across active vaults for Portfolio Router weights (resolved, issue #470). Unresolved is the mechanic for any *future agent-token shortlist* vote: ranked-choice over the shortlist (whitepaper) vs. token-level bps allocation (source PRD). **TBD**, pending the §1.3 ownership decision.
+**Shortlist vote mechanic (§1.4).** The implemented vote is bps allocation across active vaults for Portfolio Router weights (resolved). Unresolved is the mechanic for any *future agent-token shortlist* vote: ranked-choice over the shortlist (whitepaper) vs. token-level bps allocation (source PRD). **TBD**, pending the §1.3 ownership decision.
 
 ### 1.B Agent-token vault internals
 
