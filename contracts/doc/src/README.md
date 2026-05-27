@@ -41,7 +41,7 @@ cargo run -p smoke-test -- --full-stack
 # Drop tears the stack down automatically.
 ```
 
-`smoke-test` starts the Geth + Lighthouse compose stack from `testing/ethereum-testnet/`, deploys contracts, and funds test EOAs. See `docs/testing/smoke-test-design.md` for details.
+`smoke-test` starts the Geth + Lighthouse compose stack from `testing/ethereum-testnet/`, deploys contracts, and funds test EOAs. See `docs/development/smoke-test-design.md` for details.
 
 ## Status
 
@@ -53,9 +53,8 @@ The pre-pivot TypeScript CLI (`@robotmoney/cli`) and its surrounding pnpm worksp
 
 - [Architecture proposal](docs/architecture.md)
 - [MVP implementation plan](docs/implementation-plan.md)
-- [Project roadmap](docs/project-roadmap.md)
 - [Smart-contract reference](docs/technical/smart-contracts.md)
-- [Testing strategy](docs/testing-strategy-ethereum.md)
+- [Testing strategy](docs/development/testing-strategy-ethereum.md)
 - Vault on BaseScan: https://basescan.org/address/0x4f835c9f54bcf17daf9040f60cb72951ccbb49dd
 
 ## License
