@@ -85,7 +85,8 @@ contract DeployDemoExtraVaultsTest is Test {
             wExtra1: W_EXTRA1,
             wExtra2: W_EXTRA2,
             name1: "Robot Money Demo Vault A",
-            name2: "Robot Money Demo Vault B"
+            name2: "Robot Money Demo Vault B",
+            rwaName: "Robot Money RWA / Thematic"
         });
 
         DeployDemoExtraVaults.Deployed memory d = script.runInProcess(p);
