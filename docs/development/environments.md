@@ -15,7 +15,7 @@ Canonical: `docs/implementation-plan.md`. Related design docs:
 `docs/technical/full-stack-devnet.md`, `docs/testing/smoke-test-design.md`,
 `docs/technical/fork-e2e-decisions.md`. The principle these modes embody —
 one production codebase, environments differing only by configuration and
-seeded data — is `docs/handbook/single-production-codebase.md`.
+seeded data — is `docs/development/single-production-codebase.md`.
 
 ---
 

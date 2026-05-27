@@ -1,6 +1,6 @@
 # Single Production Codebase
 
-> Canonical principle. Related: `docs/environments.md` (the concrete environment
+> Canonical principle. Related: `docs/development/environments.md` (the concrete environment
 > modes this principle governs), `docs/architecture.md`, and issue #475 (the
 > refactor that brings the contracts into compliance). The `rmpc` corollary —
 > "one client, no env-specific behavior, never spoof users" — is the same rule
@@ -29,7 +29,7 @@ And the following are how variation is expressed instead:
   thresholds, role holders. Injected at deploy/boot time, identical binary.
 - **Seeded data** — a demo environment is the production code pointed at a chain
   whose *state* has been seeded (deposits, vault registrations, balances). See
-  `docs/environments.md`: the local devnet boots from a pinned Base mainnet
+  `docs/development/environments.md`: the local devnet boots from a pinned Base mainnet
   snapshot and deploys the real contracts fresh; the fork environment
   impersonates real accounts. Neither swaps in different code.
 
@@ -82,7 +82,7 @@ the idea is older than software itself; everything after is corroboration.
 
 ## Checklist before adding any environment-dependent behaviour
 
-1. Is the difference really **data**? → seed it (see `docs/environments.md`).
+1. Is the difference really **data**? → seed it (see `docs/development/environments.md`).
 2. Is it really **configuration**? → inject it at deploy/boot; keep one binary.
 3. Is it a genuine production safety property? → express it as **registry/config
    state** an operator sets, not a subclass or a compile-time branch.
