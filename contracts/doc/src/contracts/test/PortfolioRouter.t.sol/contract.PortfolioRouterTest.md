@@ -1,5 +1,5 @@
 # PortfolioRouterTest
-[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/4abca778fbff27a7ffb15e9efc3710db004e89f7/contracts/test/PortfolioRouter.t.sol)
+[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/e725858583e4c0e5819bd858f896d04ded40bdb7/contracts/test/PortfolioRouter.t.sol)
 
 **Inherits:**
 Test
@@ -564,48 +564,53 @@ un-opted-in vault, true once the registry flag is flipped.
 function test_isRouterEligible_followsRegistryFlag() public;
 ```
 
-### _registerRwaPlaceholder
+### _setDefaultWeights
 
-Register a fourth vault matching the demo's RWA/Thematic
-placeholder shape: present in the registry but non-Active
-(Paused) and never marked router-eligible. Returns the vault.
+Set a default 60/40 vector over the two eligible vaults.
 
 
 ```solidity
-function _registerRwaPlaceholder() internal returns (MockRouterVault rwa);
+function _setDefaultWeights() internal;
 ```
 
-### test_previewDeposit_skipsRwaPlaceholder
+### test_setDefaultWeights_revertsIfLengthMismatch
 
-AC (issue #479): with the RWA/Thematic placeholder present in
-the registry as a non-Active, non-router-eligible entry,
-`previewDeposit` returns only the weighted (Active, eligible)
-legs and does not surface or revert on the RWA leg.
+setDefaultWeights rejects a length that does not match the
+registry's router-eligible vault count.
 
 
 ```solidity
-function test_previewDeposit_skipsRwaPlaceholder() public;
+function test_setDefaultWeights_revertsIfLengthMismatch() public;
 ```
 
-### test_deposit_succeedsWithRwaPlaceholderPresent
+### test_previewDeposit_uses_defaultWeights_when_no_proposal
 
-AC (issue #479): `deposit` succeeds and splits across the
-Active weighted vaults while the non-Active RWA placeholder
-sits inertly in the registry — no revert, no flow to RWA.
+With no proposal ever passed (voted vector inactive), the router
+previews and routes by the default weight vector. ADR-0002.
 
 
 ```solidity
-function test_deposit_succeedsWithRwaPlaceholderPresent() public;
+function test_previewDeposit_uses_defaultWeights_when_no_proposal() public;
 ```
 
-### test_rwaPlaceholder_isNonActiveAndIneligible
+### test_previewDeposit_uses_defaultWeights_after_failed_quorum
 
-AC (issue #479): the RWA placeholder reports the expected
-non-Active status and stays router-ineligible — the two
-signals the dapp and Router read to keep it out of flow.
+After the voted vector is cleared (simulating a fall-back to
+default after the most recent proposal failed quorum), the
+router previews by the default vector again. ADR-0002.
 
 
 ```solidity
-function test_rwaPlaceholder_isNonActiveAndIneligible() public;
+function test_previewDeposit_uses_defaultWeights_after_failed_quorum() public;
+```
+
+### test_voted_weights_override_defaults_then_revert_to_defaults
+
+A passed vote overrides the default; defaultWeights storage is
+unchanged; clearing the voted vector reverts to default. ADR-0002.
+
+
+```solidity
+function test_voted_weights_override_defaults_then_revert_to_defaults() public;
 ```
 
