@@ -262,7 +262,7 @@ branches. Test seams live entirely in Playwright (`tests/e2e/helpers/`):
 a JS-level EIP-1193 provider injected via `page.addInitScript` drives
 the prod `injected()` wagmi connector exactly like a real wallet
 extension. The harness supplies the real expected code hash. See
-`docs/testing/smoke-test-design.md`.
+`docs/development/smoke-test-design.md`.
 
 **Steps:**
 1. Checkout repository (recursive submodules)
@@ -346,7 +346,7 @@ Split into two files because the structural/offline checks are cheap, keyless, a
 ### 12. OpenClaw integration tests
 **Suggested file:** `.github/workflows/openclaw.yml`
 **Environment:** `devnet`
-**Trigger paths:** `testing/openclaw-config/**`, `plugins/robotmoney-cli/**`, `docs/walkthroughs/openclaw-config.md`
+**Trigger paths:** `testing/openclaw-config/**`, `plugins/robotmoney-cli/**`, `docs/development/openclaw-config.md`
 
 **Jobs:**
 - `safety` — shellcheck, mainnet gate, secret handling; runs immediately; no chain required

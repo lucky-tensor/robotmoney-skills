@@ -238,7 +238,7 @@ Approves `adapter_` on `vault_` after asserting the no-proxy
 invariant: the adapter's runtime bytecode must not contain a
 `DELEGATECALL` opcode. This prevents a future proxy-backed
 adapter from bypassing the codehash allowlist by hot-swapping
-its implementation. See docs/security-model.md and issue #448.
+its implementation. See docs/technical/security-model.md and issue #448.
 
 
 ```solidity

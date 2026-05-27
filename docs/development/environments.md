@@ -12,7 +12,7 @@ Each section lists: required env vars, startup command, contract address source,
 data persistence behaviour, and teardown command.
 
 Canonical: `docs/implementation-plan.md`. Related design docs:
-`docs/technical/full-stack-devnet.md`, `docs/testing/smoke-test-design.md`,
+`docs/technical/full-stack-devnet.md`, `docs/development/smoke-test-design.md`,
 `docs/technical/fork-e2e-decisions.md`. The principle these modes embody —
 one production codebase, environments differing only by configuration and
 seeded data — is `docs/development/single-production-codebase.md`.
@@ -146,7 +146,7 @@ For the read-only OpenCode walkthrough, boot Anvil directly:
 anvil --fork-url "$RMPC_FORK_RPC_URL" --port 8545 --silent &
 ```
 
-See `docs/walkthroughs/opencode-readonly-fork.md` for the full walkthrough.
+See `docs/development/opencode-readonly-fork.md` for the full walkthrough.
 
 ### Contract address source
 
@@ -349,7 +349,7 @@ RMPC_MONITOR_COMMAND=get-vault \
   bash testing/openclaw-config/openclaw_harness.sh
 ```
 
-See `docs/walkthroughs/opencode-readonly-fork.md` for the fork-based
+See `docs/development/opencode-readonly-fork.md` for the fork-based
 read-only walkthrough (no mainnet RPC required).
 
 ### Contract address source

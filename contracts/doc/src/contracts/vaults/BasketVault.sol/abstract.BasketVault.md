@@ -508,7 +508,7 @@ function setEmergencyUnwindGuard(
 |`token`|`address`|           Active basket asset to configure.|
 |`minUsdcOut`|`uint256`|      Admin-set reference floor used as the upper-loss reference on the override path and as the hard minimum on the non-override path.|
 |`overrideAllowed`|`bool`| Whether the override path may be invoked at all.|
-|`maxLossBps`|`uint256`|      Maximum acceptable loss in basis points versus `minUsdcOut` when the override path executes a swap. Must be <= MAX_BPS. A value of `MAX_BPS` (10_000) reproduces the legacy zero-floor behaviour. ADMIN_ROLE is timelock-gated via the existing ADMIN_ROLE pattern (see `docs/security-model.md`).|
+|`maxLossBps`|`uint256`|      Maximum acceptable loss in basis points versus `minUsdcOut` when the override path executes a swap. Must be <= MAX_BPS. A value of `MAX_BPS` (10_000) reproduces the legacy zero-floor behaviour. ADMIN_ROLE is timelock-gated via the existing ADMIN_ROLE pattern (see `docs/technical/security-model.md`).|
 
 
 ### setTwapWindow

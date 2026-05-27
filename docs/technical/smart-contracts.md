@@ -216,7 +216,7 @@ This design is the reason CompoundV3Adapter was compiled with `viaIR: true` — 
 > source. The full security taxonomy — execution, accounting,
 > access, oracle, bridge, economic, dependency, monitoring,
 > off-chain agent, dapp/web2, infrastructure, operational, and
-> process — is in `docs/security-model.md`.
+> process — is in `docs/technical/security-model.md`.
 
 | Risk | Mitigation (confirmed from source) |
 |---|---|

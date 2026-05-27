@@ -267,7 +267,7 @@ previewWithdraw(1e6) → ~1e24 raw shares
 Integrators MUST NOT assume raw shares equal asset amounts.  Always use
 `convertToShares` / `convertToAssets` for on-chain math, or read `decimals()` and
 divide accordingly in off-chain display logic.
-See: docs/security-model.md — ERC-4626 Inflation Attack Mitigation
+See: docs/technical/security-model.md — ERC-4626 Inflation Attack Mitigation
 
 
 ```solidity

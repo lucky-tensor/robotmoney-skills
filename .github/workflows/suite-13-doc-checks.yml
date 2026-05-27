@@ -1,4 +1,4 @@
-# Canonical: docs/testing/ci-suites.md §13
+# Canonical: docs/development/ci-suites.md §13
 #
 # WHY THIS SUITE EXISTS
 # Several ADRs and runbooks have downstream consumers that depend on their structure —

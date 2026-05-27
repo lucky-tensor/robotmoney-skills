@@ -93,7 +93,7 @@ If your operator provides a different hosted devnet endpoint, replace
 ### Profile B — Base mainnet anvil fork (chain ID 8453)
 
 For the read-only OpenCode walkthrough against a local anvil fork of Base
-mainnet, use the template in `docs/walkthroughs/opencode-readonly-fork.md`
+mainnet, use the template in `docs/development/opencode-readonly-fork.md`
 §Step 3 instead. That profile hardcodes `chain_id = 8453` and uses placeholder
 addresses intentionally — the walkthrough is read-only and expects degraded
 (`partial: true`) responses.
