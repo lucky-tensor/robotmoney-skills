@@ -62,46 +62,53 @@ contract AgentBasketStubDeployer {
     }
 }
 
-/// @notice One-shot batch deployer for all CREATE-heavy demo seed contracts.
-///         Its constructor performs every demo CREATE in a single broadcaster
-///         transaction:
-///           - 3 × `RobotMoneyVault` (extra vault1, extra vault2, RWA placeholder)
-///           - 2 × `PassthroughAdapter` (one per extra vault)
-///           - 1 × `AgentTokenVault` (MVP six-token basket)
-///           - 1 × `AgentBasketStubDeployer` (which itself sub-CREATEs the 12
-///             basket stand-ins: 6 × `DemoAgentToken` + 6 × `DemoUsdcPool`)
-///         All vaults are constructed with `admin = adminAddr` so the
-///         broadcaster (which the script passes in as `adminAddr`) retains
-///         ADMIN_ROLE — subsequent admin calls like `vault.addAdapter`,
-///         `setAdapterAllowed`, `addAsset`, registry ops still come from the
-///         script's broadcast key and work unchanged. Demo-only; not deployed
-///         on mainnet.
-contract DemoVaultBatchDeployer {
+/// @notice Batch deployer #1 — the two extra demo RobotMoneyVaults and their
+///         PassthroughAdapters. Performs four sub-CREATEs (vault1, vault2,
+///         adapter1, adapter2) inside a single broadcaster CREATE. Split from
+///         the RWA + AgentTokenVault batch so the combined initcode stays
+///         under the EIP-3860 max-initcode limit (49152 bytes) — geth enforces
+///         this on the smoke-test devnet even though forge tests do not.
+///         All vaults are constructed with admin = adminAddr (the script
+///         broadcaster), so subsequent admin calls (addAdapter,
+///         setAdapterAllowed, registry ops) still come from the broadcast key
+///         and work unchanged. Demo-only.
+contract DemoExtraVaultsBatchDeployer {
     RobotMoneyVault public immutable vault1;
     RobotMoneyVault public immutable vault2;
-    RobotMoneyVault public immutable rwaVault;
     PassthroughAdapter public immutable adapter1;
     PassthroughAdapter public immutable adapter2;
+
+    constructor(address usdc, address adminAddr, uint256 tvlCap, uint256 perDepositCap) {
+        vault1 = new RobotMoneyVault(IERC20(usdc), tvlCap, perDepositCap, 0, adminAddr, adminAddr);
+        vault2 = new RobotMoneyVault(IERC20(usdc), tvlCap, perDepositCap, 0, adminAddr, adminAddr);
+        adapter1 = new PassthroughAdapter(usdc, address(vault1));
+        adapter2 = new PassthroughAdapter(usdc, address(vault2));
+    }
+}
+
+/// @notice Batch deployer #2 — the RWA/Thematic placeholder vault plus the
+///         AgentTokenVault. Performs two direct sub-CREATEs (rwaVault,
+///         agentVault) inside a single broadcaster CREATE. Kept separate
+///         from `AgentBasketStubDeployer` so that adding either contract
+///         doesn't push combined initcode over EIP-3860's 49152-byte limit
+///         (geth enforces this on the smoke-test devnet). All vaults
+///         constructed with admin = adminAddr (the script broadcaster).
+///         Demo-only.
+contract DemoAgentRwaBatchDeployer {
+    RobotMoneyVault public immutable rwaVault;
     AgentTokenVault public immutable agentVault;
-    AgentBasketStubDeployer public immutable basketStubs;
 
     constructor(
         address usdc,
         address adminAddr,
         address swapRouter,
         uint256 tvlCap,
-        uint256 perDepositCap,
-        string[6] memory agentSymbols
+        uint256 perDepositCap
     ) {
-        vault1 = new RobotMoneyVault(IERC20(usdc), tvlCap, perDepositCap, 0, adminAddr, adminAddr);
-        vault2 = new RobotMoneyVault(IERC20(usdc), tvlCap, perDepositCap, 0, adminAddr, adminAddr);
         rwaVault = new RobotMoneyVault(IERC20(usdc), tvlCap, perDepositCap, 0, adminAddr, adminAddr);
-        adapter1 = new PassthroughAdapter(usdc, address(vault1));
-        adapter2 = new PassthroughAdapter(usdc, address(vault2));
         agentVault = new AgentTokenVault(
             IERC20(usdc), ISwapRouter(swapRouter), tvlCap, perDepositCap, 0, adminAddr, adminAddr
         );
-        basketStubs = new AgentBasketStubDeployer(agentSymbols, usdc);
     }
 }
 
@@ -300,19 +307,33 @@ contract DeployDemoExtraVaults is Script {
         //    basket stub batcher) down to 1, saving ~78s on the smoke-test
         //    chain-boot so the dapp-e2e globalSetup budget can absorb a cold
         //    dapp Docker build.
-        DemoVaultBatchDeployer batch = new DemoVaultBatchDeployer(
-            p.usdc, p.admin, p.swapRouter, DEMO_TVL_CAP, DEMO_PER_DEPOSIT_CAP, AGENT_SYMBOLS
+        // Batched CREATEs: three broadcaster CREATEs instead of seven. The
+        // split is forced by EIP-3860 — combining all sub-CREATEs into one
+        // batcher pushes initcode past geth's 49152-byte max-initcode limit
+        // (-32000 max initcode size exceeded). The split below keeps each
+        // batcher under the limit; net broadcaster CREATEs in this script are
+        // batchA + batchB + basketStubs = 3 (down from 7), saving roughly five
+        // CREATE round-trips in the smoke-test boot.
+        DemoExtraVaultsBatchDeployer batchA =
+            new DemoExtraVaultsBatchDeployer(p.usdc, p.admin, DEMO_TVL_CAP, DEMO_PER_DEPOSIT_CAP);
+        DemoAgentRwaBatchDeployer batchB = new DemoAgentRwaBatchDeployer(
+            p.usdc, p.admin, p.swapRouter, DEMO_TVL_CAP, DEMO_PER_DEPOSIT_CAP
         );
+        // Basket stub seeder is its own broadcaster CREATE: holding 6 ERC20s
+        // + 6 pool stubs already runs close to the initcode ceiling on its
+        // own, and combining it with the agent/rwa batch fails forge fmt
+        // (and EIP-3860).
+        AgentBasketStubDeployer basketStubs = new AgentBasketStubDeployer(AGENT_SYMBOLS, p.usdc);
 
-        // Stash the batch-deployed addresses in the result struct immediately
-        // so we don't have to keep all seven contract handles live as locals
-        // (avoids stack-too-deep across the wiring + registry + weights calls).
-        d.vault1 = address(batch.vault1());
-        d.vault2 = address(batch.vault2());
-        d.adapter1 = address(batch.adapter1());
-        d.adapter2 = address(batch.adapter2());
-        d.rwaVault = address(batch.rwaVault());
-        d.agentTokenVault = address(batch.agentVault());
+        // Stash addresses in the result struct immediately so we don't have to
+        // keep all the contract handles live as locals (avoids stack-too-deep
+        // across the wiring + registry + weights calls).
+        d.vault1 = address(batchA.vault1());
+        d.vault2 = address(batchA.vault2());
+        d.adapter1 = address(batchA.adapter1());
+        d.adapter2 = address(batchA.adapter2());
+        d.rwaVault = address(batchB.rwaVault());
+        d.agentTokenVault = address(batchB.agentVault());
         d.weightPrimaryBps = p.wPrimary;
         d.weightExtra1Bps = p.wExtra1;
         d.weightExtra2Bps = p.wExtra2;
@@ -362,9 +383,8 @@ contract DeployDemoExtraVaults is Script {
         // 8. Seed AgentTokenVault with the canonical MVP six-token shortlist
         //    (ADR-0001). Registered for display, NOT router-eligible — the
         //    basket-vault gap (TWAP, previewRedeem) blocks that independently.
-        d.agentTokens = _seedAgentTokenVault(
-            p, registry, AgentTokenVault(d.agentTokenVault), batch.basketStubs()
-        );
+        d.agentTokens =
+            _seedAgentTokenVault(p, registry, AgentTokenVault(d.agentTokenVault), basketStubs);
     }
 
     /// @dev Approve and wire `adapter_` on `vault_`. The vault was constructed
