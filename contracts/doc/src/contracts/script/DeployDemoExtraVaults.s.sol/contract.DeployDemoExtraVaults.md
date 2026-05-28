@@ -1,5 +1,5 @@
 # DeployDemoExtraVaults
-[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/5b027c4d9e5c2cad1ce180455be7d916e37f430a/contracts/script/DeployDemoExtraVaults.s.sol)
+[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/c43fbb392825b11d010cdb5df06c784303c7dcd7/contracts/script/DeployDemoExtraVaults.s.sol)
 
 **Inherits:**
 Script
@@ -160,6 +160,25 @@ router, and resets the router weight vector.
 function run() external returns (Deployed memory d);
 ```
 
+### runInProcess
+
+In-process entrypoint for forge tests. Runs the same deploy +
+seed body as `run()` but without `vm.startBroadcast`, so the
+caller (the test contract) is the broadcaster and must already
+hold ADMIN_ROLE on the registry and router. No deployment JSON
+is written. Used by `test_demo_seed_populates_defaultWeights`.
+
+
+```solidity
+function runInProcess(Params memory p) external returns (Deployed memory d);
+```
+**Parameters**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`p`|`Params`|Fully-formed params (no env reads).|
+
+
 ### _readParams
 
 
@@ -231,6 +250,24 @@ function _wireAdapter(RobotMoneyVault vault_, address usdc_)
 
 ```solidity
 function _setThreeWayWeights(
+    PortfolioRouter router,
+    address primary,
+    address extra1,
+    address extra2,
+    Params memory p
+) internal;
+```
+
+### _setThreeWayDefaultWeights
+
+Populate the router's default (below-quorum fallback) weight vector
+with the same three-way split. ADR-0002: this is the vector the
+router routes by — and the allocation surface renders — with no
+governance activity.
+
+
+```solidity
+function _setThreeWayDefaultWeights(
     PortfolioRouter router,
     address primary,
     address extra1,

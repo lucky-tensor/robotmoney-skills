@@ -1,5 +1,5 @@
 # PortfolioRouterTest
-[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/5b027c4d9e5c2cad1ce180455be7d916e37f430a/contracts/test/PortfolioRouter.t.sol)
+[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/c43fbb392825b11d010cdb5df06c784303c7dcd7/contracts/test/PortfolioRouter.t.sol)
 
 **Inherits:**
 Test
@@ -607,5 +607,55 @@ signals the dapp and Router read to keep it out of flow.
 
 ```solidity
 function test_rwaPlaceholder_isNonActiveAndIneligible() public;
+```
+
+### _setDefaultWeights
+
+Set a default 60/40 vector over the two eligible vaults.
+
+
+```solidity
+function _setDefaultWeights() internal;
+```
+
+### test_setDefaultWeights_revertsIfLengthMismatch
+
+setDefaultWeights rejects a length that does not match the
+registry's router-eligible vault count.
+
+
+```solidity
+function test_setDefaultWeights_revertsIfLengthMismatch() public;
+```
+
+### test_previewDeposit_uses_defaultWeights_when_no_proposal
+
+With no proposal ever passed (voted vector inactive), the router
+previews and routes by the default weight vector. ADR-0002.
+
+
+```solidity
+function test_previewDeposit_uses_defaultWeights_when_no_proposal() public;
+```
+
+### test_previewDeposit_uses_defaultWeights_after_failed_quorum
+
+After the voted vector is cleared (simulating a fall-back to
+default after the most recent proposal failed quorum), the
+router previews by the default vector again. ADR-0002.
+
+
+```solidity
+function test_previewDeposit_uses_defaultWeights_after_failed_quorum() public;
+```
+
+### test_voted_weights_override_defaults_then_revert_to_defaults
+
+A passed vote overrides the default; defaultWeights storage is
+unchanged; clearing the voted vector reverts to default. ADR-0002.
+
+
+```solidity
+function test_voted_weights_override_defaults_then_revert_to_defaults() public;
 ```
 
