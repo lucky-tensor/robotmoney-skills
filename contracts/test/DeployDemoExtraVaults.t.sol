@@ -31,8 +31,8 @@ contract DeployDemoExtraVaultsTest is Test {
     address internal admin = address(this);
 
     uint256 constant W_PRIMARY = 5_000;
-    uint256 constant W_EXTRA1 = 3_000;
-    uint256 constant W_EXTRA2 = 2_000;
+    uint256 constant W_PROTOCOL = 3_000;
+    uint256 constant W_AGENT = 2_000;
 
     function setUp() public {
         script = new DeployDemoExtraVaults();
@@ -83,24 +83,23 @@ contract DeployDemoExtraVaultsTest is Test {
             usdc: address(usdc),
             swapRouter: 0x2626664c2603336E57B271c5C0b26F421741e481,
             wPrimary: W_PRIMARY,
-            wExtra1: W_EXTRA1,
-            wExtra2: W_EXTRA2,
-            name1: "Robot Money Demo Vault A",
-            name2: "Robot Money Demo Vault B",
+            wProtocol: W_PROTOCOL,
+            wAgent: W_AGENT,
             rwaName: "Robot Money RWA / Thematic"
         });
 
         DeployDemoExtraVaults.Deployed memory d = script.runInProcess(p);
 
-        // Default vector is non-empty and spans all three demo vaults.
+        // Default vector is non-empty and spans the three PRD §11 Active vaults
+        // (Primary, ProtocolAsset, AgentToken).
         (address[] memory dV, uint256[] memory dB) = router.getDefaultWeights();
         assertEq(dV.length, 3, "default vector must span three vaults");
         assertEq(dV[0], address(primaryVault), "leg 0 = primary vault");
-        assertEq(dV[1], d.vault1, "leg 1 = extra vault A");
-        assertEq(dV[2], d.vault2, "leg 2 = extra vault B");
+        assertEq(dV[1], d.protocolVault, "leg 1 = ProtocolAssetVault (PRD 11.2)");
+        assertEq(dV[2], d.agentTokenVault, "leg 2 = AgentTokenVault (PRD 11.3)");
         assertEq(dB[0], W_PRIMARY);
-        assertEq(dB[1], W_EXTRA1);
-        assertEq(dB[2], W_EXTRA2);
+        assertEq(dB[1], W_PROTOCOL);
+        assertEq(dB[2], W_AGENT);
         uint256 sum = dB[0] + dB[1] + dB[2];
         assertEq(sum, 10_000, "default weights must sum to 10000 bps");
 
@@ -118,8 +117,8 @@ contract DeployDemoExtraVaultsTest is Test {
         PortfolioRouter.LegPreview[] memory legs = router.previewDeposit(1_000e6);
         assertEq(legs.length, 3, "preview must have three legs");
         assertEq(legs[0].weightBps, W_PRIMARY);
-        assertEq(legs[1].weightBps, W_EXTRA1);
-        assertEq(legs[2].weightBps, W_EXTRA2);
+        assertEq(legs[1].weightBps, W_PROTOCOL);
+        assertEq(legs[2].weightBps, W_AGENT);
         assertEq(legs[0].legAmount, 500e6);
         assertEq(legs[1].legAmount, 300e6);
         assertEq(legs[2].legAmount, 200e6);

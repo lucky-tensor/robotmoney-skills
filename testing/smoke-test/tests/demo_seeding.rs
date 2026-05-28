@@ -24,8 +24,8 @@
 
 use alloy_primitives::Address;
 use smoke_test::{
-    prerequisites_available, Fixture, DEMO_WEIGHT_EXTRA1_BPS, DEMO_WEIGHT_EXTRA2_BPS,
-    DEMO_WEIGHT_PRIMARY_BPS,
+    prerequisites_available, Fixture, DEMO_WEIGHT_AGENT_BPS, DEMO_WEIGHT_PRIMARY_BPS,
+    DEMO_WEIGHT_PROTOCOL_BPS,
 };
 
 fn skip_if_no_prereqs(name: &str) -> bool {
@@ -274,13 +274,14 @@ fn router_weights_are_three_way_split() {
         );
     }
 
-    // Order must match the script's primary/extra1/extra2 layout.
+    // Order must match the script's primary/protocol/agent layout
+    // (PRD §11.1, §11.2, §11.3).
     assert_eq!(vaults[0], fx.vault(), "weight[0] must be the primary vault");
     assert_eq!(bps[0] as u64, DEMO_WEIGHT_PRIMARY_BPS);
-    assert_eq!(vaults[1], fx.demo_extra_vault1());
-    assert_eq!(bps[1] as u64, DEMO_WEIGHT_EXTRA1_BPS);
-    assert_eq!(vaults[2], fx.demo_extra_vault2());
-    assert_eq!(bps[2] as u64, DEMO_WEIGHT_EXTRA2_BPS);
+    assert_eq!(vaults[1], fx.demo_protocol_vault());
+    assert_eq!(bps[1] as u64, DEMO_WEIGHT_PROTOCOL_BPS);
+    assert_eq!(vaults[2], fx.demo_agent_vault());
+    assert_eq!(bps[2] as u64, DEMO_WEIGHT_AGENT_BPS);
 }
 
 /// AC2: After seeding simulated depositors via the router, each vault reports

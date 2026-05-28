@@ -1,14 +1,12 @@
 # DemoAgentRwaBatchDeployer
-[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/81cc01fb38d05b8378cb638b175e1ee437aad146/contracts/script/DeployDemoExtraVaults.s.sol)
+[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/e0dc44f8c31f4b76f840118b8a9def58d8080e00/contracts/script/DeployDemoExtraVaults.s.sol)
 
-Batch deployer #2 — the RWA/Thematic placeholder vault plus the
-AgentTokenVault. Performs two direct sub-CREATEs (rwaVault,
-agentVault) inside a single broadcaster CREATE. Kept separate
-from `AgentBasketStubDeployer` so that adding either contract
-doesn't push combined initcode over EIP-3860's 49152-byte limit
-(geth enforces this on the smoke-test devnet). All vaults
-constructed with admin = adminAddr (the script broadcaster).
-Demo-only.
+Batch deployer #2 — the RWA/Thematic placeholder vault (PRD §11.4)
+plus the `AgentTokenVault` (PRD §11.3). Performs two direct
+sub-CREATEs inside a single broadcaster CREATE. Kept separate
+from `ProtocolVaultBatchDeployer` so combined initcode stays under
+EIP-3860's 49152-byte limit (geth enforces this on the smoke-test
+devnet). All vaults constructed with admin = adminAddr. Demo-only.
 
 
 ## Constants

@@ -1,21 +1,21 @@
 # AgentBasketStubDeployer
-[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/81cc01fb38d05b8378cb638b175e1ee437aad146/contracts/script/DeployDemoExtraVaults.s.sol)
+[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/e0dc44f8c31f4b76f840118b8a9def58d8080e00/contracts/script/DeployDemoExtraVaults.s.sol)
 
 One-shot batch deployer for the AgentTokenVault devnet basket
-stand-ins. Its constructor performs all 12 sub-`CREATE`s (six
-`DemoAgentToken` + six `DemoUsdcPool`) in a single broadcaster
+stand-ins (PRD §11.3). Its constructor performs all 12 sub-`CREATE`s
+(six `DemoBasketToken` + six `DemoUsdcPool`) in a single broadcaster
 transaction. The script then makes one `vault.addAsset(...)` call
-per token. This collapses the per-symbol broadcast loop from 18
-transactions (6 × token + pool + addAsset) down to 7, keeping the
-smoke-test chain-boot inside the dapp-e2e `globalSetup` budget on
-GH-hosted runners. Demo-only; never deployed on mainnet.
+per token. Collapses the per-symbol broadcast loop from 18 tx
+(6 × token + pool + addAsset) down to 7, keeping smoke-test
+chain-boot inside the dapp-e2e `globalSetup` budget on GH-hosted
+runners. Demo-only.
 
 
 ## State Variables
 ### tokens
 
 ```solidity
-DemoAgentToken[6] public tokens
+DemoBasketToken[6] public tokens
 ```
 
 

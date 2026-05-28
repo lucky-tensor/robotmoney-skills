@@ -1,5 +1,5 @@
 # DeployDemoExtraVaultsTest
-[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/81cc01fb38d05b8378cb638b175e1ee437aad146/contracts/test/DeployDemoExtraVaults.t.sol)
+[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/e0dc44f8c31f4b76f840118b8a9def58d8080e00/contracts/test/DeployDemoExtraVaults.t.sol)
 
 **Inherits:**
 Test
@@ -18,17 +18,17 @@ uint256 constant W_PRIMARY = 5_000
 ```
 
 
-### W_EXTRA1
+### W_PROTOCOL
 
 ```solidity
-uint256 constant W_EXTRA1 = 3_000
+uint256 constant W_PROTOCOL = 3_000
 ```
 
 
-### W_EXTRA2
+### W_AGENT
 
 ```solidity
-uint256 constant W_EXTRA2 = 2_000
+uint256 constant W_AGENT = 2_000
 ```
 
 
