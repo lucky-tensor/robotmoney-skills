@@ -225,9 +225,6 @@ contract AgentTokenVaultTest is Test {
         vm.setEnv("ROUTER_ADDRESS", vm.toString(address(portfolioRouter)));
         vm.setEnv("PRIMARY_VAULT", vm.toString(address(primary)));
         vm.setEnv("USDC_ADDRESS", vm.toString(address(seedUsdc)));
-        vm.setEnv("WEIGHT_PRIMARY_BPS", "8000");
-        vm.setEnv("WEIGHT_EXTRA1_BPS", "1000");
-        vm.setEnv("WEIGHT_EXTRA2_BPS", "1000");
         vm.setEnv("DEPLOYMENT_OUT", "/tmp/agent-token-demo-seed-test.json");
 
         DeployDemoExtraVaults script = new DeployDemoExtraVaults();
@@ -247,16 +244,14 @@ contract AgentTokenVaultTest is Test {
         assertEq(meta.name, "Robot Money Agent Tokens", "registered under canonical name");
         assertEq(meta.asset, address(seedUsdc), "registered against USDC");
 
-        // 3. Router-eligible in the demo registry: the seed intentionally
-        //    overrides PRD §11.3's production "not Router-eligible" status so
-        //    the multi-vault Router Governance UI has three Active legs to
-        //    display. This is demo-only registry state — production never
-        //    runs this script (single-production-codebase). The basket-vault
-        //    gap (TWAP, previewRedeem) remains a real production blocker;
-        //    nothing in this demo seed resolves it.
-        assertTrue(
+        // 3. NOT router-eligible per PRD §11.3: BasketVault.deposit needs a
+        //    real Uniswap V3 SwapRouter and the devnet has none, so a router-
+        //    weighted deposit here would revert. The basket-vault gap (TWAP,
+        //    previewRedeem) is the production blocker; nothing in this demo
+        //    seed resolves it.
+        assertFalse(
             registry.isRouterEligible(d.agentTokenVault),
-            "agent token vault must be router-eligible in the demo registry"
+            "agent token vault must remain router-ineligible"
         );
     }
 }

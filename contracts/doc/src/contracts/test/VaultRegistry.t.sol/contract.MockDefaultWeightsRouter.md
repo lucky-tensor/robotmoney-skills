@@ -1,5 +1,5 @@
 # MockDefaultWeightsRouter
-[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/e0dc44f8c31f4b76f840118b8a9def58d8080e00/contracts/test/VaultRegistry.t.sol)
+[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/d46930cf8672ef941b507edf186b49886ff48c8a/contracts/test/VaultRegistry.t.sol)
 
 Minimal stand-in for `PortfolioRouter` exposing only the
 `defaultWeightsLength()` view the registry's stale-length guard
