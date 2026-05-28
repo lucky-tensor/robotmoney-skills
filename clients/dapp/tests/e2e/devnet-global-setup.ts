@@ -48,6 +48,9 @@ const REQUIRED_KEYS = [
   // Issue #320: vault-selector and router deposit flow.
   "registry_addr",
   "router_addr",
+  // Issue #477: governance fresh-account E2E.
+  "governance_addr",
+  "rm_token_addr",
 ] as const;
 type RequiredKey = (typeof REQUIRED_KEYS)[number];
 
@@ -183,6 +186,9 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
     // Issue #320: vault-selector and router deposit flow.
     registry_addr: raw.registry_addr,
     router_addr: raw.router_addr,
+    // Issue #477: governance fresh-account E2E.
+    governance_addr: raw.governance_addr,
+    rm_token_addr: raw.rm_token_addr,
   };
 
   console.log("devnet-global-setup: endpoint summary received");
