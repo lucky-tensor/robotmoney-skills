@@ -6,6 +6,7 @@
 - [DeployAgentTokenVault](DeployAgentTokenVault.s.sol/contract.DeployAgentTokenVault.md)
 - [DemoAgentToken](DeployDemoExtraVaults.s.sol/contract.DemoAgentToken.md)
 - [DemoUsdcPool](DeployDemoExtraVaults.s.sol/contract.DemoUsdcPool.md)
+- [AgentBasketStubDeployer](DeployDemoExtraVaults.s.sol/contract.AgentBasketStubDeployer.md)
 - [DeployDemoExtraVaults](DeployDemoExtraVaults.s.sol/contract.DeployDemoExtraVaults.md)
 - [DeployPortfolioRouter](DeployPortfolioRouter.s.sol/contract.DeployPortfolioRouter.md)
 - [DeployRmToken](DeployRmToken.s.sol/contract.DeployRmToken.md)

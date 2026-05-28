@@ -40,6 +40,28 @@ contract DemoUsdcPool {
     }
 }
 
+/// @notice One-shot batch deployer for the AgentTokenVault devnet basket
+///         stand-ins. Its constructor performs all 12 sub-`CREATE`s (six
+///         `DemoAgentToken` + six `DemoUsdcPool`) in a single broadcaster
+///         transaction. The script then makes one `vault.addAsset(...)` call
+///         per token. This collapses the per-symbol broadcast loop from 18
+///         transactions (6 × token + pool + addAsset) down to 7, keeping the
+///         smoke-test chain-boot inside the dapp-e2e `globalSetup` budget on
+///         GH-hosted runners. Demo-only; never deployed on mainnet.
+contract AgentBasketStubDeployer {
+    DemoAgentToken[6] public tokens;
+    DemoUsdcPool[6] public pools;
+
+    constructor(string[6] memory symbols, address usdc) {
+        for (uint256 i = 0; i < symbols.length; i++) {
+            DemoAgentToken token =
+                new DemoAgentToken(string.concat("Demo Agent ", symbols[i]), symbols[i]);
+            tokens[i] = token;
+            pools[i] = new DemoUsdcPool(address(token), usdc);
+        }
+    }
+}
+
 /// @title DeployDemoExtraVaults
 /// @notice Demo-only deploy script that registers two additional ERC-4626
 ///         vaults plus a non-Active RWA/Thematic placeholder in
@@ -330,14 +352,19 @@ contract DeployDemoExtraVaults is Script {
             p.admin // admin (broadcaster holds ADMIN_ROLE)
         );
 
+        // Deploy all six stand-in tokens + matched USDC pool stubs in ONE
+        // broadcaster CREATE via the seeder's constructor (12 internal
+        // sub-CREATEs). Without this batching the loop fires 18 broadcaster
+        // tx (6 × token + pool + addAsset) and the smoke-test chain-boot
+        // exceeds the dapp-e2e globalSetup budget on GH-hosted runners.
+        AgentBasketStubDeployer seeder = new AgentBasketStubDeployer(AGENT_SYMBOLS, p.usdc);
+
         tokens = new address[](AGENT_SYMBOLS.length);
         for (uint256 i = 0; i < AGENT_SYMBOLS.length; i++) {
-            DemoAgentToken token = new DemoAgentToken(
-                string.concat("Demo Agent ", AGENT_SYMBOLS[i]), AGENT_SYMBOLS[i]
-            );
-            DemoUsdcPool pool = new DemoUsdcPool(address(token), p.usdc);
-            vault.addAsset(address(token), address(pool), DEMO_AGENT_SWAP_FEE);
-            tokens[i] = address(token);
+            address token_ = address(seeder.tokens(i));
+            address pool_ = address(seeder.pools(i));
+            vault.addAsset(token_, pool_, DEMO_AGENT_SWAP_FEE);
+            tokens[i] = token_;
         }
 
         _registerIfAbsent(registry, address(vault), p.usdc, "Robot Money Agent Tokens");
