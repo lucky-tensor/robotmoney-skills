@@ -38,16 +38,15 @@
 
 import { test, expect } from "@playwright/test";
 import { setTimeout as sleep } from "node:timers/promises";
-import {
-  createWalletClient,
-  http,
-  encodeFunctionData,
-  type Hex,
-  type Address,
-} from "viem";
+import { createWalletClient, http, encodeFunctionData, type Hex, type Address } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { loadEndpoints, type DevnetEndpoints } from "./helpers/devnet";
-import { injectWallet, connectInjectedWallet, dismissOnboardingIfPresent, openTab } from "./helpers/wallet";
+import {
+  injectWallet,
+  connectInjectedWallet,
+  dismissOnboardingIfPresent,
+  openTab,
+} from "./helpers/wallet";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -226,9 +225,7 @@ async function waitForRmBalance(
     if (bal >= expectedBalance) return;
     await sleep(POLL_INTERVAL_MS);
   }
-  throw new Error(
-    `waitForRmBalance: timed out; account=${account} expected>=${expectedBalance}`,
-  );
+  throw new Error(`waitForRmBalance: timed out; account=${account} expected>=${expectedBalance}`);
 }
 
 /** Wait for RouterGovernance.votesFor to increase beyond baseline. */
@@ -282,254 +279,255 @@ test.describe("fresh-account governance E2E — drip ETH + RM then vote (issue #
     endpoints = loadEndpoints();
   });
 
-  test(
-    "fresh EOA drips ETH and RM via Faucet tab, casts on-chain governance vote, tally increases",
-    async ({ page }) => {
-      // ── 1. Generate a throwaway EOA ──────────────────────────────────────────
-      const freshPrivateKey = generatePrivateKey();
-      const freshAccount = privateKeyToAccount(freshPrivateKey);
-      const freshAddr = freshAccount.address;
-      console.log(`governance-fresh-account: fresh EOA = ${freshAddr}`);
+  test("fresh EOA drips ETH and RM via Faucet tab, casts on-chain governance vote, tally increases", async ({
+    page,
+  }) => {
+    // ── 1. Generate a throwaway EOA ──────────────────────────────────────────
+    const freshPrivateKey = generatePrivateKey();
+    const freshAccount = privateKeyToAccount(freshPrivateKey);
+    const freshAddr = freshAccount.address;
+    console.log(`governance-fresh-account: fresh EOA = ${freshAddr}`);
 
-      // ── 2. Setup on-chain state via admin key ────────────────────────────────
-      //    a) Assign voting power equal to the RM drip amount so the assertion
-      //       "tally increased by fresh account's RM balance" holds by construction.
-      //    b) Create an open proposal (or re-use an existing active one).
-      const governanceAddr = endpoints.governance_addr as Address;
-      const adminChain = {
-        id: endpoints.chain_id,
-        name: "devnet",
-        nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
-        rpcUrls: { default: { http: [endpoints.rpc_url] } },
-      } as const;
-      const adminWalletClient = createWalletClient({
-        account: privateKeyToAccount(endpoints.admin_private_key as Hex),
-        transport: http(endpoints.rpc_url),
-        chain: adminChain,
-      });
+    // ── 2. Setup on-chain state via admin key ────────────────────────────────
+    //    a) Assign voting power equal to the RM drip amount so the assertion
+    //       "tally increased by fresh account's RM balance" holds by construction.
+    //    b) Create an open proposal (or re-use an existing active one).
+    const governanceAddr = endpoints.governance_addr as Address;
+    const adminChain = {
+      id: endpoints.chain_id,
+      name: "devnet",
+      nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+      rpcUrls: { default: { http: [endpoints.rpc_url] } },
+    } as const;
+    const adminWalletClient = createWalletClient({
+      account: privateKeyToAccount(endpoints.admin_private_key as Hex),
+      transport: http(endpoints.rpc_url),
+      chain: adminChain,
+    });
 
-      // setVotingPower(freshAddr, FAUCET_DRIP_AMOUNT_RM)
-      const setVpData = encodeFunctionData({
+    // setVotingPower(freshAddr, FAUCET_DRIP_AMOUNT_RM)
+    const setVpData = encodeFunctionData({
+      abi: GOVERNANCE_ABI,
+      functionName: "setVotingPower",
+      args: [freshAddr, FAUCET_DRIP_AMOUNT_RM],
+    });
+    await adminWalletClient.sendTransaction({
+      to: governanceAddr,
+      data: setVpData,
+      chain: adminChain,
+    });
+    console.log(
+      `governance-fresh-account: setVotingPower(${freshAddr}, ${FAUCET_DRIP_AMOUNT_RM}) sent`,
+    );
+
+    // Read currentProposalId to check if there is already an active proposal.
+    const existingProposalId = await readCurrentProposalId(
+      endpoints.rpc_url,
+      endpoints.governance_addr,
+    );
+
+    let proposalId: bigint;
+    if (existingProposalId === 0n) {
+      // No proposal exists — create one.
+      const proposeData = encodeFunctionData({
         abi: GOVERNANCE_ABI,
-        functionName: "setVotingPower",
-        args: [freshAddr, FAUCET_DRIP_AMOUNT_RM],
+        functionName: "propose",
+        args: [[endpoints.vault_addr as Address], [10_000n]],
       });
       await adminWalletClient.sendTransaction({
         to: governanceAddr,
-        data: setVpData,
+        data: proposeData,
         chain: adminChain,
       });
-      console.log(`governance-fresh-account: setVotingPower(${freshAddr}, ${FAUCET_DRIP_AMOUNT_RM}) sent`);
+      // Read the new proposal id.
+      const newId = await readCurrentProposalId(endpoints.rpc_url, endpoints.governance_addr);
+      proposalId = newId > 0n ? newId : 1n;
+      console.log(`governance-fresh-account: proposal created; id=${proposalId}`);
+    } else {
+      proposalId = existingProposalId;
+      console.log(`governance-fresh-account: re-using existing proposal id=${proposalId}`);
+    }
 
-      // Read currentProposalId to check if there is already an active proposal.
-      const existingProposalId = await readCurrentProposalId(
-        endpoints.rpc_url,
-        endpoints.governance_addr,
+    // Confirm voting power was set.
+    const assignedPower = await readVotingPower(
+      endpoints.rpc_url,
+      endpoints.governance_addr,
+      freshAddr,
+    );
+    if (assignedPower === 0n) {
+      test.skip(
+        true,
+        "setVotingPower did not take effect (RouterGovernance may not accept votes without " +
+          "queued power). This is an on-chain state setup failure, not a dapp UI regression.",
       );
+      return;
+    }
 
-      let proposalId: bigint;
-      if (existingProposalId === 0n) {
-        // No proposal exists — create one.
-        const proposeData = encodeFunctionData({
-          abi: GOVERNANCE_ABI,
-          functionName: "propose",
-          args: [[endpoints.vault_addr as Address], [10_000n]],
-        });
-        await adminWalletClient.sendTransaction({
-          to: governanceAddr,
-          data: proposeData,
-          chain: adminChain,
-        });
-        // Read the new proposal id.
-        const newId = await readCurrentProposalId(endpoints.rpc_url, endpoints.governance_addr);
-        proposalId = newId > 0n ? newId : 1n;
-        console.log(`governance-fresh-account: proposal created; id=${proposalId}`);
-      } else {
-        proposalId = existingProposalId;
-        console.log(`governance-fresh-account: re-using existing proposal id=${proposalId}`);
-      }
+    // ── 3. Open dapp with fresh EOA as the connected wallet ─────────────────
+    await injectWallet(page, {
+      privateKey: freshPrivateKey,
+      rpcUrl: endpoints.rpc_url,
+      chainId: endpoints.chain_id,
+    });
+    await page.goto(endpoints.dapp_url);
+    await connectInjectedWallet(page);
+    await dismissOnboardingIfPresent(page);
 
-      // Confirm voting power was set.
-      const assignedPower = await readVotingPower(
-        endpoints.rpc_url,
-        endpoints.governance_addr,
-        freshAddr,
+    // ── 4a. Faucet: drip Base ETH ────────────────────────────────────────────
+    await openTab(page, "faucet");
+
+    // Verify recipient dropdown shows fresh EOA.
+    const select = page.getByTestId("faucet-wallet-select");
+    await expect(select).toBeVisible({ timeout: 10_000 });
+    const selectedValue = await select.inputValue();
+    expect(selectedValue.toLowerCase()).toBe(freshAddr.toLowerCase());
+
+    const ethBaseline = await ethGetBalance(endpoints.rpc_url, freshAddr);
+
+    const ethDripBtn = page.getByTestId("faucet-eth-drip-button");
+    if (!(await ethDripBtn.isVisible({ timeout: 15_000 }).catch(() => false))) {
+      test.skip(
+        true,
+        "faucet-eth-drip-button not present — dapp bundle may have been built without " +
+          "Base ETH drip support (issue #466). Skipping fresh-account governance E2E.",
       );
-      if (assignedPower === 0n) {
-        test.skip(
-          true,
-          "setVotingPower did not take effect (RouterGovernance may not accept votes without " +
-            "queued power). This is an on-chain state setup failure, not a dapp UI regression.",
-        );
-        return;
-      }
+      return;
+    }
+    await expect(ethDripBtn).toBeEnabled({ timeout: 30_000 });
+    await ethDripBtn.click();
+    await expect(page.getByTestId("faucet-eth-drip-success")).toBeVisible({ timeout: 60_000 });
 
-      // ── 3. Open dapp with fresh EOA as the connected wallet ─────────────────
-      await injectWallet(page, {
-        privateKey: freshPrivateKey,
-        rpcUrl: endpoints.rpc_url,
-        chainId: endpoints.chain_id,
+    // Confirm ETH arrived on-chain.
+    await waitForEthGrowth(endpoints.rpc_url, freshAddr, ethBaseline, FAUCET_DRIP_AMOUNT_ETH);
+    console.log(`governance-fresh-account: Base ETH drip confirmed; addr=${freshAddr}`);
+
+    // ── 4b. Faucet: drip RM tokens ───────────────────────────────────────────
+    const rmDripBtn = page.getByTestId("faucet-rm-drip-button");
+    if (!(await rmDripBtn.isVisible({ timeout: 15_000 }).catch(() => false))) {
+      test.skip(
+        true,
+        "faucet-rm-drip-button not present — dapp bundle may have been built without " +
+          "VITE_RM_TOKEN_ADDRESS (issue #365). Skipping fresh-account governance E2E.",
+      );
+      return;
+    }
+    await expect(rmDripBtn).toBeEnabled({ timeout: 30_000 });
+    await rmDripBtn.click();
+    await expect(page.getByTestId("faucet-rm-drip-success")).toBeVisible({ timeout: 60_000 });
+
+    // Confirm RM tokens arrived on-chain.
+    await waitForRmBalance(
+      endpoints.rpc_url,
+      endpoints.rm_token_addr,
+      freshAddr,
+      FAUCET_DRIP_AMOUNT_RM,
+    );
+    const rmBalance = await erc20BalanceOf(endpoints.rpc_url, endpoints.rm_token_addr, freshAddr);
+    console.log(
+      `governance-fresh-account: RM drip confirmed; addr=${freshAddr} balance=${rmBalance}`,
+    );
+
+    // ── 5. Navigate to GovernancePanel — fresh EOA is already the wallet ─────
+    //    The fresh EOA has ETH and RM. The governance panel reads
+    //    votingPower(freshAddr) from the chain, which we set to FAUCET_DRIP_AMOUNT_RM.
+
+    // Intercept the governance API so the panel shows the active proposal
+    // we just created (the explorer indexer may not have processed it yet).
+    await page.route("**/v1/governance/proposals", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          makeProposalResponse(Number(proposalId), endpoints.vault_addr, endpoints.admin_addr),
+        ),
       });
-      await page.goto(endpoints.dapp_url);
-      await connectInjectedWallet(page);
-      await dismissOnboardingIfPresent(page);
+    });
 
-      // ── 4a. Faucet: drip Base ETH ────────────────────────────────────────────
-      await openTab(page, "faucet");
-
-      // Verify recipient dropdown shows fresh EOA.
-      const select = page.getByTestId("faucet-wallet-select");
-      await expect(select).toBeVisible({ timeout: 10_000 });
-      const selectedValue = await select.inputValue();
-      expect(selectedValue.toLowerCase()).toBe(freshAddr.toLowerCase());
-
-      const ethBaseline = await ethGetBalance(endpoints.rpc_url, freshAddr);
-
-      const ethDripBtn = page.getByTestId("faucet-eth-drip-button");
-      if (!(await ethDripBtn.isVisible({ timeout: 15_000 }).catch(() => false))) {
-        test.skip(
-          true,
-          "faucet-eth-drip-button not present — dapp bundle may have been built without " +
-            "Base ETH drip support (issue #466). Skipping fresh-account governance E2E.",
-        );
-        return;
-      }
-      await expect(ethDripBtn).toBeEnabled({ timeout: 30_000 });
-      await ethDripBtn.click();
-      await expect(page.getByTestId("faucet-eth-drip-success")).toBeVisible({ timeout: 60_000 });
-
-      // Confirm ETH arrived on-chain.
-      await waitForEthGrowth(endpoints.rpc_url, freshAddr, ethBaseline, FAUCET_DRIP_AMOUNT_ETH);
-      console.log(`governance-fresh-account: Base ETH drip confirmed; addr=${freshAddr}`);
-
-      // ── 4b. Faucet: drip RM tokens ───────────────────────────────────────────
-      const rmDripBtn = page.getByTestId("faucet-rm-drip-button");
-      if (!(await rmDripBtn.isVisible({ timeout: 15_000 }).catch(() => false))) {
-        test.skip(
-          true,
-          "faucet-rm-drip-button not present — dapp bundle may have been built without " +
-            "VITE_RM_TOKEN_ADDRESS (issue #365). Skipping fresh-account governance E2E.",
-        );
-        return;
-      }
-      await expect(rmDripBtn).toBeEnabled({ timeout: 30_000 });
-      await rmDripBtn.click();
-      await expect(page.getByTestId("faucet-rm-drip-success")).toBeVisible({ timeout: 60_000 });
-
-      // Confirm RM tokens arrived on-chain.
-      await waitForRmBalance(
-        endpoints.rpc_url,
-        endpoints.rm_token_addr,
-        freshAddr,
-        FAUCET_DRIP_AMOUNT_RM,
-      );
-      const rmBalance = await erc20BalanceOf(endpoints.rpc_url, endpoints.rm_token_addr, freshAddr);
-      console.log(
-        `governance-fresh-account: RM drip confirmed; addr=${freshAddr} balance=${rmBalance}`,
-      );
-
-      // ── 5. Navigate to GovernancePanel — fresh EOA is already the wallet ─────
-      //    The fresh EOA has ETH and RM. The governance panel reads
-      //    votingPower(freshAddr) from the chain, which we set to FAUCET_DRIP_AMOUNT_RM.
-
-      // Intercept the governance API so the panel shows the active proposal
-      // we just created (the explorer indexer may not have processed it yet).
-      await page.route("**/v1/governance/proposals", async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify(
-            makeProposalResponse(Number(proposalId), endpoints.vault_addr, endpoints.admin_addr),
-          ),
-        });
-      });
-
-      // Navigate to governance tab.
-      const govTab = page.getByTestId("tab-governance");
-      if (await govTab.isVisible({ timeout: 5_000 }).catch(() => false)) {
-        await govTab.click();
-        await expect(page.getByTestId("governance-panel")).toBeVisible({ timeout: 15_000 });
-      } else {
-        // Fall back to ?governance=1 URL toggle (devnet-only dev shortcut).
-        await page.goto(`${endpoints.dapp_url}?governance=1`);
-        const panelVisible = await page
-          .getByTestId("governance-panel")
-          .isVisible({ timeout: 15_000 })
-          .catch(() => false);
-        if (!panelVisible) {
-          test.skip(
-            true,
-            "GovernancePanel is not yet mounted in the dapp bundle (no tab-governance or " +
-              "?governance=1 toggle). Wire GovernancePanel into AdminFlow/buildAdminTabs to " +
-              "activate this spec (see issue #322).",
-          );
-          return;
-        }
-      }
-
-      // Wait for the proposal to render.
-      const votingPrompt = page.getByTestId("governance-voting-prompt");
-      await expect(votingPrompt).toBeVisible({ timeout: 30_000 });
-
-      // ── 6. Click Vote ────────────────────────────────────────────────────────
-      const tallyBaseline = await readProposalVotesFor(
-        endpoints.rpc_url,
-        endpoints.governance_addr,
-        proposalId,
-      );
-      console.log(
-        `governance-fresh-account: proposalId=${proposalId} tally baseline=${tallyBaseline}`,
-      );
-
-      const voteBtn = page.getByTestId("governance-vote-button");
-      await expect(voteBtn).toBeVisible({ timeout: 15_000 });
-
-      // The Vote button is enabled only when:
-      //   - canVote (connected, open proposal, votingPower > 0)
-      //   - voteSim resolved (simulate succeeded)
-      // On this devnet RouterGovernance IS deployed, so simulate should resolve.
-      const enabled = await voteBtn.isEnabled({ timeout: 30_000 }).catch(() => false);
-      if (!enabled) {
-        test.skip(
-          true,
-          "governance-vote-button not enabled after 30s — simulate may have failed (e.g. " +
-            "RouterGovernance reverted NoVotingPower). Check on-chain state.",
-        );
-        return;
-      }
-
-      await voteBtn.click();
-
-      // Wait for wallet handoff confirmation (success or error surface).
-      const successOrError = page
-        .getByTestId("governance-vote-success")
-        .or(page.getByTestId("governance-vote-error"));
-      await expect(successOrError).toBeVisible({ timeout: 60_000 });
-
-      const didSucceed = await page
-        .getByTestId("governance-vote-success")
-        .isVisible()
+    // Navigate to governance tab.
+    const govTab = page.getByTestId("tab-governance");
+    if (await govTab.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      await govTab.click();
+      await expect(page.getByTestId("governance-panel")).toBeVisible({ timeout: 15_000 });
+    } else {
+      // Fall back to ?governance=1 URL toggle (devnet-only dev shortcut).
+      await page.goto(`${endpoints.dapp_url}?governance=1`);
+      const panelVisible = await page
+        .getByTestId("governance-panel")
+        .isVisible({ timeout: 15_000 })
         .catch(() => false);
-      if (!didSucceed) {
-        const errText = await page
-          .getByTestId("governance-vote-error")
-          .textContent()
-          .catch(() => "unknown error");
-        throw new Error(`governance-vote-button click resulted in error: ${errText}`);
+      if (!panelVisible) {
+        test.skip(
+          true,
+          "GovernancePanel is not yet mounted in the dapp bundle (no tab-governance or " +
+            "?governance=1 toggle). Wire GovernancePanel into AdminFlow/buildAdminTabs to " +
+            "activate this spec (see issue #322).",
+        );
+        return;
       }
+    }
 
-      // ── 7. Assert on-chain tally increased ───────────────────────────────────
-      const finalTally = await waitForTallyIncrease(
-        endpoints.rpc_url,
-        endpoints.governance_addr,
-        proposalId,
-        tallyBaseline,
+    // Wait for the proposal to render.
+    const votingPrompt = page.getByTestId("governance-voting-prompt");
+    await expect(votingPrompt).toBeVisible({ timeout: 30_000 });
+
+    // ── 6. Click Vote ────────────────────────────────────────────────────────
+    const tallyBaseline = await readProposalVotesFor(
+      endpoints.rpc_url,
+      endpoints.governance_addr,
+      proposalId,
+    );
+    console.log(
+      `governance-fresh-account: proposalId=${proposalId} tally baseline=${tallyBaseline}`,
+    );
+
+    const voteBtn = page.getByTestId("governance-vote-button");
+    await expect(voteBtn).toBeVisible({ timeout: 15_000 });
+
+    // The Vote button is enabled only when:
+    //   - canVote (connected, open proposal, votingPower > 0)
+    //   - voteSim resolved (simulate succeeded)
+    // On this devnet RouterGovernance IS deployed, so simulate should resolve.
+    const enabled = await voteBtn.isEnabled({ timeout: 30_000 }).catch(() => false);
+    if (!enabled) {
+      test.skip(
+        true,
+        "governance-vote-button not enabled after 30s — simulate may have failed (e.g. " +
+          "RouterGovernance reverted NoVotingPower). Check on-chain state.",
       );
-      expect(finalTally - tallyBaseline).toBeGreaterThanOrEqual(assignedPower);
-      console.log(
-        `governance-fresh-account: PASS — tally increased by ${finalTally - tallyBaseline} ` +
-          `(expected >=${assignedPower}); finalTally=${finalTally}`,
-      );
-    },
-  );
+      return;
+    }
+
+    await voteBtn.click();
+
+    // Wait for wallet handoff confirmation (success or error surface).
+    const successOrError = page
+      .getByTestId("governance-vote-success")
+      .or(page.getByTestId("governance-vote-error"));
+    await expect(successOrError).toBeVisible({ timeout: 60_000 });
+
+    const didSucceed = await page
+      .getByTestId("governance-vote-success")
+      .isVisible()
+      .catch(() => false);
+    if (!didSucceed) {
+      const errText = await page
+        .getByTestId("governance-vote-error")
+        .textContent()
+        .catch(() => "unknown error");
+      throw new Error(`governance-vote-button click resulted in error: ${errText}`);
+    }
+
+    // ── 7. Assert on-chain tally increased ───────────────────────────────────
+    const finalTally = await waitForTallyIncrease(
+      endpoints.rpc_url,
+      endpoints.governance_addr,
+      proposalId,
+      tallyBaseline,
+    );
+    expect(finalTally - tallyBaseline).toBeGreaterThanOrEqual(assignedPower);
+    console.log(
+      `governance-fresh-account: PASS — tally increased by ${finalTally - tallyBaseline} ` +
+        `(expected >=${assignedPower}); finalTally=${finalTally}`,
+    );
+  });
 });
