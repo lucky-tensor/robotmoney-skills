@@ -38,7 +38,14 @@
 
 import { test, expect } from "@playwright/test";
 import { setTimeout as sleep } from "node:timers/promises";
-import { createWalletClient, http, encodeFunctionData, type Hex, type Address } from "viem";
+import {
+  createWalletClient,
+  http,
+  encodeFunctionData,
+  decodeFunctionResult,
+  type Hex,
+  type Address,
+} from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { loadEndpoints, type DevnetEndpoints } from "./helpers/devnet";
 import {
@@ -93,14 +100,24 @@ const GOVERNANCE_ABI = [
     name: "proposals",
     stateMutability: "view",
     inputs: [{ name: "proposalId", type: "uint256" }],
+    // Matches Proposal struct: id, proposer, vaults[], bps[], votingDeadline, executableAfter,
+    // votesFor, executed. Dynamic arrays are included so viem decodes the ABI-encoded tuple
+    // correctly (offset-based encoding). Only votesFor is consumed by this spec.
     outputs: [
-      { name: "id", type: "uint256" },
-      { name: "proposer", type: "address" },
-      { name: "votesFor", type: "uint256" },
-      { name: "votesAgainst", type: "uint256" },
-      { name: "votingDeadline", type: "uint64" },
-      { name: "executableAfter", type: "uint64" },
-      { name: "executed", type: "bool" },
+      {
+        name: "",
+        type: "tuple",
+        components: [
+          { name: "id", type: "uint256" },
+          { name: "proposer", type: "address" },
+          { name: "vaults", type: "address[]" },
+          { name: "bps", type: "uint256[]" },
+          { name: "votingDeadline", type: "uint64" },
+          { name: "executableAfter", type: "uint64" },
+          { name: "votesFor", type: "uint256" },
+          { name: "executed", type: "bool" },
+        ],
+      },
     ],
   },
 ] as const;
@@ -173,24 +190,29 @@ async function readCurrentProposalId(rpc: string, governance: string): Promise<b
 }
 
 /** Read RouterGovernance.proposals(id).votesFor via eth_call.
- *  proposals(uint256) selector: keccak256("proposals(uint256)")[0..4] = 0x013cf08b
+ *  proposals(uint256) selector: cast sig "proposals(uint256)" = 0x013cf08b
+ *  Uses viem decodeFunctionResult to handle the Proposal struct's dynamic
+ *  arrays (vaults[], bps[]) which use offset-based ABI encoding.
  */
 async function readProposalVotesFor(
   rpc: string,
   governance: string,
   proposalId: bigint,
 ): Promise<bigint> {
-  const idHex = proposalId.toString(16).padStart(64, "0");
-  const data = `0x013cf08b${idHex}`;
-  const result = await ethCall(rpc, governance, data);
-  if (!result || result === "0x") return 0n;
-  // proposals() returns (id, proposer, votesFor, ...) — votesFor is at offset 64 (2nd uint256 after proposer)
-  // Layout: id(32) proposer(32, right-padded addr) votesFor(32) votesAgainst(32) ...
-  // Offset in bytes from start: id=0, proposer=32, votesFor=64
-  const hex = result.replace(/^0x/, "");
-  // Each field is 32 bytes = 64 hex chars
-  const votesForHex = hex.slice(128, 192); // offset 64 bytes = 128 hex chars
-  return BigInt("0x" + votesForHex);
+  const calldata = encodeFunctionData({
+    abi: GOVERNANCE_ABI,
+    functionName: "proposals",
+    args: [proposalId],
+  });
+  const raw = await ethCall(rpc, governance, calldata);
+  if (!raw || raw === "0x") return 0n;
+  const decoded = decodeFunctionResult({
+    abi: GOVERNANCE_ABI,
+    functionName: "proposals",
+    data: raw as Hex,
+  });
+  // decoded is the Proposal tuple; votesFor is the 7th field.
+  return (decoded as { votesFor: bigint }).votesFor;
 }
 
 /** Wait for eth_getBalance to grow. Returns the final balance. */
