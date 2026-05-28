@@ -62,6 +62,61 @@ contract AgentBasketStubDeployer {
     }
 }
 
+/// @notice One-shot batch deployer for all CREATE-heavy demo seed contracts.
+///         Its constructor performs every demo CREATE in a single broadcaster
+///         transaction:
+///           - 3 × `RobotMoneyVault` (extra vault1, extra vault2, RWA placeholder)
+///           - 2 × `PassthroughAdapter` (one per extra vault)
+///           - 1 × `AgentTokenVault` (MVP six-token basket)
+///           - 1 × `AgentBasketStubDeployer` (which itself sub-CREATEs the 12
+///             basket stand-ins: 6 × `DemoAgentToken` + 6 × `DemoUsdcPool`)
+///         All vaults are constructed with `admin = adminAddr` so the
+///         broadcaster (which the script passes in as `adminAddr`) retains
+///         ADMIN_ROLE — subsequent admin calls like `vault.addAdapter`,
+///         `setAdapterAllowed`, `addAsset`, registry ops still come from the
+///         script's broadcast key and work unchanged. Demo-only; not deployed
+///         on mainnet.
+contract DemoVaultBatchDeployer {
+    RobotMoneyVault public immutable vault1;
+    RobotMoneyVault public immutable vault2;
+    RobotMoneyVault public immutable rwaVault;
+    PassthroughAdapter public immutable adapter1;
+    PassthroughAdapter public immutable adapter2;
+    AgentTokenVault public immutable agentVault;
+    AgentBasketStubDeployer public immutable basketStubs;
+
+    constructor(
+        address usdc,
+        address adminAddr,
+        address swapRouter,
+        uint256 tvlCap,
+        uint256 perDepositCap,
+        string[6] memory agentSymbols
+    ) {
+        vault1 = new RobotMoneyVault(
+            IERC20(usdc), tvlCap, perDepositCap, 0, adminAddr, adminAddr
+        );
+        vault2 = new RobotMoneyVault(
+            IERC20(usdc), tvlCap, perDepositCap, 0, adminAddr, adminAddr
+        );
+        rwaVault = new RobotMoneyVault(
+            IERC20(usdc), tvlCap, perDepositCap, 0, adminAddr, adminAddr
+        );
+        adapter1 = new PassthroughAdapter(usdc, address(vault1));
+        adapter2 = new PassthroughAdapter(usdc, address(vault2));
+        agentVault = new AgentTokenVault(
+            IERC20(usdc),
+            ISwapRouter(swapRouter),
+            tvlCap,
+            perDepositCap,
+            0,
+            adminAddr,
+            adminAddr
+        );
+        basketStubs = new AgentBasketStubDeployer(agentSymbols, usdc);
+    }
+}
+
 /// @title DeployDemoExtraVaults
 /// @notice Demo-only deploy script that registers two additional ERC-4626
 ///         vaults plus a non-Active RWA/Thematic placeholder in
@@ -247,118 +302,120 @@ contract DeployDemoExtraVaults is Script {
     ///      key. Splits the body of `run()` so the locals stay below the
     ///      stack-too-deep limit.
     function _doDeploy(Params memory p) internal returns (Deployed memory d) {
-        // 1. Deploy two RobotMoneyVault instances wired to PassthroughAdapter.
-        //    PassthroughAdapter is the same path the primary vault uses on
-        //    devnet (USE_PASSTHROUGH_ADAPTER=true in Deploy.s.sol), so deposit
-        //    flow is identical and no fork-state assumptions are introduced.
-        RobotMoneyVault vault1 = _deployVault(p);
-        RobotMoneyVault vault2 = _deployVault(p);
-        PassthroughAdapter adapter1 = _wireAdapter(vault1, p.usdc);
-        PassthroughAdapter adapter2 = _wireAdapter(vault2, p.usdc);
+        // 1. Single batched CREATE: all RobotMoneyVault, PassthroughAdapter,
+        //    AgentTokenVault, and AgentBasketStubDeployer instances are built
+        //    inside one `DemoVaultBatchDeployer` constructor. The vaults are
+        //    constructed with admin = p.admin (the broadcaster), so subsequent
+        //    addAdapter/addAsset/registry calls — still issued from the script
+        //    broadcaster — continue to work. This collapses what was 7
+        //    broadcaster CREATEs (3 vaults + 2 adapters + 1 AgentTokenVault + 1
+        //    basket stub batcher) down to 1, saving ~78s on the smoke-test
+        //    chain-boot so the dapp-e2e globalSetup budget can absorb a cold
+        //    dapp Docker build.
+        DemoVaultBatchDeployer batch = new DemoVaultBatchDeployer(
+            p.usdc, p.admin, p.swapRouter, DEMO_TVL_CAP, DEMO_PER_DEPOSIT_CAP, AGENT_SYMBOLS
+        );
 
-        // 2. Register both vaults in the registry (idempotent).
+        // Stash the batch-deployed addresses in the result struct immediately
+        // so we don't have to keep all seven contract handles live as locals
+        // (avoids stack-too-deep across the wiring + registry + weights calls).
+        d.vault1 = address(batch.vault1());
+        d.vault2 = address(batch.vault2());
+        d.adapter1 = address(batch.adapter1());
+        d.adapter2 = address(batch.adapter2());
+        d.rwaVault = address(batch.rwaVault());
+        d.agentTokenVault = address(batch.agentVault());
+        d.weightPrimaryBps = p.wPrimary;
+        d.weightExtra1Bps = p.wExtra1;
+        d.weightExtra2Bps = p.wExtra2;
+
+        // 2. Approve + wire each adapter on its vault. PassthroughAdapter is the
+        //    same path the primary vault uses on devnet
+        //    (USE_PASSTHROUGH_ADAPTER=true in Deploy.s.sol), so deposit flow is
+        //    identical and no fork-state assumptions are introduced.
+        _wireAdapterOn(RobotMoneyVault(d.vault1), PassthroughAdapter(d.adapter1));
+        _wireAdapterOn(RobotMoneyVault(d.vault2), PassthroughAdapter(d.adapter2));
+
+        // 3. Register both extra vaults in the registry (idempotent).
         VaultRegistry registry = VaultRegistry(p.registry);
-        _registerIfAbsent(registry, address(vault1), p.usdc, p.name1);
-        _registerIfAbsent(registry, address(vault2), p.usdc, p.name2);
+        _registerIfAbsent(registry, d.vault1, p.usdc, p.name1);
+        _registerIfAbsent(registry, d.vault2, p.usdc, p.name2);
 
-        // 3. Mark both vaults router-eligible in the registry so setWeights
-        //    accepts them. The primary vault is already opted in by
+        // 4. Mark both extra vaults router-eligible in the registry so
+        //    setWeights accepts them. The primary vault is already opted in by
         //    DeployPortfolioRouter.s.sol (see issue #475 — single registry
         //    eligibility gate; same contracts every environment).
-        PortfolioRouter router = PortfolioRouter(p.router);
-        registry.setRouterEligible(address(vault1), true);
-        registry.setRouterEligible(address(vault2), true);
+        registry.setRouterEligible(d.vault1, true);
+        registry.setRouterEligible(d.vault2, true);
 
-        // 4. Reset the router voted weight vector to the three-way split (kept
-        //    for the existing AC3 smoke test which reads getWeights()).
-        _setThreeWayWeights(router, p.primaryVault, address(vault1), address(vault2), p);
-
-        // 5. Populate the on-chain default (below-quorum fallback) weight vector
-        //    with the same three-way split so the public allocation surface
-        //    (robotmoney.net/allocation) renders out of the box with no
-        //    governance activity. ADR-0002. The default vector length must match
-        //    the registry's router-eligible count, so link the router on the
-        //    registry first (idempotent) — this also arms the stale-length guard.
+        // 5/6. Reset the router voted weight vector AND the on-chain default
+        //      (below-quorum fallback) vector to the three-way split. Default
+        //      vector length must match the registry's router-eligible count,
+        //      so link the router on the registry first (idempotent).
         if (address(registry.router()) != p.router) {
             registry.setRouter(p.router);
         }
-        _setThreeWayDefaultWeights(router, p.primaryVault, address(vault1), address(vault2), p);
+        _applyThreeWayWeights(PortfolioRouter(p.router), p.primaryVault, d.vault1, d.vault2, p);
 
-        // 6. Register the RWA/Thematic placeholder (issue #479). It rounds the
-        //    deployed set out to the four PRD §11 categories. It is registered
-        //    then immediately set to a non-Active status (Paused) and is never
-        //    marked router-eligible (the registry default), so:
-        //      - PortfolioRouter never weights or deposits into it (it is not
-        //        in the weight vector and isRouterEligible() == false);
-        //      - the dapp renders it as a Future / Coming-soon tile, reading
-        //        its inactive state from on-chain status rather than a flag.
-        //    No adapter is wired: the placeholder takes no deposits, so a bare
-        //    RobotMoneyVault registry entry is sufficient.
-        address rwaVault = _registerRwaPlaceholder(registry, p);
-
-        // 6. Deploy + seed AgentTokenVault with the canonical MVP six-token
-        //    shortlist (ADR-0001). Registered for display, NOT router-eligible.
-        (address agentVault, address[] memory agentTokens) = _seedAgentTokenVault(p, registry);
-
-        d = Deployed({
-            vault1: address(vault1),
-            vault2: address(vault2),
-            adapter1: address(adapter1),
-            adapter2: address(adapter2),
-            weightPrimaryBps: p.wPrimary,
-            weightExtra1Bps: p.wExtra1,
-            weightExtra2Bps: p.wExtra2,
-            rwaVault: rwaVault,
-            agentTokenVault: agentVault,
-            agentTokens: agentTokens
-        });
-    }
-
-    /// @dev Deploy a bare RobotMoneyVault, register it, and set it to a
-    ///      non-Active status so the Router skips it and the dapp marks it
-    ///      Future. Router eligibility is left at the registry default
-    ///      (`false`) — the placeholder is never opted in. Idempotent only at
-    ///      registration; a re-run deploys a fresh vault address (demo seed
-    ///      runs once against a fresh fork).
-    function _registerRwaPlaceholder(VaultRegistry registry, Params memory p)
-        internal
-        returns (address rwaVault)
-    {
-        RobotMoneyVault rwa = _deployVault(p);
-        rwaVault = address(rwa);
+        // 7. Register the RWA/Thematic placeholder (issue #479). It rounds the
+        //    deployed set out to the four PRD §11 categories. Registered then
+        //    immediately set to non-Active (Paused) and never router-eligible
+        //    (registry default). PortfolioRouter never weights or deposits into
+        //    it (not in the weight vector, isRouterEligible() == false); the
+        //    dapp renders it as a Future / Coming-soon tile from on-chain
+        //    status, not a hard-coded flag. No adapter is wired: the
+        //    placeholder takes no deposits.
         registry.registerVault(
-            rwaVault, VaultRegistry.VaultMetadata({name: p.rwaName, asset: p.usdc, registeredAt: 0})
+            d.rwaVault,
+            VaultRegistry.VaultMetadata({name: p.rwaName, asset: p.usdc, registeredAt: 0})
         );
-        registry.setVaultStatus(rwaVault, VaultRegistry.VaultStatus.Paused);
+        registry.setVaultStatus(d.rwaVault, VaultRegistry.VaultStatus.Paused);
+
+        // 8. Seed AgentTokenVault with the canonical MVP six-token shortlist
+        //    (ADR-0001). Registered for display, NOT router-eligible — the
+        //    basket-vault gap (TWAP, previewRedeem) blocks that independently.
+        d.agentTokens = _seedAgentTokenVault(
+            p, registry, AgentTokenVault(d.agentTokenVault), batch.basketStubs()
+        );
     }
 
-    /// @dev Deploy a real `AgentTokenVault`, fill it with the six MVP shortlist
-    ///      tokens (devnet stand-in ERC20s paired against USDC via stub V3
-    ///      pools, equal-weight by construction in `BasketVault._routeDeposit`),
-    ///      and register it in `VaultRegistry`. The vault is intentionally left
-    ///      router-ineligible — basket-vault gap (TWAP, previewRedeem) blocks
-    ///      that independently of the now-resolved shortlist question.
-    function _seedAgentTokenVault(Params memory p, VaultRegistry registry)
-        internal
-        returns (address agentVault, address[] memory tokens)
-    {
-        AgentTokenVault vault = new AgentTokenVault(
-            IERC20(p.usdc),
-            ISwapRouter(p.swapRouter),
-            DEMO_TVL_CAP,
-            DEMO_PER_DEPOSIT_CAP,
-            0, // exitFeeBps
-            p.admin, // feeRecipient (fees are 0)
-            p.admin // admin (broadcaster holds ADMIN_ROLE)
-        );
+    /// @dev Approve and wire `adapter_` on `vault_`. The vault was constructed
+    ///      with admin = broadcaster inside `DemoVaultBatchDeployer`, so these
+    ///      ADMIN_ROLE-guarded calls succeed from the script broadcast key.
+    function _wireAdapterOn(RobotMoneyVault vault_, PassthroughAdapter adapter_) internal {
+        _approveAdapter(vault_, address(adapter_));
+        vault_.addAdapter(address(adapter_), 10_000);
+    }
 
-        // Deploy all six stand-in tokens + matched USDC pool stubs in ONE
-        // broadcaster CREATE via the seeder's constructor (12 internal
-        // sub-CREATEs). Without this batching the loop fires 18 broadcaster
-        // tx (6 × token + pool + addAsset) and the smoke-test chain-boot
-        // exceeds the dapp-e2e globalSetup budget on GH-hosted runners.
-        AgentBasketStubDeployer seeder = new AgentBasketStubDeployer(AGENT_SYMBOLS, p.usdc);
+    /// @dev Set both the voted weight vector (used by AC3 smoke test which
+    ///      reads `getWeights()`) and the on-chain default (below-quorum
+    ///      fallback, ADR-0002) to the same three-way split. Bundled into one
+    ///      helper to keep the `_doDeploy` stack below the solc limit.
+    function _applyThreeWayWeights(
+        PortfolioRouter router,
+        address primary,
+        address extra1,
+        address extra2,
+        Params memory p
+    ) internal {
+        _setThreeWayWeights(router, primary, extra1, extra2, p);
+        _setThreeWayDefaultWeights(router, primary, extra1, extra2, p);
+    }
 
+    /// @dev Wire the six MVP shortlist tokens into the pre-built
+    ///      `AgentTokenVault` via `addAsset` (still a broadcaster tx; the
+    ///      vault's ADMIN_ROLE is held by p.admin). The tokens themselves and
+    ///      the matching USDC stub pools were already created inside the
+    ///      single batched `DemoVaultBatchDeployer` CREATE. The vault is
+    ///      intentionally left router-ineligible — basket-vault gap (TWAP,
+    ///      previewRedeem) blocks that independently of the now-resolved
+    ///      shortlist question.
+    function _seedAgentTokenVault(
+        Params memory p,
+        VaultRegistry registry,
+        AgentTokenVault vault,
+        AgentBasketStubDeployer seeder
+    ) internal returns (address[] memory tokens) {
         tokens = new address[](AGENT_SYMBOLS.length);
         for (uint256 i = 0; i < AGENT_SYMBOLS.length; i++) {
             address token_ = address(seeder.tokens(i));
@@ -371,27 +428,6 @@ contract DeployDemoExtraVaults is Script {
         // Deliberately NOT calling registry.setRouterEligible(vault, true):
         // AgentTokenVault remains router-ineligible until the basket-vault gap
         // closes (docs/technical/basket-vault-gap-report.md).
-        agentVault = address(vault);
-    }
-
-    function _deployVault(Params memory p) internal returns (RobotMoneyVault) {
-        return new RobotMoneyVault(
-            IERC20(p.usdc),
-            DEMO_TVL_CAP,
-            DEMO_PER_DEPOSIT_CAP,
-            0, // exitFeeBps
-            p.admin, // feeRecipient (fees are 0)
-            p.admin
-        );
-    }
-
-    function _wireAdapter(RobotMoneyVault vault_, address usdc_)
-        internal
-        returns (PassthroughAdapter adapter_)
-    {
-        adapter_ = new PassthroughAdapter(usdc_, address(vault_));
-        _approveAdapter(vault_, address(adapter_));
-        vault_.addAdapter(address(adapter_), 10_000);
     }
 
     function _setThreeWayWeights(
