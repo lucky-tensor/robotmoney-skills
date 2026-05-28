@@ -152,21 +152,21 @@ async function erc20BalanceOf(rpc: string, token: string, account: string): Prom
 }
 
 /** Read RouterGovernance.votingPower(voter) via eth_call.
- *  votingPower(address) selector: keccak256("votingPower(address)")[0..4] = 0x13c8a7f5
+ *  votingPower(address) selector: cast sig "votingPower(address)" = 0xc07473f6
  */
 async function readVotingPower(rpc: string, governance: string, voter: string): Promise<bigint> {
   const padded = voter.toLowerCase().replace(/^0x/, "").padStart(64, "0");
-  const data = `0x13c8a7f5${padded}`;
+  const data = `0xc07473f6${padded}`;
   const result = await ethCall(rpc, governance, data);
   if (!result || result === "0x") return 0n;
   return BigInt(result);
 }
 
 /** Read RouterGovernance.currentProposalId() via eth_call.
- *  currentProposalId() selector: keccak256("currentProposalId()")[0..4] = 0x5b1a8b84
+ *  currentProposalId() selector: cast sig "currentProposalId()" = 0xfeac729d
  */
 async function readCurrentProposalId(rpc: string, governance: string): Promise<bigint> {
-  const data = "0x5b1a8b84";
+  const data = "0xfeac729d";
   const result = await ethCall(rpc, governance, data);
   if (!result || result === "0x") return 0n;
   return BigInt(result);
