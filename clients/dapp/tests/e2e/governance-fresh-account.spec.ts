@@ -465,10 +465,21 @@ test.describe("fresh-account governance E2E — drip ETH + RM then vote (issue #
       });
     });
 
-    // Navigate to governance tab.
-    const govTab = page.getByTestId("tab-governance");
-    if (await govTab.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await govTab.click();
+    // Navigate to the "Router Governance" tab. The main dapp surface uses
+    // `id: "router-governance"` → testId `tab-router-governance`. The legacy
+    // `tab-governance` testid (inside AdminFlow) is also tried for backwards
+    // compatibility in case the tab was moved. Falls back to `?governance=1`.
+    const routerGovTab = page.getByTestId("tab-router-governance");
+    const legacyGovTab = page.getByTestId("tab-governance");
+    const tabFound =
+      (await routerGovTab.isVisible({ timeout: 5_000 }).catch(() => false)) ||
+      (await legacyGovTab.isVisible({ timeout: 2_000 }).catch(() => false));
+    if (tabFound) {
+      if (await routerGovTab.isVisible().catch(() => false)) {
+        await routerGovTab.click();
+      } else {
+        await legacyGovTab.click();
+      }
       await expect(page.getByTestId("governance-panel")).toBeVisible({ timeout: 15_000 });
     } else {
       // Fall back to ?governance=1 URL toggle (devnet-only dev shortcut).
@@ -480,8 +491,8 @@ test.describe("fresh-account governance E2E — drip ETH + RM then vote (issue #
       if (!panelVisible) {
         test.skip(
           true,
-          "GovernancePanel is not yet mounted in the dapp bundle (no tab-governance or " +
-            "?governance=1 toggle). Wire GovernancePanel into AdminFlow/buildAdminTabs to " +
+          "GovernancePanel is not yet mounted in the dapp bundle (no tab-router-governance or " +
+            "?governance=1 toggle). Wire GovernancePanel into the dapp tab tree to " +
             "activate this spec (see issue #322).",
         );
         return;
