@@ -58,7 +58,7 @@ landing-price-fork-test: ## Boot forked-Base devnet + run landing price-strip fo
 	# 3. Playwright fork: dapp pointed at the forked-Base devnet (booted by the
 	#    Playwright globalSetup), no RPC mocks, asserts the strip against the
 	#    same expected-prices fixture.
-	cd clients/dapp && pnpm exec playwright test landing-price-strip.spec.ts
+	cd clients/dapp && bunx playwright test landing-price-strip.spec.ts
 
 # Include per-machine overrides if present (gitignored).
 -include Makefile.local
