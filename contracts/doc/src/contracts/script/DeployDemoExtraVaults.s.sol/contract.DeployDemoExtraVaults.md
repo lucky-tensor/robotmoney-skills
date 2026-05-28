@@ -1,5 +1,5 @@
 # DeployDemoExtraVaults
-[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/c43fbb392825b11d010cdb5df06c784303c7dcd7/contracts/script/DeployDemoExtraVaults.s.sol)
+[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/b2783a9fccc37987f2403e8b51396991d9825f59/contracts/script/DeployDemoExtraVaults.s.sol)
 
 **Inherits:**
 Script
@@ -197,52 +197,54 @@ stack-too-deep limit.
 function _doDeploy(Params memory p) internal returns (Deployed memory d);
 ```
 
-### _registerRwaPlaceholder
+### _wireAdapterOn
 
-Deploy a bare RobotMoneyVault, register it, and set it to a
-non-Active status so the Router skips it and the dapp marks it
-Future. Router eligibility is left at the registry default
-(`false`) — the placeholder is never opted in. Idempotent only at
-registration; a re-run deploys a fresh vault address (demo seed
-runs once against a fresh fork).
+Approve and wire `adapter_` on `vault_`. The vault was constructed
+with admin = broadcaster inside `DemoVaultBatchDeployer`, so these
+ADMIN_ROLE-guarded calls succeed from the script broadcast key.
 
 
 ```solidity
-function _registerRwaPlaceholder(VaultRegistry registry, Params memory p)
-    internal
-    returns (address rwaVault);
+function _wireAdapterOn(RobotMoneyVault vault_, PassthroughAdapter adapter_) internal;
+```
+
+### _applyThreeWayWeights
+
+Set both the voted weight vector (used by AC3 smoke test which
+reads `getWeights()`) and the on-chain default (below-quorum
+fallback, ADR-0002) to the same three-way split. Bundled into one
+helper to keep the `_doDeploy` stack below the solc limit.
+
+
+```solidity
+function _applyThreeWayWeights(
+    PortfolioRouter router,
+    address primary,
+    address extra1,
+    address extra2,
+    Params memory p
+) internal;
 ```
 
 ### _seedAgentTokenVault
 
-Deploy a real `AgentTokenVault`, fill it with the six MVP shortlist
-tokens (devnet stand-in ERC20s paired against USDC via stub V3
-pools, equal-weight by construction in `BasketVault._routeDeposit`),
-and register it in `VaultRegistry`. The vault is intentionally left
-router-ineligible — basket-vault gap (TWAP, previewRedeem) blocks
-that independently of the now-resolved shortlist question.
+Wire the six MVP shortlist tokens into the pre-built
+`AgentTokenVault` via `addAsset` (still a broadcaster tx; the
+vault's ADMIN_ROLE is held by p.admin). The tokens themselves and
+the matching USDC stub pools were already created inside the
+single batched `DemoVaultBatchDeployer` CREATE. The vault is
+intentionally left router-ineligible — basket-vault gap (TWAP,
+previewRedeem) blocks that independently of the now-resolved
+shortlist question.
 
 
 ```solidity
-function _seedAgentTokenVault(Params memory p, VaultRegistry registry)
-    internal
-    returns (address agentVault, address[] memory tokens);
-```
-
-### _deployVault
-
-
-```solidity
-function _deployVault(Params memory p) internal returns (RobotMoneyVault);
-```
-
-### _wireAdapter
-
-
-```solidity
-function _wireAdapter(RobotMoneyVault vault_, address usdc_)
-    internal
-    returns (PassthroughAdapter adapter_);
+function _seedAgentTokenVault(
+    Params memory p,
+    VaultRegistry registry,
+    AgentTokenVault vault,
+    AgentBasketStubDeployer seeder
+) internal returns (address[] memory tokens);
 ```
 
 ### _setThreeWayWeights

@@ -28,6 +28,7 @@
     - [DemoAgentToken](contracts/script/DeployDemoExtraVaults.s.sol/contract.DemoAgentToken.md)
     - [DemoUsdcPool](contracts/script/DeployDemoExtraVaults.s.sol/contract.DemoUsdcPool.md)
     - [AgentBasketStubDeployer](contracts/script/DeployDemoExtraVaults.s.sol/contract.AgentBasketStubDeployer.md)
+    - [DemoVaultBatchDeployer](contracts/script/DeployDemoExtraVaults.s.sol/contract.DemoVaultBatchDeployer.md)
     - [DeployDemoExtraVaults](contracts/script/DeployDemoExtraVaults.s.sol/contract.DeployDemoExtraVaults.md)
     - [DeployPortfolioRouter](contracts/script/DeployPortfolioRouter.s.sol/contract.DeployPortfolioRouter.md)
     - [DeployRmToken](contracts/script/DeployRmToken.s.sol/contract.DeployRmToken.md)

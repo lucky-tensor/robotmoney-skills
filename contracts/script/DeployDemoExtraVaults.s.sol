@@ -93,25 +93,13 @@ contract DemoVaultBatchDeployer {
         uint256 perDepositCap,
         string[6] memory agentSymbols
     ) {
-        vault1 = new RobotMoneyVault(
-            IERC20(usdc), tvlCap, perDepositCap, 0, adminAddr, adminAddr
-        );
-        vault2 = new RobotMoneyVault(
-            IERC20(usdc), tvlCap, perDepositCap, 0, adminAddr, adminAddr
-        );
-        rwaVault = new RobotMoneyVault(
-            IERC20(usdc), tvlCap, perDepositCap, 0, adminAddr, adminAddr
-        );
+        vault1 = new RobotMoneyVault(IERC20(usdc), tvlCap, perDepositCap, 0, adminAddr, adminAddr);
+        vault2 = new RobotMoneyVault(IERC20(usdc), tvlCap, perDepositCap, 0, adminAddr, adminAddr);
+        rwaVault = new RobotMoneyVault(IERC20(usdc), tvlCap, perDepositCap, 0, adminAddr, adminAddr);
         adapter1 = new PassthroughAdapter(usdc, address(vault1));
         adapter2 = new PassthroughAdapter(usdc, address(vault2));
         agentVault = new AgentTokenVault(
-            IERC20(usdc),
-            ISwapRouter(swapRouter),
-            tvlCap,
-            perDepositCap,
-            0,
-            adminAddr,
-            adminAddr
+            IERC20(usdc), ISwapRouter(swapRouter), tvlCap, perDepositCap, 0, adminAddr, adminAddr
         );
         basketStubs = new AgentBasketStubDeployer(agentSymbols, usdc);
     }

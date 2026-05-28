@@ -1,5 +1,5 @@
 # AgentBasketStubDeployer
-[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/3f001c69873f497b9473d71d6dd1177cd0a478a9/contracts/script/DeployDemoExtraVaults.s.sol)
+[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/b2783a9fccc37987f2403e8b51396991d9825f59/contracts/script/DeployDemoExtraVaults.s.sol)
 
 One-shot batch deployer for the AgentTokenVault devnet basket
 stand-ins. Its constructor performs all 12 sub-`CREATE`s (six
