@@ -342,31 +342,30 @@ test.describe("fresh-account governance E2E — drip ETH + RM then vote (issue #
       `governance-fresh-account: setVotingPower(${freshAddr}, ${FAUCET_DRIP_AMOUNT_RM}) sent`,
     );
 
-    // Read currentProposalId to check if there is already an active proposal.
-    const existingProposalId = await readCurrentProposalId(
-      endpoints.rpc_url,
-      endpoints.governance_addr,
-    );
-
+    // Attempt to create a new proposal. propose() reverts with ActiveProposalExists if
+    // there is already an Active or Queued proposal — in that case we re-use it.
+    // If no proposal exists (currentProposalId == 0) or the existing one is non-active,
+    // the new proposal will be created.
+    const proposeData = encodeFunctionData({
+      abi: GOVERNANCE_ABI,
+      functionName: "propose",
+      args: [[endpoints.vault_addr as Address], [10_000n]],
+    });
     let proposalId: bigint;
-    if (existingProposalId === 0n) {
-      // No proposal exists — create one.
-      const proposeData = encodeFunctionData({
-        abi: GOVERNANCE_ABI,
-        functionName: "propose",
-        args: [[endpoints.vault_addr as Address], [10_000n]],
-      });
+    try {
       await adminWalletClient.sendTransaction({
         to: governanceAddr,
         data: proposeData,
         chain: adminChain,
       });
-      // Read the new proposal id.
+      // Read the newly created proposal id.
       const newId = await readCurrentProposalId(endpoints.rpc_url, endpoints.governance_addr);
       proposalId = newId > 0n ? newId : 1n;
       console.log(`governance-fresh-account: proposal created; id=${proposalId}`);
-    } else {
-      proposalId = existingProposalId;
+    } catch {
+      // propose() likely reverted with ActiveProposalExists — re-use the current active one.
+      const existing = await readCurrentProposalId(endpoints.rpc_url, endpoints.governance_addr);
+      proposalId = existing > 0n ? existing : 1n;
       console.log(`governance-fresh-account: re-using existing proposal id=${proposalId}`);
     }
 
