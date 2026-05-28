@@ -986,4 +986,172 @@ contract PortfolioRouterTest is Test {
         registry.setRouterEligible(address(v), false);
         assertFalse(router.isRouterEligible(address(v)), "false after revoke");
     }
+
+    // ─── RWA/Thematic placeholder coexistence (issue #479) ────────────────────
+
+    /// @dev Register a fourth vault matching the demo's RWA/Thematic
+    ///      placeholder shape: present in the registry but non-Active
+    ///      (Paused) and never marked router-eligible. Returns the vault.
+    function _registerRwaPlaceholder() internal returns (MockRouterVault rwa) {
+        rwa = new MockRouterVault(address(usdc));
+        VaultRegistry.VaultMetadata memory meta = VaultRegistry.VaultMetadata({
+            name: "Robot Money RWA / Thematic", asset: address(usdc), registeredAt: 0
+        });
+        vm.startPrank(admin);
+        registry.registerVault(address(rwa), meta);
+        // Non-Active status; isRouterEligible stays false (the registry
+        // default). This mirrors DeployDemoExtraVaults' RWA placeholder.
+        registry.setVaultStatus(address(rwa), VaultRegistry.VaultStatus.Paused);
+        vm.stopPrank();
+    }
+
+    /// @notice AC (issue #479): with the RWA/Thematic placeholder present in
+    ///         the registry as a non-Active, non-router-eligible entry,
+    ///         `previewDeposit` returns only the weighted (Active, eligible)
+    ///         legs and does not surface or revert on the RWA leg.
+    function test_previewDeposit_skipsRwaPlaceholder() public {
+        _setEqualWeights();
+        MockRouterVault rwa = _registerRwaPlaceholder();
+
+        PortfolioRouter.LegPreview[] memory legs = router.previewDeposit(1000 * ONE_USDC);
+
+        // Only the two weighted vaults appear; the RWA placeholder is not in
+        // the weight vector so it never enters the preview.
+        assertEq(legs.length, 2, "RWA placeholder must not appear in preview legs");
+        for (uint256 i = 0; i < legs.length; i++) {
+            assertTrue(legs[i].vault != address(rwa), "RWA vault must not be a preview leg");
+        }
+    }
+
+    /// @notice AC (issue #479): `deposit` succeeds and splits across the
+    ///         Active weighted vaults while the non-Active RWA placeholder
+    ///         sits inertly in the registry — no revert, no flow to RWA.
+    function test_deposit_succeedsWithRwaPlaceholderPresent() public {
+        _setEqualWeights();
+        MockRouterVault rwa = _registerRwaPlaceholder();
+
+        uint256 amount = 1000 * ONE_USDC;
+        _fundAndApprove(depositor, amount);
+
+        vm.prank(depositor);
+        uint256[] memory shares = router.deposit(amount, new uint256[](0));
+
+        assertEq(shares.length, 2, "deposit splits across the two weighted vaults");
+        assertEq(vaultA.balanceOf(depositor), 500 * ONE_USDC);
+        assertEq(vaultB.balanceOf(depositor), 500 * ONE_USDC);
+        // The RWA placeholder received nothing and the router holds no dust.
+        assertEq(rwa.balanceOf(depositor), 0, "no shares minted in the RWA placeholder");
+        assertEq(usdc.balanceOf(address(rwa)), 0, "no USDC routed to the RWA placeholder");
+        assertEq(usdc.balanceOf(address(router)), 0);
+    }
+
+    /// @notice AC (issue #479): the RWA placeholder reports the expected
+    ///         non-Active status and stays router-ineligible — the two
+    ///         signals the dapp and Router read to keep it out of flow.
+    function test_rwaPlaceholder_isNonActiveAndIneligible() public {
+        MockRouterVault rwa = _registerRwaPlaceholder();
+        (, VaultRegistry.VaultStatus status) = registry.getVault(address(rwa));
+        assertTrue(status != VaultRegistry.VaultStatus.Active, "RWA must be non-Active");
+        assertFalse(registry.isRouterEligible(address(rwa)), "RWA must be router-ineligible");
+        assertFalse(router.isRouterEligible(address(rwa)), "router view agrees: ineligible");
+    }
+
+    // ─── defaultWeights fallback — ADR-0002 ────────────────────────────────────
+
+    /// @dev Set a default 60/40 vector over the two eligible vaults.
+    function _setDefaultWeights() internal {
+        address[] memory vaults = new address[](2);
+        uint256[] memory bps = new uint256[](2);
+        vaults[0] = address(vaultA);
+        vaults[1] = address(vaultB);
+        bps[0] = 6_000;
+        bps[1] = 4_000;
+        vm.prank(admin);
+        router.setDefaultWeights(vaults, bps);
+    }
+
+    /// @notice setDefaultWeights rejects a length that does not match the
+    ///         registry's router-eligible vault count.
+    function test_setDefaultWeights_revertsIfLengthMismatch() public {
+        address[] memory vaults = new address[](1);
+        uint256[] memory bps = new uint256[](1);
+        vaults[0] = address(vaultA);
+        bps[0] = 10_000;
+        vm.prank(admin);
+        vm.expectRevert(PortfolioRouter.LengthMismatch.selector);
+        router.setDefaultWeights(vaults, bps);
+    }
+
+    /// @notice With no proposal ever passed (voted vector inactive), the router
+    ///         previews and routes by the default weight vector. ADR-0002.
+    function test_previewDeposit_uses_defaultWeights_when_no_proposal() public {
+        _setDefaultWeights();
+        assertFalse(router.votedWeightsActive(), "voted vector must be inactive");
+
+        PortfolioRouter.LegPreview[] memory legs = router.previewDeposit(1_000e6);
+        assertEq(legs.length, 2);
+        assertEq(legs[0].vault, address(vaultA));
+        assertEq(legs[0].weightBps, 6_000);
+        assertEq(legs[0].legAmount, 600e6);
+        assertEq(legs[1].weightBps, 4_000);
+        assertEq(legs[1].legAmount, 400e6);
+
+        // Effective weights echo the default vector.
+        (address[] memory eV, uint256[] memory eB) = router.getEffectiveWeights();
+        assertEq(eV.length, 2);
+        assertEq(eB[0], 6_000);
+        assertEq(eB[1], 4_000);
+
+        // A real deposit splits by the default vector too.
+        _fundAndApprove(depositor, 1_000e6);
+        vm.prank(depositor);
+        uint256[] memory shares = router.deposit(1_000e6, new uint256[](0));
+        assertEq(shares[0], 600e6);
+        assertEq(shares[1], 400e6);
+    }
+
+    /// @notice After the voted vector is cleared (simulating a fall-back to
+    ///         default after the most recent proposal failed quorum), the
+    ///         router previews by the default vector again. ADR-0002.
+    function test_previewDeposit_uses_defaultWeights_after_failed_quorum() public {
+        _setDefaultWeights();
+
+        // A prior proposal had passed and set a 50/50 voted vector...
+        _setEqualWeights();
+        assertTrue(router.votedWeightsActive());
+
+        // ...then governance reverts to default after a failed-quorum window.
+        vm.prank(admin);
+        router.clearVotedWeights();
+        assertFalse(router.votedWeightsActive());
+
+        PortfolioRouter.LegPreview[] memory legs = router.previewDeposit(1_000e6);
+        assertEq(legs[0].weightBps, 6_000);
+        assertEq(legs[1].weightBps, 4_000);
+    }
+
+    /// @notice A passed vote overrides the default; defaultWeights storage is
+    ///         unchanged; clearing the voted vector reverts to default. ADR-0002.
+    function test_voted_weights_override_defaults_then_revert_to_defaults() public {
+        _setDefaultWeights();
+
+        // Vote passes -> voted 50/50 overrides the default.
+        _setEqualWeights();
+        assertTrue(router.votedWeightsActive());
+        (, uint256[] memory effBps) = router.getEffectiveWeights();
+        assertEq(effBps[0], 5_000);
+        assertEq(effBps[1], 5_000);
+
+        // defaultWeights storage is untouched by the vote.
+        (, uint256[] memory defBps) = router.getDefaultWeights();
+        assertEq(defBps[0], 6_000);
+        assertEq(defBps[1], 4_000);
+
+        // Revert to default.
+        vm.prank(admin);
+        router.clearVotedWeights();
+        (, uint256[] memory backBps) = router.getEffectiveWeights();
+        assertEq(backBps[0], 6_000);
+        assertEq(backBps[1], 4_000);
+    }
 }
