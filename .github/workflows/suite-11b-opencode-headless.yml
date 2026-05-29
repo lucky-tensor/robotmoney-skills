@@ -303,8 +303,6 @@ jobs:
         run: opencode plugin "$PWD/plugins/robotmoney-cli"
 
       - name: Headless deposit run
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set -euo pipefail
           mkdir -p "${RUNNER_TEMP}/robotmoney-opencode"
@@ -429,8 +427,6 @@ jobs:
         run: opencode plugin "$PWD/plugins/robotmoney-cli"
 
       - name: Headless read run
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set -euo pipefail
           mkdir -p "${RUNNER_TEMP}/robotmoney-opencode"
