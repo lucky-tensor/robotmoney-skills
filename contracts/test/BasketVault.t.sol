@@ -489,8 +489,7 @@ contract BasketVaultTest is Test {
             "emergencyResponder has EMERGENCY_ROLE"
         );
         assertFalse(
-            vault.hasRole(vault.EMERGENCY_ROLE(), admin),
-            "admin must NOT have EMERGENCY_ROLE"
+            vault.hasRole(vault.EMERGENCY_ROLE(), admin), "admin must NOT have EMERGENCY_ROLE"
         );
     }
 
