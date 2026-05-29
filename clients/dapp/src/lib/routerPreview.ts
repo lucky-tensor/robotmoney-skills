@@ -145,7 +145,11 @@ function shorten(addr: string): string {
   return shortenAddr(addr);
 }
 
-import { formatUsdc as _formatUsdc, formatShares as _formatShares, formatPercent as _formatPercent } from "./format";
+import {
+  formatUsdc as _formatUsdc,
+  formatShares as _formatShares,
+  formatPercent as _formatPercent,
+} from "./format";
 
 function formatUsdc(raw: bigint): string {
   return _formatUsdc(raw);

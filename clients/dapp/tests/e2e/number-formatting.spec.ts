@@ -18,11 +18,7 @@
  */
 import { test, expect } from "@playwright/test";
 import { loadEndpoints, type DevnetEndpoints } from "./helpers/devnet";
-import {
-  injectWallet,
-  connectInjectedWallet,
-  dismissOnboardingIfPresent,
-} from "./helpers/wallet";
+import { injectWallet, connectInjectedWallet, dismissOnboardingIfPresent } from "./helpers/wallet";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -80,9 +76,7 @@ test("balances-panel: balance column is right-aligned (text-align: right)", asyn
 
   // The balance column <td> must have text-align right (set via .balances-panel table td:last-child).
   const usdcCell = page.getByTestId("balances-panel-row-usdc-amount");
-  const textAlign = await usdcCell.evaluate(
-    (el) => window.getComputedStyle(el).textAlign,
-  );
+  const textAlign = await usdcCell.evaluate((el) => window.getComputedStyle(el).textAlign);
   expect(textAlign, "USDC balance cell should be right-aligned").toBe("right");
 });
 
@@ -112,12 +106,10 @@ test("router-deposit: ProportionPreview numeric columns are right-aligned", asyn
   }
 
   // Weight column (2nd) and USDC-leg column (3rd) should be right-aligned.
-  const weightCell = page.locator(
-    '[data-testid="proportion-preview-table"] td:nth-child(2)',
-  ).first();
-  const weightAlign = await weightCell.evaluate(
-    (el) => window.getComputedStyle(el).textAlign,
-  );
+  const weightCell = page
+    .locator('[data-testid="proportion-preview-table"] td:nth-child(2)')
+    .first();
+  const weightAlign = await weightCell.evaluate((el) => window.getComputedStyle(el).textAlign);
   expect(weightAlign, "Weight column should be right-aligned").toBe("right");
 });
 
