@@ -369,17 +369,24 @@ test.describe("fresh-account governance E2E — drip ETH + RM then vote (issue #
       console.log(`governance-fresh-account: re-using existing proposal id=${proposalId}`);
     }
 
-    // Confirm voting power was set.
-    const assignedPower = await readVotingPower(
-      endpoints.rpc_url,
-      endpoints.governance_addr,
-      freshAddr,
-    );
+    // Confirm voting power was set. Poll until the transaction is mined —
+    // sendTransaction returns after submission, not after mining.
+    let assignedPower = 0n;
+    const vpDeadline = Date.now() + 60_000; // 60 s for mining
+    while (Date.now() < vpDeadline) {
+      assignedPower = await readVotingPower(
+        endpoints.rpc_url,
+        endpoints.governance_addr,
+        freshAddr,
+      );
+      if (assignedPower > 0n) break;
+      await sleep(POLL_INTERVAL_MS);
+    }
     if (assignedPower === 0n) {
       test.skip(
         true,
-        "setVotingPower did not take effect (RouterGovernance may not accept votes without " +
-          "queued power). This is an on-chain state setup failure, not a dapp UI regression.",
+        "setVotingPower did not take effect within 60 s (RouterGovernance may not accept " +
+          "votes without queued power). This is an on-chain state setup failure, not a dapp UI regression.",
       );
       return;
     }
