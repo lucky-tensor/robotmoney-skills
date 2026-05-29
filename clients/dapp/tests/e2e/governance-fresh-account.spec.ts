@@ -96,29 +96,32 @@ const GOVERNANCE_ABI = [
     outputs: [{ name: "", type: "uint256" }],
   },
   {
+    // activeProposal() is the public view that returns the current proposal's data.
+    // _proposals is a *private* mapping — no public proposals(uint256) getter exists.
     type: "function",
-    name: "proposals",
+    name: "activeProposal",
     stateMutability: "view",
-    inputs: [{ name: "proposalId", type: "uint256" }],
-    // Matches Proposal struct: id, proposer, vaults[], bps[], votingDeadline, executableAfter,
-    // votesFor, executed. Dynamic arrays are included so viem decodes the ABI-encoded tuple
-    // correctly (offset-based encoding). Only votesFor is consumed by this spec.
+    inputs: [],
     outputs: [
-      {
-        name: "",
-        type: "tuple",
-        components: [
-          { name: "id", type: "uint256" },
-          { name: "proposer", type: "address" },
-          { name: "vaults", type: "address[]" },
-          { name: "bps", type: "uint256[]" },
-          { name: "votingDeadline", type: "uint64" },
-          { name: "executableAfter", type: "uint64" },
-          { name: "votesFor", type: "uint256" },
-          { name: "executed", type: "bool" },
-        ],
-      },
+      { name: "id", type: "uint256" },
+      { name: "proposer", type: "address" },
+      { name: "vaults", type: "address[]" },
+      { name: "bps", type: "uint256[]" },
+      { name: "votingDeadline", type: "uint64" },
+      { name: "executableAfter", type: "uint64" },
+      { name: "votesFor", type: "uint256" },
+      { name: "executed", type: "bool" },
     ],
+  },
+  {
+    type: "function",
+    name: "hasVoted",
+    stateMutability: "view",
+    inputs: [
+      { name: "proposalId", type: "uint256" },
+      { name: "voter", type: "address" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
   },
 ] as const;
 
@@ -189,36 +192,35 @@ async function readCurrentProposalId(rpc: string, governance: string): Promise<b
   return BigInt(result);
 }
 
-/** Read RouterGovernance.proposals(id).votesFor via eth_call.
- *  proposals(uint256) selector: cast sig "proposals(uint256)" = 0x013cf08b
- *  Uses viem decodeFunctionResult to handle the Proposal struct's dynamic
- *  arrays (vaults[], bps[]) which use offset-based ABI encoding.
+/** Read RouterGovernance.activeProposal().votesFor via eth_call.
+ *  activeProposal() returns the current proposal struct directly.
+ *  _proposals is a private mapping — no public proposals(uint256) getter exists.
  */
 async function readProposalVotesFor(
   rpc: string,
   governance: string,
-  proposalId: bigint,
+  _proposalId: bigint, // kept for API compatibility; activeProposal() always returns current
 ): Promise<bigint> {
   const calldata = encodeFunctionData({
     abi: GOVERNANCE_ABI,
-    functionName: "proposals",
-    args: [proposalId],
+    functionName: "activeProposal",
+    args: [],
   });
   let raw: string;
   try {
     raw = await ethCall(rpc, governance, calldata);
   } catch {
-    // Proposal does not exist yet (execution reverted). Return 0n so callers can retry.
+    // No active proposal yet or call failed. Return 0n so callers can retry.
     return 0n;
   }
   if (!raw || raw === "0x") return 0n;
   const decoded = decodeFunctionResult({
     abi: GOVERNANCE_ABI,
-    functionName: "proposals",
+    functionName: "activeProposal",
     data: raw as Hex,
   });
-  // decoded is the Proposal tuple; votesFor is the 7th field.
-  return (decoded as { votesFor: bigint }).votesFor;
+  // decoded is the active Proposal struct; votesFor is the 7th output field.
+  return (decoded as unknown as { votesFor: bigint }).votesFor;
 }
 
 /** Wait for eth_getBalance to grow. Returns the final balance. */
