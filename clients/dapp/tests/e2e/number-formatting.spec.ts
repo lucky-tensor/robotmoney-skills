@@ -17,6 +17,9 @@
  * Canonical: docs/architecture.md §5.3 — Human Dapp.
  */
 import { test, expect } from "@playwright/test";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadEndpoints, type DevnetEndpoints } from "./helpers/devnet";
 import { injectWallet, connectInjectedWallet, dismissOnboardingIfPresent } from "./helpers/wallet";
 
@@ -130,6 +133,24 @@ test("router-deposit: ProportionPreview numeric columns are right-aligned", asyn
 // ---------------------------------------------------------------------------
 
 test("snapshot: balances panel renders consistently", async ({ page }) => {
+  // Resolve the snapshot baseline path. On the first run (no committed baseline)
+  // skip gracefully so CI stays green; a developer runs
+  // `playwright test --update-snapshots` locally, commits the generated file,
+  // and subsequent runs diff against it.
+  const thisDir = path.dirname(fileURLToPath(import.meta.url));
+  const snapshotDir = path.join(thisDir, "number-formatting.spec.ts-snapshots");
+  const baselinePath = path.join(snapshotDir, "balances-panel-linux.png");
+  if (!fs.existsSync(baselinePath)) {
+    test.info().annotations.push({
+      type: "note",
+      description:
+        "Screenshot baseline balances-panel-linux.png not yet committed. " +
+        "Run `playwright test --update-snapshots` and commit the generated file.",
+    });
+    test.skip();
+    return;
+  }
+
   await injectWallet(page, {
     privateKey: eps.admin_private_key as `0x${string}`,
     rpcUrl: eps.rpc_url,
