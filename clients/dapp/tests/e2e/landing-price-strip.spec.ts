@@ -15,6 +15,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadEndpoints } from "./helpers/devnet";
 import { openDapp } from "./helpers/wallet";
 
@@ -31,8 +32,10 @@ interface ExpectedPrices {
 }
 
 function loadExpectedPrices(): ExpectedPrices {
-  // tests/e2e -> repo root is five levels up (clients/dapp/tests/e2e).
-  const repoRoot = path.resolve(__dirname, "../../../..");
+  // tests/e2e -> repo root is four levels up (clients/dapp/tests/e2e).
+  // Use import.meta.url instead of __dirname (ESM context).
+  const thisDir = path.dirname(fileURLToPath(import.meta.url));
+  const repoRoot = path.resolve(thisDir, "../../../..");
   const file = path.join(repoRoot, "testing/ethereum-testnet/config/expected-prices.json");
   return JSON.parse(fs.readFileSync(file, "utf8")) as ExpectedPrices;
 }
