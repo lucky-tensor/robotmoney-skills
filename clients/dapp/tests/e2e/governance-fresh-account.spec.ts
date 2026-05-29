@@ -219,8 +219,20 @@ async function readProposalVotesFor(
     functionName: "activeProposal",
     data: raw as Hex,
   });
-  // decoded is the active Proposal struct; votesFor is the 7th output field.
-  return (decoded as unknown as { votesFor: bigint }).votesFor;
+  // viem returns named multiple-return-value functions as an object keyed by name.
+  // votesFor is the 7th output (index 6): id, proposer, vaults, bps, votingDeadline,
+  // executableAfter, votesFor, executed.
+  const result = decoded as unknown as readonly [
+    bigint, // id
+    string, // proposer
+    readonly string[], // vaults
+    readonly bigint[], // bps
+    bigint, // votingDeadline
+    bigint, // executableAfter
+    bigint, // votesFor
+    boolean, // executed
+  ];
+  return result[6];
 }
 
 /** Wait for eth_getBalance to grow. Returns the final balance. */
