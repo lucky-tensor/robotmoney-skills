@@ -29,8 +29,8 @@ const USDC_STRIPPED_RE = /^\d+(\.\d{1,6})? USDC$/;
 
 let eps: DevnetEndpoints;
 
-test.beforeAll(async () => {
-  eps = await loadEndpoints();
+test.beforeAll(() => {
+  eps = loadEndpoints();
 });
 
 // ---------------------------------------------------------------------------
@@ -40,8 +40,12 @@ test.beforeAll(async () => {
 test("balances-panel: USDC and ETH rows use centralized formatter (no trailing zeros)", async ({
   page,
 }) => {
-  await injectWallet(page, eps.adminPrivateKey, eps.rpcUrl, eps.chainId);
-  await page.goto(eps.dappUrl);
+  await injectWallet(page, {
+    privateKey: eps.admin_private_key as `0x${string}`,
+    rpcUrl: eps.rpc_url,
+    chainId: eps.chain_id,
+  });
+  await page.goto(eps.dapp_url);
   await connectInjectedWallet(page);
   await dismissOnboardingIfPresent(page);
 
@@ -67,8 +71,12 @@ test("balances-panel: USDC and ETH rows use centralized formatter (no trailing z
 // ---------------------------------------------------------------------------
 
 test("balances-panel: balance column is right-aligned (text-align: right)", async ({ page }) => {
-  await injectWallet(page, eps.adminPrivateKey, eps.rpcUrl, eps.chainId);
-  await page.goto(eps.dappUrl);
+  await injectWallet(page, {
+    privateKey: eps.admin_private_key as `0x${string}`,
+    rpcUrl: eps.rpc_url,
+    chainId: eps.chain_id,
+  });
+  await page.goto(eps.dapp_url);
   await connectInjectedWallet(page);
   await dismissOnboardingIfPresent(page);
 
@@ -85,8 +93,12 @@ test("balances-panel: balance column is right-aligned (text-align: right)", asyn
 // ---------------------------------------------------------------------------
 
 test("router-deposit: ProportionPreview numeric columns are right-aligned", async ({ page }) => {
-  await injectWallet(page, eps.adminPrivateKey, eps.rpcUrl, eps.chainId);
-  await page.goto(eps.dappUrl);
+  await injectWallet(page, {
+    privateKey: eps.admin_private_key as `0x${string}`,
+    rpcUrl: eps.rpc_url,
+    chainId: eps.chain_id,
+  });
+  await page.goto(eps.dapp_url);
   await connectInjectedWallet(page);
   await dismissOnboardingIfPresent(page);
 
@@ -118,8 +130,12 @@ test("router-deposit: ProportionPreview numeric columns are right-aligned", asyn
 // ---------------------------------------------------------------------------
 
 test("snapshot: balances panel renders consistently", async ({ page }) => {
-  await injectWallet(page, eps.adminPrivateKey, eps.rpcUrl, eps.chainId);
-  await page.goto(eps.dappUrl);
+  await injectWallet(page, {
+    privateKey: eps.admin_private_key as `0x${string}`,
+    rpcUrl: eps.rpc_url,
+    chainId: eps.chain_id,
+  });
+  await page.goto(eps.dapp_url);
   await connectInjectedWallet(page);
   await dismissOnboardingIfPresent(page);
 
