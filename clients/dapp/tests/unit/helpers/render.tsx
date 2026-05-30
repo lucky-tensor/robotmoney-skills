@@ -24,11 +24,7 @@
  */
 
 import React from "react";
-import {
-  render as rtlRender,
-  type RenderOptions,
-  type RenderResult,
-} from "@testing-library/react";
+import { render as rtlRender, type RenderOptions, type RenderResult } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 export * from "@testing-library/react";
@@ -37,7 +33,9 @@ export * from "@testing-library/react";
 // render.tsx always loads the same pre-bundled module instance that component
 // source files use — same WagmiContext object, same React context identity.
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-const { WagmiProvider, createConfig, http } = (await vi.importActual("wagmi")) as typeof import("wagmi");
+const { WagmiProvider, createConfig, http } = (await vi.importActual(
+  "wagmi",
+)) as typeof import("wagmi");
 const { mock } = (await vi.importActual("wagmi/connectors")) as typeof import("wagmi/connectors");
 const { defineChain } = (await vi.importActual("viem")) as typeof import("viem");
 /* eslint-enable @typescript-eslint/no-unsafe-assignment */
@@ -51,9 +49,7 @@ const testChain = defineChain({
 
 const wagmiConfig = createConfig({
   chains: [testChain],
-  connectors: [
-    mock({ accounts: ["0x1111111111111111111111111111111111111111"] as const }),
-  ],
+  connectors: [mock({ accounts: ["0x1111111111111111111111111111111111111111"] as const })],
   transports: { [testChain.id]: http() },
 });
 
