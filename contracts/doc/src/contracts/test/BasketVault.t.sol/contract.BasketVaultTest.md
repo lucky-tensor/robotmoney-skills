@@ -269,6 +269,42 @@ ADMIN_ROLE holder can call setMaxSlippageBps; EMERGENCY_ROLE-only holder cannot.
 function test_setMaxSlippageBps_requiresAdminRole() public;
 ```
 
+### test_emergencyUnwind_succeedsWhenAlreadyPaused
+
+emergencyUnwind succeeds when vault is already paused.
+
+
+```solidity
+function test_emergencyUnwind_succeedsWhenAlreadyPaused() public;
+```
+
+### test_emergencyUnwindWithOverride_succeedsWhenAlreadyPaused
+
+emergencyUnwindWithOverride succeeds when vault is already paused.
+
+
+```solidity
+function test_emergencyUnwindWithOverride_succeedsWhenAlreadyPaused() public;
+```
+
+### test_emergencyUnwind_pausesVaultWhenNotAlreadyPaused
+
+emergencyUnwind on unpaused vault still pauses the vault.
+
+
+```solidity
+function test_emergencyUnwind_pausesVaultWhenNotAlreadyPaused() public;
+```
+
+### test_emergencyUnwindWithOverride_pausesVaultWhenNotAlreadyPaused
+
+emergencyUnwindWithOverride on unpaused vault still pauses the vault.
+
+
+```solidity
+function test_emergencyUnwindWithOverride_pausesVaultWhenNotAlreadyPaused() public;
+```
+
 ### test_emergencyUnwind_requiresEmergencyRole_adminOnlyReverts
 
 EMERGENCY_ROLE holder can call emergencyUnwind; ADMIN_ROLE-only holder cannot.

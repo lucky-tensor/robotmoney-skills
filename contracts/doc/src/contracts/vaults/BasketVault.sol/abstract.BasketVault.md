@@ -422,6 +422,17 @@ function pause() external onlyRole(EMERGENCY_ROLE);
 function unpause() external onlyRole(ADMIN_ROLE);
 ```
 
+### _pauseIfNotPaused
+
+Pause only when not already paused. Silently no-ops when the
+contract is already paused so that the common incident sequence
+pause() → emergencyUnwind() does not revert with EnforcedPause.
+
+
+```solidity
+function _pauseIfNotPaused() internal;
+```
+
 ### emergencyUnwind
 
 Pause and swap all basket assets back to USDC using configured minimum outputs.
