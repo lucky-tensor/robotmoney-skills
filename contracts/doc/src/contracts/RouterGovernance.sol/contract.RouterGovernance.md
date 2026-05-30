@@ -1,5 +1,5 @@
 # RouterGovernance
-[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/66300588f0fee2f79bec18799621ba523871f42a/contracts/RouterGovernance.sol)
+[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/5e0758d2049cf2770fbcc743d358f5172be4f30a/contracts/RouterGovernance.sol)
 
 **Inherits:**
 AccessControl
@@ -629,6 +629,25 @@ Thrown when votingPeriod is set below MIN_VOTING_PERIOD.
 ```solidity
 error VotingPeriodBelowMinimum();
 ```
+
+### VaultNotEligible
+Thrown by propose() when a vault in the proposed weight list is
+not router-eligible (zero address, unregistered, ineligible flag
+not set, or wrong underlying asset). Identifies the offending
+vault so the proposer can correct the weight vector before
+resubmitting. Prevents governance deadlock from stuck Queued
+proposals that would revert on execute().
+
+
+```solidity
+error VaultNotEligible(address vault);
+```
+
+**Parameters**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`vault`|`address`|The vault address that failed the router-eligibility check.|
 
 ## Structs
 ### Proposal
