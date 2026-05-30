@@ -1,5 +1,5 @@
 # RouterGovernanceTest
-[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/d6ea170b5db4fe1e5559433d38b4563ca140fbfc/contracts/test/RouterGovernance.t.sol)
+[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/d2f11e55183cacf89c19558c72523157397a4856/contracts/test/RouterGovernance.t.sol)
 
 **Inherits:**
 Test
@@ -260,46 +260,6 @@ function test_propose_revertsOnLengthMismatch() public;
 
 ```solidity
 function test_propose_revertsIfAlreadyActive() public;
-```
-
-### test_propose_revertsOnZeroAddressVault
-
-propose() with address(0) in the vault list reverts naming address(0).
-AC: forge test: propose() with address(0) in the vault list reverts naming address(0)
-
-
-```solidity
-function test_propose_revertsOnZeroAddressVault() public;
-```
-
-### test_propose_revertsOnUnregisteredVault
-
-propose() with a vault not in VaultRegistry reverts naming that vault.
-AC: forge test: propose() with an unregistered vault reverts naming the vault address
-
-
-```solidity
-function test_propose_revertsOnUnregisteredVault() public;
-```
-
-### test_propose_revertsOnIneligibleVault
-
-propose() with a vault that was registered then had eligibility revoked reverts at propose time.
-AC: forge test: register then revoke eligibility for a vault; call propose() with it; assert revert
-
-
-```solidity
-function test_propose_revertsOnIneligibleVault() public;
-```
-
-### test_propose_allEligibleVaultsSucceedsActive
-
-propose() with all eligible vaults succeeds and transitions proposal to Active state.
-AC: forge test: propose() with all eligible vaults; assert proposal Active and no revert
-
-
-```solidity
-function test_propose_allEligibleVaultsSucceedsActive() public;
 ```
 
 ### test_propose_allowsNewProposalAfterDefeated
@@ -607,89 +567,6 @@ even when quorumThreshold changes between them.
 
 ```solidity
 function test_snapshotQuorum_twoProposalsIndependentSnapshots() public;
-```
-
-### test_cancel_adminCancelsQueuedProposal
-
-ADMIN_ROLE can cancel a Queued proposal; state transitions to
-Cancelled and ProposalCancelled event is emitted.
-
-
-```solidity
-function test_cancel_adminCancelsQueuedProposal() public;
-```
-
-### test_cancel_adminCancelsActiveProposal
-
-ADMIN_ROLE can cancel an Active proposal.
-
-
-```solidity
-function test_cancel_adminCancelsActiveProposal() public;
-```
-
-### test_cancel_revertsForNonAdmin
-
-Non-ADMIN_ROLE cancel() call reverts with AccessControl error.
-
-
-```solidity
-function test_cancel_revertsForNonAdmin() public;
-```
-
-### test_cancel_revertsOnNonExistentProposal
-
-cancel() on a non-existent proposal reverts with NoActiveProposal.
-
-
-```solidity
-function test_cancel_revertsOnNonExistentProposal() public;
-```
-
-### test_cancel_revertsOnAlreadyExecuted
-
-cancel() on an already-executed proposal reverts with ProposalAlreadyExecuted.
-
-
-```solidity
-function test_cancel_revertsOnAlreadyExecuted() public;
-```
-
-### test_cancel_revertsOnAlreadyCancelled
-
-cancel() on an already-cancelled proposal reverts with ProposalAlreadyCancelled.
-
-
-```solidity
-function test_cancel_revertsOnAlreadyCancelled() public;
-```
-
-### test_cancel_allowsNewProposalAfterCancelled
-
-A new proposal can be created immediately after prior proposal is cancelled.
-
-
-```solidity
-function test_cancel_allowsNewProposalAfterCancelled() public;
-```
-
-### test_execute_revertsIfCancelled
-
-execute() on a Cancelled proposal reverts with ProposalIsCancelled.
-
-
-```solidity
-function test_execute_revertsIfCancelled() public;
-```
-
-### test_cancel_deadlockRecovery
-
-Governance deadlock recovery: vault loses router eligibility after
-proposal is Queued, cancel() unblocks propose() with valid vaults.
-
-
-```solidity
-function test_cancel_deadlockRecovery() public;
 ```
 
 ### test_clearVotedWeights_revertsToDefault

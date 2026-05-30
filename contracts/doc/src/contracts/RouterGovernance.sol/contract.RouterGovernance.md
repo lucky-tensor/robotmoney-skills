@@ -1,5 +1,5 @@
 # RouterGovernance
-[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/d6ea170b5db4fe1e5559433d38b4563ca140fbfc/contracts/RouterGovernance.sol)
+[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/d2f11e55183cacf89c19558c72523157397a4856/contracts/RouterGovernance.sol)
 
 **Inherits:**
 AccessControl
@@ -18,7 +18,7 @@ agent permissions, or protocol admin operations.
 - Exposes proposal state, vote tallies, cadence metadata, and
 resulting weights for rmpc and dapp reads.
 - One active proposal at a time (simple linear cadence).
-Emits: `ProposalCreated`, `VoteCast`, `ProposalExecuted`, `WeightsApplied`, `ProposalCancelled`.
+Emits: `ProposalCreated`, `VoteCast`, `ProposalExecuted`, `WeightsApplied`.
 
 
 ## Constants
@@ -269,26 +269,6 @@ function propose(address[] calldata vaults, uint256[] calldata bps)
 |`bps`|`uint256[]`|    Parallel weight array; must sum to BPS_DENOMINATOR.|
 
 
-### cancel
-
-Cancel any non-executed proposal. Restricted to ADMIN_ROLE.
-Transitions the proposal to Cancelled state and emits
-ProposalCancelled. A Cancelled proposal cannot be executed and
-does not block subsequent propose() calls, providing an on-chain
-escape from governance deadlock (e.g., a vault in the weight
-vector loses router eligibility after the proposal is Queued).
-
-
-```solidity
-function cancel(uint256 proposalId) external onlyRole(ADMIN_ROLE);
-```
-**Parameters**
-
-|Name|Type|Description|
-|----|----|-----------|
-|`proposalId`|`uint256`|Id of the proposal to cancel.|
-
-
 ### vote
 
 Cast a FOR vote on the currently active proposal.
@@ -337,8 +317,7 @@ function activeProposal()
         uint64 executableAfter,
         uint256 votesFor,
         uint256 snapshotQuorum,
-        bool executed,
-        bool cancelled
+        bool executed
     );
 ```
 
@@ -464,21 +443,6 @@ event WeightsApplied(uint256 indexed proposalId, address[] vaults, uint256[] bps
 |`vaults`|`address[]`|    New vault address list.|
 |`bps`|`uint256[]`|       New weight bps list (parallel to vaults).|
 
-### ProposalCancelled
-Emitted when a proposal is cancelled by ADMIN_ROLE.
-
-
-```solidity
-event ProposalCancelled(uint256 indexed proposalId, address indexed cancelledBy);
-```
-
-**Parameters**
-
-|Name|Type|Description|
-|----|----|-----------|
-|`proposalId`|`uint256`| Cancelled proposal id.|
-|`cancelledBy`|`address`|Address that called `cancel`.|
-
 ### QuorumThresholdSet
 Emitted when the quorum threshold is changed.
 
@@ -590,30 +554,6 @@ error ProposalDefeated();
 error ActiveProposalExists();
 ```
 
-### ProposalAlreadyExecuted
-Thrown when cancel() is called on an already-executed proposal.
-
-
-```solidity
-error ProposalAlreadyExecuted();
-```
-
-### ProposalAlreadyCancelled
-Thrown when cancel() is called on an already-cancelled proposal.
-
-
-```solidity
-error ProposalAlreadyCancelled();
-```
-
-### ProposalIsCancelled
-Thrown when execute() is called on a cancelled proposal.
-
-
-```solidity
-error ProposalIsCancelled();
-```
-
 ### QuorumBelowMinimum
 Thrown when quorumThreshold is set below MIN_QUORUM_THRESHOLD.
 
@@ -629,25 +569,6 @@ Thrown when votingPeriod is set below MIN_VOTING_PERIOD.
 ```solidity
 error VotingPeriodBelowMinimum();
 ```
-
-### VaultNotEligible
-Thrown by propose() when a vault in the proposed weight list is
-not router-eligible (zero address, unregistered, ineligible flag
-not set, or wrong underlying asset). Identifies the offending
-vault so the proposer can correct the weight vector before
-resubmitting. Prevents governance deadlock from stuck Queued
-proposals that would revert on execute().
-
-
-```solidity
-error VaultNotEligible(address vault);
-```
-
-**Parameters**
-
-|Name|Type|Description|
-|----|----|-----------|
-|`vault`|`address`|The vault address that failed the router-eligibility check.|
 
 ## Structs
 ### Proposal
@@ -675,8 +596,6 @@ struct Proposal {
     uint256 snapshotQuorum;
     /// Whether the proposal has been executed.
     bool executed;
-    /// Whether the proposal has been cancelled by ADMIN_ROLE.
-    bool cancelled;
 }
 ```
 
@@ -692,9 +611,7 @@ enum ProposalState {
     /// Quorum reached; waiting for execution delay to elapse.
     Queued,
     /// Executed: weights applied to the router.
-    Executed,
-    /// Cancelled by ADMIN_ROLE before execution.
-    Cancelled
+    Executed
 }
 ```
 
