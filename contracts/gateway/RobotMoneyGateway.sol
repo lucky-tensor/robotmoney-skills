@@ -344,6 +344,15 @@ contract RobotMoneyGateway is AccessRoles, ReentrancyGuard, IGateway {
         if (c.committer == address(0)) revert CommitmentNotFound();
 
         // 2. Revealer must be the original committer.
+        //
+        // Note: this branch is defense-in-depth only. Because the commit hash
+        // is computed as `keccak256(abi.encode(agent, msg.sender, salt))` at
+        // commit time, a caller with a different `msg.sender` would produce a
+        // different hash. The lookup above returns a zero-committer entry for
+        // that hash (no matching commitment), which already reverts at step 1.
+        // The `CommitmentOwnerMismatch` check here is therefore unreachable
+        // through the current API surface.
+        // coverage:unreachable
         if (c.committer != msg.sender) revert CommitmentOwnerMismatch();
 
         // 3. Must wait at least one block (front-running protection).
