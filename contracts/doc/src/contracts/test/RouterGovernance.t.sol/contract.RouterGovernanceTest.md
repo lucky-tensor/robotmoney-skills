@@ -1,5 +1,5 @@
 # RouterGovernanceTest
-[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/d2f11e55183cacf89c19558c72523157397a4856/contracts/test/RouterGovernance.t.sol)
+[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/66300588f0fee2f79bec18799621ba523871f42a/contracts/test/RouterGovernance.t.sol)
 
 **Inherits:**
 Test
@@ -567,6 +567,89 @@ even when quorumThreshold changes between them.
 
 ```solidity
 function test_snapshotQuorum_twoProposalsIndependentSnapshots() public;
+```
+
+### test_cancel_adminCancelsQueuedProposal
+
+ADMIN_ROLE can cancel a Queued proposal; state transitions to
+Cancelled and ProposalCancelled event is emitted.
+
+
+```solidity
+function test_cancel_adminCancelsQueuedProposal() public;
+```
+
+### test_cancel_adminCancelsActiveProposal
+
+ADMIN_ROLE can cancel an Active proposal.
+
+
+```solidity
+function test_cancel_adminCancelsActiveProposal() public;
+```
+
+### test_cancel_revertsForNonAdmin
+
+Non-ADMIN_ROLE cancel() call reverts with AccessControl error.
+
+
+```solidity
+function test_cancel_revertsForNonAdmin() public;
+```
+
+### test_cancel_revertsOnNonExistentProposal
+
+cancel() on a non-existent proposal reverts with NoActiveProposal.
+
+
+```solidity
+function test_cancel_revertsOnNonExistentProposal() public;
+```
+
+### test_cancel_revertsOnAlreadyExecuted
+
+cancel() on an already-executed proposal reverts with ProposalAlreadyExecuted.
+
+
+```solidity
+function test_cancel_revertsOnAlreadyExecuted() public;
+```
+
+### test_cancel_revertsOnAlreadyCancelled
+
+cancel() on an already-cancelled proposal reverts with ProposalAlreadyCancelled.
+
+
+```solidity
+function test_cancel_revertsOnAlreadyCancelled() public;
+```
+
+### test_cancel_allowsNewProposalAfterCancelled
+
+A new proposal can be created immediately after prior proposal is cancelled.
+
+
+```solidity
+function test_cancel_allowsNewProposalAfterCancelled() public;
+```
+
+### test_execute_revertsIfCancelled
+
+execute() on a Cancelled proposal reverts with ProposalIsCancelled.
+
+
+```solidity
+function test_execute_revertsIfCancelled() public;
+```
+
+### test_cancel_deadlockRecovery
+
+Governance deadlock recovery: vault loses router eligibility after
+proposal is Queued, cancel() unblocks propose() with valid vaults.
+
+
+```solidity
+function test_cancel_deadlockRecovery() public;
 ```
 
 ### test_clearVotedWeights_revertsToDefault

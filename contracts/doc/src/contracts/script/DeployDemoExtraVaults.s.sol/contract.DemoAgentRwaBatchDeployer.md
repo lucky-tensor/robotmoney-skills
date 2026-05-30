@@ -1,5 +1,5 @@
 # DemoAgentRwaBatchDeployer
-[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/d2f11e55183cacf89c19558c72523157397a4856/contracts/script/DeployDemoExtraVaults.s.sol)
+[Git Source](https://github.com/lucky-tensor/robotmoney-monorepo/blob/66300588f0fee2f79bec18799621ba523871f42a/contracts/script/DeployDemoExtraVaults.s.sol)
 
 Batch deployer #2 — the RWA/Thematic placeholder vault (PRD §11.4)
 plus the `AgentTokenVault` (PRD §11.3). Performs two direct
