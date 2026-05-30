@@ -311,8 +311,8 @@ fn stub_pools_return_nonzero_sqrt_price() {
         );
         // The first 32 bytes = sqrtPriceX96 (uint160 is right-aligned in a 32-byte slot).
         let first_32 = &stripped[..64];
-        let sqrt_price = u128::from_str_radix(&first_32[first_32.len().saturating_sub(40)..], 16)
-            .unwrap_or(0);
+        let sqrt_price =
+            u128::from_str_radix(&first_32[first_32.len().saturating_sub(40)..], 16).unwrap_or(0);
         assert!(
             sqrt_price > 0,
             "stub pool {name} at {addr:#x} returned sqrtPriceX96=0"

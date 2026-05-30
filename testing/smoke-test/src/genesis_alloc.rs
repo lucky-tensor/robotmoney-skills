@@ -57,10 +57,10 @@ pub const ARACHNID_FACTORY_ADDR: &str = "0x4e59b44847b379578588920cA78FbF26c0B49
 
 /// Deployed bytecode of the Arachnid deterministic-deployment-proxy.
 /// This is the runtime bytecode (not creation bytecode); injected verbatim
-/// into the genesis alloc.  Verified against
-/// https://github.com/Arachnid/deterministic-deployment-proxy — the
-/// 67-byte runtime is identical for every EVM deployment.
-pub const ARACHNID_FACTORY_BYTECODE: &str = "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8152601460005a9156";
+/// into the genesis alloc.  Verified against Base mainnet:
+///   cast code 0x4e59b44847b379578588920cA78FbF26c0B4956C --rpc-url https://mainnet.base.org
+/// The 69-byte runtime is identical for every EVM chain that has the factory.
+pub const ARACHNID_FACTORY_BYTECODE: &str = "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3";
 
 /// FiatTokenV2_1 storage slot index for the `balances` mapping. The slot
 /// holding `balances[holder]` is `keccak256(abi.encode(holder, 9))`.
