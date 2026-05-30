@@ -5,6 +5,8 @@
   "tolerance_pct": 1.0,
   "$capture_note": "expected_price values match the stub sqrtPriceX96 seeds in DeployDemoUniswapV3Stubs.s.sol (issue #531). The Playwright e2e test reads the dapp which reads from devnet stub pools; the dapp converts sqrtPriceX96 to a display price using the decimal fields in config/dex-pools.json::devnet.pools. These values are exact — tolerance_pct is set to 1% to absorb any floating-point rounding in the dapp's price conversion.",
   "captured": true,
+  "$pinned_on_archive_fork_note": "When true, the freshness-chip Playwright test asserts block >= fork_block (archive fork keeps producing past the fork point). When false, only asserts block > 0. Set to false for stub-price devnet runs where block numbers start near zero; set to true only after capturing real archive-fork prices.",
+  "pinned_on_archive_fork": false,
   "pairs": [
     {
       "id": "eth-usd",
