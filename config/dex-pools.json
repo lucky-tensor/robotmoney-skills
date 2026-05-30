@@ -74,10 +74,10 @@
   },
   "devnet": {
     "chainId": 918453,
-    "$comment": "Fork-aware override. On a fresh fork these are identical to the mainnet pools because the genesis ingester copies Base state at the fork block. Pinned to testing/ethereum-testnet/config/fork-block.json — see testing/ethereum-testnet/config/expected-prices.json for the prices these pools must read at the fork block.",
+    "$comment": "Devnet stub pool override (issue #531). The smoke-test devnet is a fresh Geth+Lighthouse chain — Base mainnet pool addresses have no bytecode there. DeployDemoUniswapV3Stubs.s.sol deploys UniswapV3PoolSlot0Stub instances via the Arachnid CREATE2 factory (pre-installed in genesis by genesis_alloc.rs::ARACHNID_FACTORY_ADDR) with fixed salts, producing the deterministic addresses below. Seed prices: ETH/USD≈$2500, cbBTC/USDC≈$60000, wSOL/USDC≈$150. token0/token1 addresses are illustrative stubs — the dapp only reads sqrtPriceX96 from slot0 and uses the decimal fields from this record for price conversion.",
     "pools": {
       "eth-usd": {
-        "pool": "0xd0b53D9277642d899DF5C87A3966A349A798F224",
+        "pool": "0x35eca2ea4235254bcb5ddeef82dc0801df0ddcd0",
         "token0": "0x4200000000000000000000000000000000000006",
         "token1": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         "token0Decimals": 18,
@@ -85,7 +85,7 @@
         "baseIsToken0": true
       },
       "weth-usdc": {
-        "pool": "0xd0b53D9277642d899DF5C87A3966A349A798F224",
+        "pool": "0xde306af5ac13d12174dbc15ef56a2034245203ed",
         "token0": "0x4200000000000000000000000000000000000006",
         "token1": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         "token0Decimals": 18,
@@ -93,7 +93,7 @@
         "baseIsToken0": true
       },
       "cbbtc-usdc": {
-        "pool": "0xfBB6Eed8e7aa03B138556eeDaF5D271A5E1e43ef",
+        "pool": "0xe387baaa8cc228f3011cbe0107ce0d40f5fc1261",
         "token0": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
         "token1": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         "token0Decimals": 8,
@@ -101,7 +101,7 @@
         "baseIsToken0": true
       },
       "wsol-usdc": {
-        "pool": "0xc1bF8adf6E62cC9C56E2b246b03d3e74da45A0E1",
+        "pool": "0x424eb4e787ac9f6e07d62dde3ca862948d4235d7",
         "token0": "0x1C61629598e4a901136a81BC138E5828dc150d67",
         "token1": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         "token0Decimals": 9,

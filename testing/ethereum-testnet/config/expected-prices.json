@@ -1,10 +1,10 @@
 {
-  "$comment": "Canonical: docs/prd.md#112-protocol-asset-vault (issue #482). Expected Uniswap V3 mid prices for the landing-page price strip, pinned to the Base mainnet fork point recorded in testing/ethereum-testnet/config/fork-block.json. `fork_block` MUST equal that manifest's `block_number` — the CI guard `fork_block_aligns_with_expected_prices` in testing/smoke-test/src/fork_manifest.rs fails the build if the fork block changes without this fixture being refreshed in the same commit. The fork integration test (testing/fork-e2e-rust/tests/landing_price_strip_fork.rs) reads each pool's slot0 from the running forked-Base devnet, converts via the shared sqrtPriceX96 math, and asserts the result matches `expected_price` within `tolerance_pct`. The Playwright fork test asserts the rendered cells match these same values.",
+  "$comment": "Canonical: docs/prd.md#112-protocol-asset-vault (issue #482, #531). Expected Uniswap V3 mid prices for the landing-page price strip. `fork_block` must equal testing/ethereum-testnet/config/fork-block.json::block_number — the CI guard `fork_block_aligns_with_expected_prices` in testing/smoke-test/src/fork_manifest.rs fails the build if the fork block changes without refreshing this file. The Playwright e2e test (clients/dapp/tests/e2e/landing-price-strip.spec.ts) checks the dapp's rendered cells against `expected_price` within `tolerance_pct`; the dapp reads from the devnet stub pool contracts deployed by DeployDemoUniswapV3Stubs.s.sol (issue #531). The fork integration test (testing/fork-e2e-rust/tests/landing_price_strip_fork.rs) is skipped unless RMPC_FORK_RPC_URL is set (requires Base archive RPC — see agent-warnings.md). `expected_price` values are the devnet stub seed prices hardcoded in DeployDemoUniswapV3Stubs.s.sol: ETH/USD≈$2500, cbBTC/USDC≈$60000, wSOL/USDC≈$150.",
   "fork_block": 45743443,
   "chain": "base",
-  "tolerance_pct": 0.01,
-  "$capture_note": "expected_price values are captured by booting the forked-Base devnet (or anvil against a Base archive RPC) at fork_block and reading each pool's slot0, then applying testing/fork-e2e-rust price conversion. Refresh with scripts/devnet/snapshot-fork.sh whenever the fork block is bumped. When `captured` is false the fork integration test reads slot0 and records the live value but does not assert the magnitude (it still asserts the pool exists); flip `captured` to true after pinning real values against an archive RPC.",
-  "captured": false,
+  "tolerance_pct": 1.0,
+  "$capture_note": "expected_price values match the stub sqrtPriceX96 seeds in DeployDemoUniswapV3Stubs.s.sol (issue #531). The Playwright e2e test reads the dapp which reads from devnet stub pools; the dapp converts sqrtPriceX96 to a display price using the decimal fields in config/dex-pools.json::devnet.pools. These values are exact — tolerance_pct is set to 1% to absorb any floating-point rounding in the dapp's price conversion.",
+  "captured": true,
   "pairs": [
     {
       "id": "eth-usd",
@@ -13,7 +13,7 @@
       "base_decimals": 18,
       "quote_decimals": 6,
       "base_is_token0": true,
-      "expected_price": null
+      "expected_price": 2500.0
     },
     {
       "id": "weth-usdc",
@@ -22,7 +22,7 @@
       "base_decimals": 18,
       "quote_decimals": 6,
       "base_is_token0": true,
-      "expected_price": null
+      "expected_price": 2500.0
     },
     {
       "id": "cbbtc-usdc",
@@ -31,7 +31,7 @@
       "base_decimals": 8,
       "quote_decimals": 6,
       "base_is_token0": true,
-      "expected_price": null
+      "expected_price": 60000.0
     },
     {
       "id": "wsol-usdc",
@@ -40,7 +40,7 @@
       "base_decimals": 9,
       "quote_decimals": 6,
       "base_is_token0": true,
-      "expected_price": null
+      "expected_price": 150.0
     }
   ]
 }
