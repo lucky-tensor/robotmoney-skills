@@ -316,6 +316,7 @@ function activeProposal()
         uint64 votingDeadline,
         uint64 executableAfter,
         uint256 votesFor,
+        uint256 snapshotQuorum,
         bool executed
     );
 ```
@@ -589,6 +590,10 @@ struct Proposal {
     uint64 executableAfter;
     /// Total voting power cast in favour.
     uint256 votesFor;
+    /// Quorum threshold captured at propose() time. Changes to the live
+    /// quorumThreshold storage variable do not retroactively affect this
+    /// proposal — preventing both retroactive defeat and retroactive passage.
+    uint256 snapshotQuorum;
     /// Whether the proposal has been executed.
     bool executed;
 }
