@@ -50,7 +50,9 @@ export function VaultCards({ apiUrl, fetchImpl, pollInterval = 15_000 }: VaultCa
     function doFetch() {
       ac = new AbortController();
       fetchVaults(apiUrl, { fetchImpl, signal: ac.signal })
-        .then((res) => setState({ phase: "ok", vaults: res.vaults, block_number: res.block_number }))
+        .then((res) =>
+          setState({ phase: "ok", vaults: res.vaults, block_number: res.block_number }),
+        )
         .catch((err: unknown) => {
           if (ac.signal.aborted) return;
           setState({ phase: "error", message: String(err) });

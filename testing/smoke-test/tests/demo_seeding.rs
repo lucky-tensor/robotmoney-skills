@@ -293,7 +293,10 @@ fn simulated_depositors_match_primary_vault_total_assets() {
     // Only the primary vault (10 000 bps weight) receives router deposits.
     let v = fx.vault();
     let ta = total_assets(fx.rpc_url(), v);
-    assert!(ta > 0, "primary vault {v:#x} has zero totalAssets after seeding");
+    assert!(
+        ta > 0,
+        "primary vault {v:#x} has zero totalAssets after seeding"
+    );
 
     // Sum each depositor's receipt-equivalent assets. RobotMoneyVault uses
     // _decimalsOffset()=18 so convertToAssets() is the correct inverse.
