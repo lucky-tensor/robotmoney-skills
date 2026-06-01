@@ -7,7 +7,7 @@
 >
 > Several items in the raw notes conflict with the canonical PRD/ADR or with
 > what the public site currently says. Those conflicts are called out inline as
-> **⚠ Flag** and collected in [§11 Open Questions & Discrepancies](#11-open-questions--discrepancies).
+> **⚠ Flag** and collected in [§12 Open Questions & Discrepancies](#12-open-questions--discrepancies).
 > Please resolve the flagged items before the corresponding workstream starts —
 > they change scope.
 
@@ -43,9 +43,11 @@ user/governor UX split** on top of that foundation.
    skeleton.
 6. **Woon-bot golden path** (OpenClaw → gateway → vault on Base) validated as
    the named first customer.
-7. Supporting research deliverables: vault sunsetting pattern memo, fee
-   placeholder design, admin-surface cooldown audit, and product-docs hosting
-   with Mermaid.
+7. **Two agent-CLI plugins** designed with capability boundaries — a
+   **deposit agent** and an **investment-committee agent**.
+8. Supporting research deliverables: vault sunsetting pattern memo (industry
+   survey **done**, see §11.1), fee placeholder design, admin-surface cooldown
+   audit, and product-docs hosting with Mermaid.
 
 ---
 
@@ -197,7 +199,7 @@ are **not separated** today:
 
 **Proposed role split** (grounded in the surfaces above; names to confirm):
 
-| New role | Owns | Timelock tier (see §10.3) |
+| New role | Owns | Timelock tier (see §11.3) |
 | --- | --- | --- |
 | `UPGRADER_ROLE` | role-admin grants, `setRouter`, any future migration/redeploy re-wiring | longest |
 | `VAULT_ADMIN_ROLE` | vault lifecycle: `registerVault`, `setVaultStatus`, `setRouterEligible` | long |
@@ -305,16 +307,80 @@ path the golden flow.
 
 ---
 
-## 10. Supporting Workstreams (research / placeholders)
+## 10. Workstream H — Agent CLI Plugin Split
 
-### 10.1 Vault Sunsetting Pattern
-Research how Compound, Balancer, Aave, and others **retire/deprecate** markets
-and vaults; produce a recommended Robot Money pattern. PRD §6 already defines
-`active → retired → redeemable archive`; this memo fills in the operational
-playbook (pause new deposits, preserve withdrawals, migration paths).
-**Deliverable:** `docs/technical/vault-sunsetting-patterns.md`.
+**Objective.** The product split between Users and Governors (Workstream E) maps
+directly onto **two distinct agent-CLI plugins** offered to vendors (OpenCode,
+OpenClaw, Claude Code), rather than one catch-all skill:
 
-### 10.2 Fee Placeholders
+1. **Robot Money Deposit Agent** — the existing treasury path: guarded deposit /
+   withdraw / position reads / agent-policy bounds. This is what the **Woon bot**
+   (Workstream F) consumes. Largely already shipped (Phases 4/7, OpenCode +
+   OpenClaw skills); this sprint **repackages it as a standalone, deposit-only
+   plugin**.
+2. **Robot Money Investment Committee Agent** — **new.** Lets a committee bot
+   read research feeds, form a per-vault overweight/underweight view, publish a
+   narrative CoT to a readable link, and submit the **fixed-shape vote JSON**
+   (Workstream A). Read-only against the protocol + write to the committee
+   surface; it must **not** carry deposit/withdraw authority.
+
+**Scope this week**
+- Define the two plugin manifests and their **capability boundaries** — the
+  committee plugin gets no treasury-spend scope; the deposit plugin gets no
+  committee-vote scope. This is a security boundary, not just packaging.
+- Map each to the existing skill package layout and the `BOOTSTRAP.md`
+  OpenCode / OpenClaw / Claude-Code onboarding sections.
+- Decide whether they ship as two packages or one package with two selectable
+  skill profiles.
+
+**Deliverables**
+- Plugin-split design note + two manifests (deposit, committee).
+- Updated `BOOTSTRAP.md` pointing vendors at the correct plugin per use case.
+
+> Depends on Workstream A (vote JSON schema) for the committee plugin's output
+> contract, and reuses Workstream F's policy preset for the deposit plugin.
+
+---
+
+## 11. Supporting Workstreams (research / placeholders)
+
+### 11.1 Vault Sunsetting Pattern
+**Research done this sprint.** Surveyed how established ERC-4626 / lending
+protocols retire (or deliberately never terminate) vaults and markets:
+
+| Protocol | Sunsetting mechanism | Termination? |
+| --- | --- | --- |
+| **Yearn V3** | Graceful ladder: pause deposits (`depositLimit = 0`), pull debt back (`minimumTotalIdle = MAX`), then `revoke_strategy`. Full `shutdown` by EMERGENCY_MANAGER is **irreversible, last resort**; `force_revoke_strategy` crystallizes loss / drops PPS. Vault stays ERC-4626-withdrawable throughout. | Only via irreversible emergency shutdown |
+| **Aave V3** | **Freeze** the reserve (no new supply/borrow; existing users can still repay/withdraw), then governance offboard: disable borrows, raise reserve factor, set LTV→0. | **Never deleted** — wound down in place, redemption preserved |
+| **Compound V3** | Params are **immutable**; PauseGuardian pauses supply/withdraw. To "change" a market you deploy a **new Comet** and re-point the proxy; the old instance is paused/abandoned, not destroyed. | Replace-and-migrate, not terminate |
+| **Balancer** | Pools are **immutable and never terminate**; deprecation is **social** — governance removes incentives and guides LP migration (v2→v3); old pools stay live forever. | No on-chain termination |
+| **Morpho (MetaMorpho)** | Deprecate a market: `submitCap(0)` → `reallocate` liquidity out → `updateWithdrawQueue` to dequeue. Stuck markets use timelocked `submitMarketRemoval`; **funds in force-removed markets are lost permanently.** | Forced removal exists but is destructive |
+
+**Industry pattern (the takeaway).** The dominant model is
+**deprecate-in-place, preserve redemption** — no established protocol *deletes*
+a vault holding user funds. The universal sequence is: (1) **stop inflows**
+(cap→0 / freeze / `depositLimit=0` / pause), (2) **drain or migrate** liquidity,
+(3) **keep withdrawals open indefinitely**. Hard "termination" exists only as a
+last-resort emergency path (Yearn shutdown, Morpho forced removal) and can
+crystallize losses.
+
+**Recommendation for Robot Money.** This validates PRD §6's
+`active → retired → redeemable archive` lifecycle: **retire = stop deposits +
+keep withdrawals open**, never a hard delete. The primitives already exist in
+our contracts — `setVaultStatus` (retired), `setTvlCap`/`setPerDepositCap` (→ 0
+to halt inflows), adapter removal (drain), and `shutdownVault` (`EMERGENCY_ROLE`,
+the last-resort analog). The memo should specify the **ordered runbook** and
+make explicit that "redeemable archive" is the correct **terminal** state.
+
+**Deliverable:** `docs/technical/vault-sunsetting-patterns.md` (comparison table
+above + the ordered RM runbook).
+> **Sources:** [Yearn V3 docs](https://docs.yearn.fi/developers/v3/overview) ·
+> [Aave frozen-markets FAQ](https://docs.aave.com/faq/frozen-markets-and-reserves) ·
+> [Compound III docs](https://docs.compound.finance/) ·
+> [Balancer v2→v3 deprecation](https://www.weex.com/news/detail/balancer-has-released-a-proposal-suggesting-the-deprecation-of-the-v2-stable-pool-and-encouraging-lps-to-migrate-their-liquidity-to-v3-222875) ·
+> [Morpho emergency procedures](https://docs.morpho.org/curate/emergency/)
+
+### 11.2 Fee Placeholders
 Using PRD/whitepaper terminology, the three fee classes are **management fee**,
 **swap-fee share**, and **exit fee** (PRD §9). The **exit fee** is already
 implemented; the **management fee** and **swap-fee share** are deferred. This
@@ -323,7 +389,7 @@ swap-fee share so the surfaces exist and are disclosed before approval.
 **Deliverable:** fee-schedule placeholder design note + dapp disclosure stub
 for the management fee and swap-fee share.
 
-### 10.3 Admin-Surface Cooldown Audit
+### 11.3 Admin-Surface Cooldown Audit
 Evaluate **all admin surfaces** and assign each an **increasing-timelock tier**
 by sensitivity. Today every admin change flows Safe → Timelock → `ADMIN_ROLE`
 through a **single** `TimelockController` with one global `minDelay`. The audit
@@ -348,7 +414,7 @@ surface inventory mapped to tier + cooldown, cross-referenced to the §6 roles.
 > **✓ Resolved.** "What flows need agent" → **increasing timelocks**: the audit
 > assigns progressively longer cooldowns to more sensitive surfaces.
 
-### 10.4 Product Documentation Hosting + Mermaid
+### 11.4 Product Documentation Hosting + Mermaid
 Stand up hosted product documentation, including **Mermaid** system/flow
 diagrams. Ties into the still-open implementation-plan item *"Tunnel hosted
 devnet demo."*
@@ -369,7 +435,7 @@ flowchart LR
 
 ---
 
-## 11. Open Questions & Discrepancies
+## 12. Open Questions & Discrepancies
 
 **Resolved this round (PM, 2026-06-01):**
 
@@ -383,7 +449,7 @@ flowchart LR
 | 9 | Peaq on Base? | **Not on Base — drop** from genesis. |
 | 6 | "Multiple tokens in stable yield"? | **Multiple base assets** (USDC + USDS/sUSDS), with peg/FX handling — spike this sprint. |
 | 7 | RBAC role split? | Propose `UPGRADER` / `VAULT_ADMIN` / `ASSET_CURATOR` / `PARAM_ADMIN` (+ keep `EMERGENCY`/`KEEPER`); see §6 surface map. |
-| 8 | Cooldown audit meaning? | **Increasing timelocks** — graduated cooldowns by sensitivity (§10.3). |
+| 8 | Cooldown audit meaning? | **Increasing timelocks** — graduated cooldowns by sensitivity (§11.3). |
 | — | Fee terminology? | Use PRD/whitepaper: **management fee / swap-fee share / exit fee**. |
 
 **Still open — needed before the dependent workstream starts:**
@@ -392,25 +458,28 @@ flowchart LR
 | --- | --- | --- | --- |
 | A | Confirm final RBAC role **names** and which roles must be **distinct signers**. | D | Use the §6 proposed names. |
 | B | Adding **proxy/UUPS upgradeability** this sprint, or keep redeploy-and-rewire? | D | Keep non-upgradeable; `UPGRADER_ROLE` = migration authority. |
-| C | Graduated cooldowns via **multiple Timelocks** or per-operation delays? | D, 10.3 | Decide in the RBAC ADR. |
+| C | Graduated cooldowns via **multiple Timelocks** or per-operation delays? | D, 11.3 | Decide in the RBAC ADR. |
 | D | Verify Base addresses for Juno / Woon / Zyfai / Giza. | C | Block their inclusion until verified. |
 
 ---
 
-## 12. Suggested Sequencing
+## 13. Suggested Sequencing
 
-- **Day 1–2 (unblock):** B (signalling docs) and the §11 decisions — both are
+- **Day 1–2 (unblock):** B (signalling docs) and the §12 decisions — both are
   cheap and unblock everything else. Kick off C research (mostly done here).
 - **Day 2–4 (design-heavy):** A (committee spec), D (RBAC ADR), E (UX split).
-- **Day 3–5 (build/spike):** C deploy-spec, F (Woon golden path), G (spike).
-- **Throughout:** supporting memos (10.1–10.4) as research capacity allows.
+- **Day 3–5 (build/spike):** C deploy-spec, F (Woon golden path), G (spike),
+  H (plugin split — after A's vote schema lands).
+- **Throughout:** supporting memos (11.1–11.4) as research capacity allows.
 
 **Dependencies:** D should precede any new vault/asset additions from C. B is a
 prerequisite for honest labelling in E. C's asset matrix gates F's Base target.
+A (vote JSON schema) gates H's committee plugin; F's policy preset feeds H's
+deposit plugin.
 
 ---
 
-## 13. Out of Sprint (explicitly not this week)
+## 14. Out of Sprint (explicitly not this week)
 
 - Real RM-token-weighted (binding) governance — deferred to token launch per
   implementation-plan Non-goals.
