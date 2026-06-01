@@ -43,14 +43,26 @@ export function VaultCards({ apiUrl, fetchImpl }: VaultCardsProps) {
   const [state, setState] = useState<State>({ phase: "loading" });
 
   useEffect(() => {
-    const ac = new AbortController();
-    fetchVaults(apiUrl, { fetchImpl, signal: ac.signal })
-      .then((res) => setState({ phase: "ok", vaults: res.vaults, block_number: res.block_number }))
-      .catch((err: unknown) => {
-        if (ac.signal.aborted) return;
-        setState({ phase: "error", message: String(err) });
-      });
-    return () => ac.abort();
+    let ac = new AbortController();
+
+    function doFetch() {
+      ac = new AbortController();
+      fetchVaults(apiUrl, { fetchImpl, signal: ac.signal })
+        .then((res) => setState({ phase: "ok", vaults: res.vaults, block_number: res.block_number }))
+        .catch((err: unknown) => {
+          if (ac.signal.aborted) return;
+          setState({ phase: "error", message: String(err) });
+        });
+    }
+
+    doFetch();
+    // Re-poll every 15 s so the indexer's processed deposits become visible
+    // without requiring a manual page reload (indexer tick is 12 s).
+    const timer = setInterval(doFetch, 15_000);
+    return () => {
+      ac.abort();
+      clearInterval(timer);
+    };
   }, [apiUrl, fetchImpl]);
 
   if (state.phase === "loading") {
