@@ -32,6 +32,8 @@ const VAULT_STATUS_ACTIVE = 0;
 interface VaultCardsProps {
   readonly apiUrl: string;
   readonly fetchImpl?: FetchLike;
+  /** Poll interval in ms. Defaults to 15 000. Overridable in tests. */
+  readonly pollInterval?: number;
 }
 
 type State =
@@ -39,7 +41,7 @@ type State =
   | { phase: "error"; message: string }
   | { phase: "ok"; vaults: readonly VaultRow[]; block_number: number };
 
-export function VaultCards({ apiUrl, fetchImpl }: VaultCardsProps) {
+export function VaultCards({ apiUrl, fetchImpl, pollInterval = 15_000 }: VaultCardsProps) {
   const [state, setState] = useState<State>({ phase: "loading" });
 
   useEffect(() => {
@@ -56,14 +58,14 @@ export function VaultCards({ apiUrl, fetchImpl }: VaultCardsProps) {
     }
 
     doFetch();
-    // Re-poll every 15 s so the indexer's processed deposits become visible
-    // without requiring a manual page reload (indexer tick is 12 s).
-    const timer = setInterval(doFetch, 15_000);
+    // Re-poll so the indexer's processed deposits become visible without a
+    // manual page reload (indexer tick is 12 s, so 15 s keeps up in production).
+    const timer = setInterval(doFetch, pollInterval);
     return () => {
       ac.abort();
       clearInterval(timer);
     };
-  }, [apiUrl, fetchImpl]);
+  }, [apiUrl, fetchImpl, pollInterval]);
 
   if (state.phase === "loading") {
     return (
